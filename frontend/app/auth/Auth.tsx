@@ -17,6 +17,7 @@ import PhoneInput from "@/components/auth/PhoneInput";
 import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
 import ContinueButton from "@/components/auth/ContinueButton";
 import TermsSection from "@/components/auth/TermsSection";
+import EmailAuth from "@/components/auth/EmailAuth";
 import apiClient from "../../api/client";
 
 const { height } = Dimensions.get('window');
@@ -27,6 +28,7 @@ const Auth = () => {
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
 
   // Memoized phone number validation
@@ -86,13 +88,18 @@ const Auth = () => {
     }
   }, [isSendingOtp, isValidPhone, fadeAnim, phoneNumber, router]);
 
-  // const openLink = useCallback(async (url: string) => {
-  //   try {
-  //     await Linking.openURL(url);
-  //   } catch {
-  //     console.log('Error opening link');
-  //   }
-  // }, []);
+  const handleEmailLogin = useCallback(() => {
+    setShowEmailAuth(true);
+  }, []);
+
+  const handleBackFromEmail = useCallback(() => {
+    setShowEmailAuth(false);
+  }, []);
+
+  // Show email auth screen if requested
+  if (showEmailAuth) {
+    return <EmailAuth onBack={handleBackFromEmail} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -151,7 +158,7 @@ const Auth = () => {
               />
 
               {/* Social Login Buttons */}
-              <SocialLoginButtons />
+              <SocialLoginButtons onEmailLogin={handleEmailLogin} />
 
               {/* Bottom Terms */}
               <TermsSection />

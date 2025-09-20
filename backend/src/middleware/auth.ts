@@ -47,10 +47,11 @@ export async function isAuthenticated(
        return;
     }
 
-    if (!user.isPhoneVerified) {
+    // Check if user is verified through either phone or email
+    if (!user.isPhoneVerified && !user.email) {
        res.status(401).json({
         success: false,
-        message: "Phone number not verified",
+        message: "Account not verified",
       });
       return;
     }

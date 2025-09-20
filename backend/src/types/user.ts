@@ -4,6 +4,8 @@ export type UserRole = "user" | "marchant" | "delivery";
 export interface User {
     _id: mongoose.Types.ObjectId;
     phone?: string | null;
+    email?: string | null;
+    password?: string;
     isPhoneVerified: boolean;
     role: UserRole;
     otp?: string;

@@ -4,6 +4,15 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     unique: true,
+    sparse: true, // Allows multiple null values
+  },
+  email: {
+    type: String,
+    unique: true,
+    sparse: true, // Allows multiple null values
+  },
+  password: {
+    type: String,
   },
   isPhoneVerified: {
     type: Boolean,

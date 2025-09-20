@@ -17,6 +17,7 @@ import PhoneInput from "@/components/auth/PhoneInput";
 import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
 import ContinueButton from "@/components/auth/ContinueButton";
 import TermsSection from "@/components/auth/TermsSection";
+import apiClient from "../../api/client";
 
 const { height } = Dimensions.get('window');
 
@@ -58,19 +59,28 @@ const Auth = () => {
         }),
       ]).start();
 
-      // Generate final phone number
-      const finalPhoneNumber = phoneNumber.replace(/\s/g, '') || `+91${Math.floor(Math.random() * 9000000000) + 1000000000}`;
+      // Format phone number properly
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      const finalPhoneNumber = `+91${cleanPhone}`;
 
-      // Simulate API call with realistic delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Navigate to OTP screen with phone number
-      router.push({
-        pathname: '/auth/OtpScreen',
-        params: { phoneNumber: finalPhoneNumber }
+      // Send OTP request to backend
+      const response = await apiClient.post('/api/v1/user/onboarding', {
+        phone: finalPhoneNumber
       });
-    } catch {
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+
+      if (response.data.success) {
+        // Navigate to OTP screen with phone number
+        router.push({
+          pathname: '/auth/OtpScreen',
+          params: { phoneNumber: finalPhoneNumber }
+        });
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to send OTP. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('OTP send error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSendingOtp(false);
     }
@@ -88,7 +98,7 @@ const Auth = () => {
     <View style={styles.container}>
       {/* Background Image - Top 50% only - Creates visual appeal and branding */}
       <ImageBackground
-        source={require('../../assets/images/locals2.png')}
+        source={require('../../assets/images/locals3.png')}
         style={styles.backgroundImage}
         resizeMode="cover"
       />

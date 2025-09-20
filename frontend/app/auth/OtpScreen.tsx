@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-  Alert,
   Animated
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -17,17 +16,19 @@ import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import apiClient from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 const OtpScreen = () => {
   const router = useRouter();
+  const { login } = useAuth();
   const params = useLocalSearchParams<{ phoneNumber?: string }>();
   const phoneNumber = params.phoneNumber || '';
   const [otp, setOtp] = useState(['', '', '', '']);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [timer, setTimer] = useState(60);
+  const [, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
-  const [shakeAnim] = useState(new Animated.Value(0));
   const [activeIndex, setActiveIndex] = useState(0);
   const [boxAnimations] = useState([
     new Animated.Value(1),
@@ -68,65 +69,49 @@ const OtpScreen = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Shake animation for error
-  const triggerShake = useCallback(() => {
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-    ]).start();
-  }, [shakeAnim]);
 
   // Verify OTP handler (moved up to avoid dependency issues)
   const handleVerifyOtp = useCallback(async () => {
     const otpString = otp.join('');
     if (!isOtpComplete) {
-      triggerShake();
       return;
     }
 
     try {
       setIsVerifying(true);
       
-      // Animate button press
-      Animated.sequence([
-        Animated.timing(fadeAnim, {
-          toValue: 0.7,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      
-      // Simulate API verification
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Demo: Accept any 4-digit OTP as valid
-      if (otpString.length === 4) {
-        // Success - auto redirect without alert
+      // Verify OTP with backend
+      const response = await apiClient.post('/api/v1/user/verify-otp', {
+        phone: phoneNumber,
+        otp: otpString
+      });
+
+      if (response.data.success) {
+        // Store token and user data using AuthContext
+        const { token, user } = response.data;
+        
+        // Login through AuthContext
+        await login(user, token);
+        
+        // Auto navigate to home screen without alert
         router.replace('/(tabs)');
       } else {
-        // Wrong OTP - shake and clear
-        triggerShake();
+        // Wrong OTP - clear without shake
         setOtp(['', '', '', '']);
         setActiveIndex(0);
         inputRefs.current[0]?.focus();
       }
-    } catch {
-      // Error - shake and clear
-      triggerShake();
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      
+      // Error - clear without shake
       setOtp(['', '', '', '']);
       setActiveIndex(0);
       inputRefs.current[0]?.focus();
     } finally {
       setIsVerifying(false);
     }
-  }, [isOtpComplete, fadeAnim, triggerShake, router, otp]);
+  }, [isOtpComplete, router, phoneNumber, otp, login]);
 
   // Enhanced OTP change handler with haptic feedback and animations
   const handleOtpChange = useCallback((value: string, index: number) => {
@@ -159,16 +144,8 @@ const OtpScreen = () => {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify when 4th digit is entered
-    if (value && index === 3) {
-      const completeOtp = newOtp.join('');
-      if (completeOtp.length === 4) {
-        setTimeout(() => {
-          handleVerifyOtp();
-        }, 300);
-      }
-    }
-  }, [otp, boxAnimations, handleVerifyOtp]);
+    // No auto-verify - user must click verify button
+  }, [boxAnimations, otp]);
 
   // Enhanced key press handler
   const handleKeyPress = useCallback((key: string, index: number) => {
@@ -199,19 +176,24 @@ const OtpScreen = () => {
     try {
       setIsVerifying(true);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setTimer(60);
-      setCanResend(false);
-      setOtp(['', '', '', '']);
-      Alert.alert('Success', 'OTP sent successfully');
-    } catch {
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      // Resend OTP request to backend
+      const response = await apiClient.post('/api/v1/user/onboarding', {
+        phone: phoneNumber
+      });
+
+      if (response.data.success) {
+        setTimer(60);
+        setCanResend(false);
+        setOtp(['', '', '', '']);
+        setActiveIndex(0);
+        inputRefs.current[0]?.focus();
+      }
+    } catch (error: any) {
+      console.error('Resend OTP error:', error);
     } finally {
       setIsVerifying(false);
     }
-  }, []);
+  }, [phoneNumber]);
 
   return (
     <View style={styles.container}>
@@ -226,7 +208,6 @@ const OtpScreen = () => {
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
-            <Text style={styles.backButtonText}>Back</Text>
           </Pressable>
         </View>
 
@@ -250,10 +231,7 @@ const OtpScreen = () => {
             {/* Scrollable Content Section */}
             <View style={styles.scrollableContent}>
               {/* OTP Input */}
-              <Animated.View style={[
-                styles.otpContainer,
-                { transform: [{ translateX: shakeAnim }] }
-              ]}>
+              <View style={styles.otpContainer}>
                 {otp.map((digit, index) => (
                   <Animated.View
                     key={index}
@@ -282,12 +260,8 @@ const OtpScreen = () => {
                     />
                   </Animated.View>
                 ))}
-              </Animated.View>
+              </View>
               
-              {/* Demo text moved below boxes */}
-              <Text style={styles.demoText}>
-                Demo: Enter any 4-digit number (e.g., 1234)
-              </Text>
 
               {/* Verify Button */}
               <Animated.View style={{ opacity: fadeAnim }}>

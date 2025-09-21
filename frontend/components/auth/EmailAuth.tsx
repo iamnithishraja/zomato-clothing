@@ -11,6 +11,7 @@ import {
   Animated,
   Alert,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
@@ -28,51 +29,77 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
   const router = useRouter();
   const { login } = useAuth();
   
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
 
   // Memoized validation
+  const isValidName = useMemo(() => {
+    if (isLogin) return true; // Name not required for login
+    return name && name.trim().length >= 2;
+  }, [name, isLogin]);
+
   const isValidEmail = useMemo(() => {
     if (!email || email.length === 0) return false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email) && email.length <= 320; // RFC 5321 limit
   }, [email]);
 
+  const isValidPhone = useMemo(() => {
+    if (isLogin) return true; // Phone not required for login
+    if (!phone || phone.length === 0) return true; // Phone is optional for registration
+    const cleanPhone = phone.replace(/\D/g, '');
+    return cleanPhone.length >= 10;
+  }, [phone, isLogin]);
+
   const isValidPassword = useMemo(() => {
     if (!password || password.length === 0) return false;
-    if (password.length < 8) return false;
+    if (password.length < 6) return false; // Minimum 6 characters
     if (password.length > 128) return false;
-    
-    // For registration, check password strength
-    if (!isLogin) {
-      const hasUpperCase = /[A-Z]/.test(password);
-      const hasLowerCase = /[a-z]/.test(password);
-      const hasNumbers = /\d/.test(password);
-      const hasSpecialChar = /[@$!%*?&]/.test(password);
-      
-      return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar;
-    }
-    
-    return true; // For login, just check length
-  }, [password, isLogin]);
+    return true; // Simple validation for both login and registration
+  }, [password]);
 
   const isFormValid = useMemo(() => {
-    return isValidEmail && isValidPassword;
-  }, [isValidEmail, isValidPassword]);
+    if (isLogin) {
+      if (loginMethod === 'email') {
+        return isValidEmail && isValidPassword;
+      } else if (loginMethod === 'phone') {
+        return isValidPhone && isValidPassword;
+      }
+      return false;
+    } else {
+      // For registration: name + password + (email OR phone)
+      const hasEmailOrPhone = (email && isValidEmail) || (phone && isValidPhone);
+      return isValidName && isValidPassword && hasEmailOrPhone;
+    }
+  }, [isValidName, isValidEmail, isValidPassword, isValidPhone, isLogin, loginMethod, email, phone]);
+
+  const handleNameChange = useCallback((text: string) => {
+    setName(text.trim());
+  }, []);
 
   const handleEmailChange = useCallback((text: string) => {
     // Only convert to lowercase, let backend handle trimming
     setEmail(text.toLowerCase());
   }, []);
 
+  const handlePhoneChange = useCallback((text: string) => {
+    // Clean phone number - remove all non-digit characters
+    const cleaned = text.replace(/\D/g, '');
+    setPhone(cleaned);
+  }, []);
+
   const handlePasswordChange = useCallback((text: string) => {
     // Don't modify password input, let user type what they want
     setPassword(text);
   }, []);
+
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword(!showPassword);
@@ -104,10 +131,18 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
       console.log('Sending request to:', endpoint);
       console.log('Request data:', { email, password: '***' });
       
-      const response = await apiClient.post(endpoint, {
-        email,
-        password
-      });
+      const requestData = isLogin 
+        ? (loginMethod === 'email' 
+            ? { email, password }
+            : { phone: phone.replace(/\D/g, ''), password }) // Send clean 10-digit number for phone login
+        : { 
+            name, 
+            password,
+            ...(email && { email }),
+            ...(phone && phone.trim() && { phone: phone.replace(/\D/g, '') }) // Send clean 10-digit number
+          };
+      
+      const response = await apiClient.post(endpoint, requestData);
 
       if (response.data.success) {
         // Store token and user data using AuthContext
@@ -128,11 +163,14 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [isFormValid, isLoading, fadeAnim, email, password, isLogin, login, router]);
+  }, [isFormValid, isLoading, fadeAnim, name, email, phone, password, isLogin, loginMethod, login, router]);
 
   const toggleMode = useCallback(() => {
     setIsLogin(!isLogin);
+    setLoginMethod('email'); // Reset to email login by default
+    setName('');
     setEmail('');
+    setPhone('');
     setPassword('');
     setShowPassword(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -147,51 +185,125 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        {/* Header */}
+        {/* Header with back button and logo */}
         <View style={styles.header}>
           <Pressable onPress={onBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
           </Pressable>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoText}>Locals</Text>
+            <View style={styles.logoUnderline} />
+          </View>
         </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          {/* Modal Container */}
-          <View style={styles.modalContainer}>
-            {/* Fixed Header Section */}
-            <View style={styles.modalHeader}>
-              <View style={styles.logoContainer}>
-                <Text style={styles.logoText}>Locals</Text>
-                <View style={styles.logoUnderline} />
-              </View>
-              <Text style={styles.title}>
-                {isLogin ? 'Welcome Back' : 'Create Account'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {isLogin 
-                  ? 'Sign in to your account to continue' 
-                  : 'Enter your details to create a new account'
-                }
-              </Text>
-            </View>
+        {/* Main Content */}
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            <Text style={styles.title}>
+              {isLogin ? 'Welcome Back' : 'Create Account'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isLogin 
+                ? 'Sign in to your account to continue' 
+                : 'Enter your details to create a new account. You need either email or phone number.'
+              }
+            </Text>
 
-            {/* Scrollable Content Section */}
-            <View style={styles.scrollableContent}>
-              {/* Email Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Email Address</Text>
+            {/* Form Content */}
+            <View style={styles.formContent}>
+              {/* Login Method Toggle - Only show for login */}
+              {isLogin && (
+                <View style={styles.loginMethodContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.loginMethodButton,
+                      loginMethod === 'email' && styles.loginMethodButtonActive
+                    ]}
+                    onPress={() => {
+                      setLoginMethod('email');
+                      setPhone('');
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Text style={[
+                      styles.loginMethodText,
+                      loginMethod === 'email' && styles.loginMethodTextActive
+                    ]}>
+                      Email
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.loginMethodButton,
+                      loginMethod === 'phone' && styles.loginMethodButtonActive
+                    ]}
+                    onPress={() => {
+                      setLoginMethod('phone');
+                      setEmail('');
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Text style={[
+                      styles.loginMethodText,
+                      loginMethod === 'phone' && styles.loginMethodTextActive
+                    ]}>
+                      Phone
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {/* Name Input - Only show for registration */}
+              {!isLogin && (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons 
+                      name="person-outline" 
+                      size={20} 
+                      color={name ? Colors.buttonPrimary : Colors.textMuted} 
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={name}
+                      onChangeText={handleNameChange}
+                      placeholder="Enter your full name"
+                      placeholderTextColor={Colors.textMuted}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      autoComplete="name"
+                    />
+                  </View>
+                  {name && !isValidName && (
+                    <Text style={styles.errorText}>
+                      Name must be at least 2 characters long
+                    </Text>
+                  )}
+                </View>
+              )}
+
+
+              {/* Email Input - Show for email login or registration */}
+              {(!isLogin || loginMethod === 'email') && (
+                <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email Address {!isLogin ? '' : ''}</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons 
                     name="mail-outline" 
                     size={20} 
-                    color={email ? Colors.primary : Colors.textMuted} 
+                    color={email ? Colors.buttonPrimary : Colors.textMuted} 
                     style={styles.inputIcon}
                   />
                   <TextInput
                     style={styles.textInput}
                     value={email}
                     onChangeText={handleEmailChange}
-                    placeholder="Enter your email"
+                    placeholder={isLogin ? "Enter your email" : "Enter your email "}
                     placeholderTextColor={Colors.textMuted}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -204,7 +316,37 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
                     Please enter a valid email address
                   </Text>
                 )}
-              </View>
+                </View>
+              )}
+
+              {/* Phone Input - Show for phone login or registration */}
+              {(!isLogin || loginMethod === 'phone') && (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Phone Number {!isLogin ? '(Optional)' : ''}</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons 
+                      name="call-outline" 
+                      size={20} 
+                      color={phone ? Colors.buttonPrimary : Colors.textMuted} 
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={phone}
+                      onChangeText={handlePhoneChange}
+                      placeholder={isLogin ? "Enter your phone number" : "Enter your phone number (optional)"}
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="phone-pad"
+                      autoComplete="tel"
+                    />
+                  </View>
+                  {phone && !isValidPhone && (
+                    <Text style={styles.errorText}>
+                      Please enter a valid 10-digit phone number
+                    </Text>
+                  )}
+                </View>
+              )}
 
               {/* Password Input */}
               <View style={styles.inputContainer}>
@@ -213,7 +355,7 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
                   <Ionicons 
                     name="lock-closed-outline" 
                     size={20} 
-                    color={password ? Colors.primary : Colors.textMuted} 
+                    color={password ? Colors.buttonPrimary : Colors.textMuted} 
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -237,10 +379,7 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
                 </View>
                 {password && !isValidPassword && (
                   <Text style={styles.errorText}>
-                    {!isLogin 
-                      ? 'Password must contain uppercase, lowercase, number, and special character (@$!%*?&)'
-                      : 'Password must be at least 8 characters'
-                    }
+                    Password must be at least 6 characters long
                   </Text>
                 )}
               </View>
@@ -298,7 +437,7 @@ const EmailAuth: React.FC<EmailAuthProps> = ({ onBack }) => {
               </View>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -313,10 +452,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 100 : 80,
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
     paddingBottom: 20,
-    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   backButton: {
     flexDirection: 'row',
@@ -333,37 +474,47 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  content: {
+  scrollContainer: {
     flex: 1,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  scrollableContent: {
-    flex: 1,
-    paddingHorizontal: 24,
+  scrollContent: {
+    flexGrow: 1,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  formContent: {
+    paddingTop: 20,
+  },
+  loginMethodContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
+  },
+  loginMethodButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loginMethodButtonActive: {
+    backgroundColor: Colors.buttonPrimary,
+  },
+  loginMethodText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  loginMethodTextActive: {
+    color: '#FFFFFF',
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 20,
   },
   logoText: {
     fontSize: 28,
@@ -383,7 +534,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
     letterSpacing: -0.5,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
@@ -393,17 +544,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 8,
+    marginBottom: 24,
+    paddingHorizontal: 10,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 6,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   inputWrapper: {
@@ -411,10 +563,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: Colors.background,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -447,15 +599,16 @@ const styles = StyleSheet.create({
   submitButton: {
     borderRadius: 20,
     overflow: 'hidden',
-    marginTop: 24,
-    marginBottom: 32,
+    marginTop: 20,
+    marginBottom: 24,
     elevation: 6,
-    shadowColor: Colors.primary,
+    shadowColor: Colors.buttonPrimary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
   },
   submitButtonDisabled: {
+    opacity: 0.7,
     elevation: 0,
     shadowOpacity: 0,
   },
@@ -468,17 +621,18 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 19,
     fontWeight: '800',
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
     letterSpacing: 1.0,
   },
   submitButtonTextDisabled: {
-    color: Colors.textMuted,
+    color: Colors.textPrimary,
+    opacity: 0.7,
   },
   toggleContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   toggleText: {
     fontSize: 16,
@@ -487,7 +641,7 @@ const styles = StyleSheet.create({
   },
   toggleLink: {
     fontSize: 16,
-    color: Colors.primary,
+    color: Colors.buttonPrimary,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
@@ -508,9 +662,9 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.buttonPrimary,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: Colors.buttonPrimary,
   },
   securityText: {
     fontSize: 14,

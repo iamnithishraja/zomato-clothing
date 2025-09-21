@@ -55,3 +55,30 @@ export const emailLoginSchema = z.object({
     email: emailSchema,
     password: passwordLoginSchema,
 });
+
+// Unified login schema (supports email+password or phone+password)
+export const loginSchema = z.object({
+    email: emailSchema.optional(),
+    phone: phoneSchema.optional(),
+    password: passwordLoginSchema,
+}).refine((data) => {
+    // Must have either email OR phone
+    return data.email || data.phone;
+}, {
+    message: "Either email or phone number is required for login",
+    path: ["email", "phone"]
+});
+
+// Unified user registration schema (supports both email and phone auth)
+export const userSchema = z.object({
+    name: z.string().min(2, "Name must be at least 2 characters long").trim(),
+    email: emailSchema.optional(),
+    phone: phoneSchema.optional(),
+    password: passwordRegisterSchema,
+}).refine((data) => {
+    // Must have either email OR phone (but not both required)
+    return data.email || data.phone;
+}, {
+    message: "Either email or phone number must be provided",
+    path: ["email", "phone"]
+});

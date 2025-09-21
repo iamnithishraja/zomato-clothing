@@ -61,9 +61,9 @@ const Auth = () => {
         }),
       ]).start();
 
-      // Format phone number properly
+      // Format phone number properly - send clean 10-digit number
       const cleanPhone = phoneNumber.replace(/\D/g, '');
-      const finalPhoneNumber = `+91${cleanPhone}`;
+      const finalPhoneNumber = cleanPhone; // Send 10-digit number to backend
 
       // Send OTP request to backend
       const response = await apiClient.post('/api/v1/user/onboarding', {

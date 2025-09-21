@@ -1,6 +1,6 @@
 
     import UserModel from "../Models/userModel";
-    import { onbooardingSchema, verifyOtpSchema, emailRegisterSchema, emailLoginSchema } from "../schemas/onboardingSchema";
+    import { onbooardingSchema, verifyOtpSchema, userSchema, loginSchema } from "../schemas/onboardingSchema";
     import { generateOTP } from "../utils/otp";
     import { sendPhoneOtp } from "../utils/sms";
     import type { Response, Request } from "express";
@@ -12,13 +12,15 @@
     async function onboarding(req: Request, res: Response) {
     try {
         const { phone } = onbooardingSchema.parse(req.body);
-        const user: User | null = await UserModel.findOne({ phone: phone });
+        // Store phone as 10-digit number like registerUser (e.g., 9876543210)
+        const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+        const user: User | null = await UserModel.findOne({ phone: cleanPhone });
         
         const otp = generateOTP();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // OTP valid for 15 minutes
         
-        // Send OTP first
-        const smsResult = await sendPhoneOtp(phone, otp);
+        // Send OTP first - use clean phone number
+        const smsResult = await sendPhoneOtp(cleanPhone, otp);
         
         if (!smsResult) {
             return res.status(400).json({
@@ -30,9 +32,10 @@
         if (!user) {
             // Create new user with OTP
             const newUser = await UserModel.create({ 
-                phone,
+                phone: cleanPhone,
                 otp,
-                otpExpiry
+                otpExpiry,
+                role: 'user'
             });
             
             return res.status(201).json({
@@ -87,7 +90,9 @@
     try {
         const { phone, otp } = verifyOtpSchema.parse(req.body);
 
-        const user: User | null = await UserModel.findOne({ phone: phone });
+        // Store phone as 10-digit number like onboarding (e.g., 9876543210)
+        const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+        const user: User | null = await UserModel.findOne({ phone: cleanPhone });
         if (!user) {
             return res.status(400).json({ 
                 success: false, 
@@ -176,9 +181,11 @@
             message: "Profile retrieved successfully",
             user: {
                 _id: user._id,
+                name: user.name,
                 phone: user.phone,
                 email: user.email,
                 isPhoneVerified: user.isPhoneVerified,
+                isEmailVerified: user.isEmailVerified,
                 role: user.role
             }
         });
@@ -191,215 +198,300 @@
     }
     }
 
-    async function emailRegister(req: Request, res: Response) {
-        const startTime = Date.now();
-        
+    async function registerUser(req: Request, res: Response): Promise<void> {
         try {
-            // Validate input using schema with safeParse for better error handling
-            const validationResult = emailRegisterSchema.safeParse(req.body);
+            console.log('Register request body:', req.body);
             
-            if (!validationResult.success) {
-                const firstError = validationResult.error.issues[0];
-                console.log('Registration validation failed:', validationResult.error.issues);
-                
-                return res.status(400).json({
+            // Validate request body
+            if (!req.body || Object.keys(req.body).length === 0) {
+                res.status(400).json({ 
                     success: false,
-                    message: firstError?.message || "Invalid input data",
-                    field: firstError?.path.join('.') || 'unknown',
-                    errors: validationResult.error.issues.map((err: any) => ({
-                        field: err.path.join('.'),
-                        message: err.message
-                    }))
+                    message: 'Request body is required' 
                 });
+                return;
             }
-
-            const { email, password } = validationResult.data;
-            console.log('Email registration attempt for:', email);
-
-            // Check if user already exists with this email
-            const existingUser: User | null = await UserModel.findOne({ email });
-            console.log('User existence check for email:', email, 'Result:', existingUser ? 'EXISTS' : 'NOT_FOUND');
             
-            if (existingUser) {
-                console.log('Registration failed - user already exists:', email);
-                return res.status(409).json({
-                    success: false,
-                    message: "An account with this email already exists. Please login instead.",
-                });
+            const { name, email, phone, password } = userSchema.parse(req.body);
+            console.log('Parsed data:', { name, email, phone });
+            
+            // Check if user already exists by email (if email provided)
+            if (email) {
+                const existingUserByEmail = await UserModel.findOne({ email: email.toLowerCase().trim() });
+                if (existingUserByEmail) {
+                    res.status(400).json({ 
+                        success: false,
+                        message: 'User with this email already exists' 
+                    });
+                    return;
+                }
             }
-
-            // Hash password with higher salt rounds for production
-            const saltRounds = process.env.NODE_ENV === 'production' ? 14 : 12;
-            const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-            // Create new user
-            const newUser = await UserModel.create({
-                email,
+            
+            // Check if user already exists by phone (if phone provided)
+            if (phone) {
+                // Store phone as 10-digit number like onboarding (e.g., 9876543210)
+                const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+                const existingUserByPhone = await UserModel.findOne({ phone: cleanPhone });
+                if (existingUserByPhone) {
+                    res.status(400).json({ 
+                        success: false,
+                        message: 'User with this phone number already exists' 
+                    });
+                    return;
+                }
+            }
+            
+            // Hash password
+            const hashedPassword = await bcrypt.hash(password, 10);
+            console.log('Password hashed successfully');
+            
+            // Create user object
+            const userData: any = { 
+                name: name.trim(),
                 password: hashedPassword,
-                isPhoneVerified: false, // Email users don't need phone verification
-            });
-            console.log('User created successfully:', newUser._id);
-
-            // Generate JWT token
-            const token = generateToken(newUser._id.toString());
-
-            // Prepare user response (exclude sensitive data)
-            const userResponse = {
-                _id: newUser._id,
-                email: newUser.email,
-                role: newUser.role,
-                createdAt: newUser.createdAt
+                role: 'user' // Always default to user role
             };
-
-            return res.status(201).json({
-                success: true,
-                message: "Account created successfully. You are now logged in.",
-                user: userResponse,
-                token,
-            });
-
-        } catch (error) {
-            const processingTime = Date.now() - startTime;
-            console.error("Error during email registration:", error);
             
-            // Handle MongoDB duplicate key error (backup check)
-            if ((error as any).code === 11000) {
-                return res.status(409).json({
-                    success: false,
-                    message: "An account with this email already exists. Please login instead.",
-                });
+            // Add email if provided
+            if (email) {
+                userData.email = email.toLowerCase().trim();
+                userData.isEmailVerified = true; // Email auth is verified immediately
             }
             
-            return res.status(500).json({
-                success: false,
-                message: "Registration failed. Please try again.",
-                ...(process.env.NODE_ENV === 'development' && {
-                    error: error instanceof Error ? error.message : 'Unknown error'
-                })
-            });
-        }
-    }
-
-    async function emailLogin(req: Request, res: Response) {
-        const startTime = Date.now();
-        
-        try {
-            // Validate input using schema with safeParse for better error handling
-            const validationResult = emailLoginSchema.safeParse(req.body);
+            // Add phone if provided
+            if (phone) {
+                // Store phone as 10-digit number like onboarding (e.g., 9876543210)
+                userData.phone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+                userData.isPhoneVerified = false; // Phone needs to be verified via OTP later
+            }
             
-            if (!validationResult.success) {
-                const firstError = validationResult.error.issues[0];
-                console.log('Login validation failed:', validationResult.error.issues);
-                
-                return res.status(400).json({
+            // Create user
+            const user = await UserModel.create(userData);
+            console.log('User created:', user._id);
+            
+            // Generate token
+            const token = generateToken(user._id.toString());
+            console.log('Token generated');
+            
+            // Remove sensitive data from response
+            const userResponse = user.toObject();
+            delete userResponse.password;
+            delete userResponse.otp;
+            delete userResponse.otpExpiry;
+            
+            res.status(201).json({ 
+                success: true,
+                user: userResponse,
+                token,
+                message: 'Registration successful'
+            });
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            // Handle Zod validation errors
+            if (error instanceof z.ZodError) {
+                res.status(400).json({ 
                     success: false,
-                    message: firstError?.message || "Invalid input data",
-                    field: firstError?.path.join('.') || 'unknown',
-                    errors: validationResult.error.issues.map((err: any) => ({
+                    message: 'Validation failed', 
+                    errors: error.issues.map((err: any) => ({
                         field: err.path.join('.'),
                         message: err.message
                     }))
                 });
+                return;
             }
-
-            const { email, password } = validationResult.data;
-            console.log('Email login attempt for:', email);
-
-            // Find user by email
-            const user: User | null = await UserModel.findOne({ email });
-
-            // Always hash the password even if user doesn't exist (timing attack prevention)
-            const dummyHash = '$2a$12$dummy.hash.to.prevent.timing.attacks.against.user.enumeration.attacks';
-            const passwordToCompare = user?.password || dummyHash;
-            const isPasswordValid = await bcrypt.compare(password, passwordToCompare);
-
-            if (!user || !isPasswordValid) {
-                console.log('Login failed for:', email, 'Reason:', !user ? 'USER_NOT_FOUND' : 'INVALID_PASSWORD');
-                
-                // Generic error message to prevent user enumeration
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid email or password",
-                });
+            
+            // Handle MongoDB duplicate key errors
+            if (error instanceof Error && error.message.includes('duplicate key')) {
+                if (error.message.includes('email')) {
+                    res.status(400).json({ 
+                        success: false,
+                        message: 'User with this email already exists' 
+                    });
+                } else if (error.message.includes('phone')) {
+                    res.status(400).json({ 
+                        success: false,
+                        message: 'User with this phone number already exists' 
+                    });
+                } else {
+                    res.status(400).json({ 
+                        success: false,
+                        message: 'User already exists' 
+                    });
+                }
+                return;
             }
-
-            // Check if user has a password (in case they registered with phone)
-            if (!user.password) {
-                console.log('Login failed - no password set for user:', email);
-                return res.status(400).json({
-                    success: false,
-                    message: "No password set for this account. Please use phone login or reset your password.",
-                });
-            }
-
-            // Generate JWT token
-            const token = generateToken(user._id.toString());
-            console.log('Login successful for:', email);
-
-            // Prepare user response (exclude sensitive data)
-            const userResponse = {
-                _id: user._id,
-                email: user.email,
-                phone: user.phone,
-                isPhoneVerified: user.isPhoneVerified,
-                role: user.role
-            };
-
-            return res.status(200).json({
-                success: true,
-                message: "Login successful.",
-                user: userResponse,
-                token,
-            });
-
-        } catch (error) {
-            const processingTime = Date.now() - startTime;
-            console.error("Error during email login:", error);
-
-            return res.status(500).json({
+            
+            // Generic error response
+            res.status(500).json({ 
                 success: false,
-                message: "Login failed. Please try again.",
-                ...(process.env.NODE_ENV === 'development' && {
-                    error: error instanceof Error ? error.message : 'Unknown error'
-                })
+                message: 'Internal server error', 
+                error: error instanceof Error ? error.message : 'Unknown error'
             });
         }
     }
 
-    async function getAllUsers(req: Request, res: Response) {
-        try {
-            const users = await UserModel.find({});
-            console.log('Total users in database:', users.length);
+async function loginUser(req: Request, res: Response): Promise<void> {
+    try {
+        // Validate request body - allow OTP login for phone
+        const { email, phone, password, otp } = req.body;
+        
+        // Validate input - must have either email+password OR phone+password OR phone+otp
+        if (!((email && password) || (phone && password) || (phone && otp))) {
+            res.status(400).json({ 
+                success: false,
+                message: 'Invalid login credentials provided' 
+            });
+            return;
+        }
+        
+        console.log('Login attempt:', { 
+            email: email ? 'provided' : 'not provided', 
+            phone: phone ? 'provided' : 'not provided',
+            method: otp ? 'OTP' : 'password'
+        });
+        
+        let user;
+        let loginMethod = '';
+        
+        // Find user by email or phone
+        if (email) {
+            user = await UserModel.findOne({ email: email.toLowerCase().trim() }).select('+password');
+            loginMethod = 'email';
+            console.log('Email login attempt for:', email);
+        } else if (phone) {
+            // Store phone as 10-digit number like onboarding (e.g., 9876543210)
+            const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+            user = await UserModel.findOne({ phone: cleanPhone }).select('+password');
+            loginMethod = 'phone';
+            console.log('Phone login attempt for:', phone, '-> clean phone:', cleanPhone);
+        }
+        
+        if (!user) {
+            console.log('User not found');
+            res.status(401).json({ 
+                success: false,
+                message: 'Invalid credentials' 
+            });
+            return;
+        }
+        
+        // Handle different login methods
+        if (otp) {
+            // OTP login - first check if user has an OTP, if not generate one
+            if (!user.otp || !user.otpExpiry || user.otpExpiry < new Date()) {
+                // Generate new OTP
+                const newOtp = generateOTP();
+                const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // OTP valid for 15 minutes
+                
+                // Update user with new OTP
+                await UserModel.updateOne(
+                    { _id: user._id },
+                    { otp: newOtp, otpExpiry }
+                );
+                
+                // Send OTP via SMS - use the clean phone number from database
+                try {
+                    const phoneToSend = user.phone; // Use the phone number from database (10-digit format)
+                    if (!phoneToSend) {
+                        console.log('No phone number found for user');
+                        res.status(400).json({ 
+                            success: false,
+                            message: 'No phone number found for this account' 
+                        });
+                        return;
+                    }
+                    await sendPhoneOtp(phoneToSend, newOtp);
+                    console.log('New OTP sent for login to:', phoneToSend);
+                } catch (smsError) {
+                    console.log('Failed to send OTP:', smsError);
+                }
+                
+                res.status(200).json({ 
+                    success: true, 
+                    message: 'OTP sent to your phone. Please enter the OTP to complete login.',
+                    requiresOtp: true 
+                });
+                return;
+            }
             
-            // Debug: Check for users with specific email patterns
-            const emailUsers = await UserModel.find({ email: { $exists: true, $ne: null } });
-            console.log('Users with email field:', emailUsers.length);
+            // Verify provided OTP
+            if (user.otp !== otp) {
+                console.log('Invalid OTP for user');
+                res.status(401).json({ message: 'Invalid OTP' });
+                return;
+            }
             
-            // Debug: Check for users with specific email
-            const testEmail = 'newuser@example.com';
-            const specificUser = await UserModel.findOne({ email: testEmail });
-            console.log('Specific user check for', testEmail, ':', specificUser ? 'FOUND' : 'NOT_FOUND');
+            // Clear OTP and mark phone as verified
+            await UserModel.updateOne(
+                { _id: user._id },
+                {
+                    $unset: { otp: 1, otpExpiry: 1 },
+                    isPhoneVerified: true
+                }
+            );
             
-            return res.status(200).json({
-                success: true,
-                message: "Users retrieved successfully",
-                count: users.length,
-                emailUsersCount: emailUsers.length,
-                specificUserCheck: specificUser ? 'FOUND' : 'NOT_FOUND',
-                users: users.map(user => ({
-                    id: user._id,
-                    email: user.email,
-                    phone: user.phone,
-                    hasPassword: !!user.password,
-                    isPhoneVerified: user.isPhoneVerified
+            console.log('OTP login successful for:', phone);
+        } else if (password) {
+            // Password login (email or phone)
+            if (!user.password) {
+                console.log('No password set for user');
+                res.status(400).json({ 
+                    success: false,
+                    message: 'No password set for this account' 
+                });
+                return;
+            }
+            
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            if (!isPasswordValid) {
+                console.log('Invalid password for:', loginMethod);
+                res.status(401).json({ 
+                    success: false,
+                    message: 'Invalid credentials' 
+                });
+                return;
+            }
+            
+            console.log('Password login successful for:', loginMethod);
+        }
+
+        const token = generateToken(user._id.toString());
+        
+        // Remove sensitive data from response
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.otp;
+        delete userResponse.otpExpiry;
+        
+        res.status(200).json({ 
+            success: true, 
+            user: userResponse, 
+            token,
+            message: 'Login successful'
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        
+        // Handle Zod validation errors
+        if (error instanceof z.ZodError) {
+            res.status(400).json({ 
+                success: false,
+                message: 'Validation failed', 
+                errors: error.issues.map((err: any) => ({
+                    field: err.path.join('.'),
+                    message: err.message
                 }))
             });
-        } catch (error) {
-            console.error("Error getting all users:", error);
-            return res.status(500).json({
-                success: false,
-                message: "Internal server error",
-            });
+            return;
         }
+        
+        // Generic error response
+        res.status(500).json({ 
+            success: false,
+            message: 'Internal server error' 
+        });
     }
-    export { onboarding, verifyOtp, getProfile, emailRegister, emailLogin, getAllUsers,  };
+}
+
+
+    export { onboarding, verifyOtp, getProfile, registerUser, loginUser };

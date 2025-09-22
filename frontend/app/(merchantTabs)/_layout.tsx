@@ -25,11 +25,11 @@ export default function MerchantTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="orders"
+        name="products"
         options={{
-          title: 'Orders',
+          title: 'Products',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="receipt" color={color} size={size} />
+            <Ionicons name="shirt" color={color} size={size} />
           ),
         }}
       />

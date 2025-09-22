@@ -4,6 +4,7 @@ import cors from "cors";
 import { connectDatabse } from "./config/database";
 import userRoute from "./routes/userRoutes";
 import storeRoute from "./routes/storeRoutes";
+import productRoute from "./routes/productRoutes";
 
 
 dotenv.config();
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/store", storeRoute);
+app.use("/api/v1/product", productRoute);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);

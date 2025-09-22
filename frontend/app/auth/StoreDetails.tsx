@@ -19,10 +19,14 @@ import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface BusinessHours {
-  open: string;
-  close: string;
-  isClosed: boolean;
+interface WorkingDays {
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
 }
 
 interface StoreData {
@@ -35,15 +39,14 @@ interface StoreData {
     email: string;
     website: string;
   };
-  businessHours: {
-    monday: BusinessHours;
-    tuesday: BusinessHours;
-    wednesday: BusinessHours;
-    thursday: BusinessHours;
-    friday: BusinessHours;
-    saturday: BusinessHours;
-    sunday: BusinessHours;
-  };
+  workingDays: WorkingDays;
+}
+
+interface FormErrors {
+  storeName?: string;
+  address?: string;
+  mapLink?: string;
+  workingDays?: string;
 }
 
 const StoreDetails = () => {
@@ -60,26 +63,58 @@ const StoreDetails = () => {
       email: '',
       website: '',
     },
-    businessHours: {
-      monday: { open: '09:00', close: '18:00', isClosed: false },
-      tuesday: { open: '09:00', close: '18:00', isClosed: false },
-      wednesday: { open: '09:00', close: '18:00', isClosed: false },
-      thursday: { open: '09:00', close: '18:00', isClosed: false },
-      friday: { open: '09:00', close: '18:00', isClosed: false },
-      saturday: { open: '09:00', close: '18:00', isClosed: false },
-      sunday: { open: '09:00', close: '18:00', isClosed: false },
+    workingDays: {
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
     },
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  // Simple validation - just check if required fields are filled
+  // Validation function
+  const validateForm = useCallback((): FormErrors => {
+    const newErrors: FormErrors = {};
+
+    // Store name validation
+    if (!storeData.storeName.trim()) {
+      newErrors.storeName = 'Store name is required';
+    } else if (storeData.storeName.trim().length < 2) {
+      newErrors.storeName = 'Store name must be at least 2 characters';
+    }
+
+    // Address validation
+    if (!storeData.address.trim()) {
+      newErrors.address = 'Address is required';
+    } else if (storeData.address.trim().length < 5) {
+      newErrors.address = 'Address must be at least 5 characters';
+    }
+
+    // Map link validation
+    if (!storeData.mapLink.trim()) {
+      newErrors.mapLink = 'Map link is required';
+    }
+
+    // Working days validation
+    const hasWorkingDays = Object.values(storeData.workingDays).some(day => day === true);
+    if (!hasWorkingDays) {
+      newErrors.workingDays = 'Please select at least one working day';
+    }
+
+    return newErrors;
+  }, [storeData]);
+
+  // Check if form is valid
   const isFormValid = useMemo(() => {
-    return storeData.storeName.trim().length >= 2 && 
-           storeData.address.trim().length >= 5 && 
-           storeData.mapLink.trim().length > 0;
-  }, [storeData.storeName, storeData.address, storeData.mapLink]);
+    const validationErrors = validateForm();
+    return Object.keys(validationErrors).length === 0;
+  }, [validateForm]);
 
   const handleInputChange = useCallback((field: string, value: string) => {
     if (field.includes('.')) {
@@ -97,23 +132,44 @@ const StoreDetails = () => {
         [field]: value
       }));
     }
-  }, []);
 
-  const handleBusinessHoursChange = useCallback((day: string, field: string, value: string | boolean) => {
+    // Clear error when user starts typing
+    if (errors[field as keyof FormErrors]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
+  }, [errors]);
+
+  const handleWorkingDayToggle = useCallback((day: keyof WorkingDays) => {
     setStoreData(prev => ({
       ...prev,
-      businessHours: {
-        ...prev.businessHours,
-        [day]: {
-          ...prev.businessHours[day as keyof typeof prev.businessHours],
-          [field]: value
-        }
+      workingDays: {
+        ...prev.workingDays,
+        [day]: !prev.workingDays[day]
       }
     }));
-  }, []);
+
+    // Clear working days error when user selects a day
+    if (errors.workingDays) {
+      setErrors(prev => ({
+        ...prev,
+        workingDays: undefined
+      }));
+    }
+  }, [errors.workingDays]);
 
   const handleSubmit = useCallback(async () => {
-    if (!isFormValid || isLoading) return;
+    // Validate form
+    const validationErrors = validateForm();
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    if (isLoading) return;
 
     try {
       setIsLoading(true);
@@ -162,39 +218,40 @@ const StoreDetails = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isFormValid, isLoading, fadeAnim, storeData, login, token, router, user]);
+  }, [validateForm, isLoading, fadeAnim, storeData, login, token, router, user]);
 
-  const renderBusinessHours = () => {
+  const renderWorkingDays = () => {
     const days = [
-      { key: 'monday', label: 'Mon' },
-      { key: 'tuesday', label: 'Tue' },
-      { key: 'wednesday', label: 'Wed' },
-      { key: 'thursday', label: 'Thu' },
-      { key: 'friday', label: 'Fri' },
-      { key: 'saturday', label: 'Sat' },
-      { key: 'sunday', label: 'Sun' },
+      { key: 'monday' as keyof WorkingDays, label: 'Mon' },
+      { key: 'tuesday' as keyof WorkingDays, label: 'Tue' },
+      { key: 'wednesday' as keyof WorkingDays, label: 'Wed' },
+      { key: 'thursday' as keyof WorkingDays, label: 'Thu' },
+      { key: 'friday' as keyof WorkingDays, label: 'Fri' },
+      { key: 'saturday' as keyof WorkingDays, label: 'Sat' },
+      { key: 'sunday' as keyof WorkingDays, label: 'Sun' },
     ];
 
     return (
-      <View style={styles.businessHoursContainer}>
-        <Text style={styles.sectionTitle}>Business Hours</Text>
+      <View style={styles.workingDaysContainer}>
+        <Text style={styles.sectionTitle}>Working Days *</Text>
         
         {/* Days Row */}
         <View style={styles.daysRow}>
           {days.map((day) => {
-            const dayData = storeData.businessHours[day.key as keyof typeof storeData.businessHours];
+            const isSelected = storeData.workingDays[day.key];
             return (
               <TouchableOpacity
                 key={day.key}
                 style={[
                   styles.dayButton,
-                  dayData.isClosed && styles.dayButtonClosed
+                  isSelected && styles.dayButtonSelected,
+                  errors.workingDays && styles.dayButtonError
                 ]}
-                onPress={() => handleBusinessHoursChange(day.key, 'isClosed', !dayData.isClosed)}
+                onPress={() => handleWorkingDayToggle(day.key)}
               >
                 <Text style={[
                   styles.dayButtonText,
-                  dayData.isClosed && styles.dayButtonTextClosed
+                  isSelected && styles.dayButtonTextSelected
                 ]}>
                   {day.label}
                 </Text>
@@ -203,44 +260,10 @@ const StoreDetails = () => {
           })}
         </View>
 
-        {/* Time Inputs for Open Days */}
-        <View style={styles.timeInputsContainer}>
-          <View style={styles.timeInputRow}>
-            <Text style={styles.timeLabel}>Opening Time</Text>
-            <Text style={styles.timeLabel}>Closing Time</Text>
-          </View>
-          
-          {days.map((day) => {
-            const dayData = storeData.businessHours[day.key as keyof typeof storeData.businessHours];
-            return (
-              <View key={day.key} style={styles.timeInputRow}>
-                <Text style={styles.dayLabel}>{day.label}</Text>
-                {dayData.isClosed ? (
-                  <View style={styles.closedIndicator}>
-                    <Text style={styles.closedText}>Closed</Text>
-                  </View>
-                ) : (
-                  <>
-                    <TextInput
-                      style={styles.timeInput}
-                      value={dayData.open}
-                      onChangeText={(value) => handleBusinessHoursChange(day.key, 'open', value)}
-                      placeholder="09:00"
-                      placeholderTextColor={Colors.textMuted}
-                    />
-                    <TextInput
-                      style={styles.timeInput}
-                      value={dayData.close}
-                      onChangeText={(value) => handleBusinessHoursChange(day.key, 'close', value)}
-                      placeholder="18:00"
-                      placeholderTextColor={Colors.textMuted}
-                    />
-                  </>
-                )}
-              </View>
-            );
-          })}
-        </View>
+        {/* Error message for working days */}
+        {errors.workingDays && (
+          <Text style={styles.errorText}>{errors.workingDays}</Text>
+        )}
       </View>
     );
   };
@@ -281,7 +304,10 @@ const StoreDetails = () => {
               {/* Store Name */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Store Name *</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputWrapper,
+                  errors.storeName && styles.inputWrapperError
+                ]}>
                   <Ionicons 
                     name="storefront-outline" 
                     size={20} 
@@ -298,6 +324,9 @@ const StoreDetails = () => {
                     autoCorrect={false}
                   />
                 </View>
+                {errors.storeName && (
+                  <Text style={styles.errorText}>{errors.storeName}</Text>
+                )}
               </View>
 
               {/* Store Description */}
@@ -326,7 +355,10 @@ const StoreDetails = () => {
               {/* Address */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Store Address *</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputWrapper,
+                  errors.address && styles.inputWrapperError
+                ]}>
                   <Ionicons 
                     name="location-outline" 
                     size={20} 
@@ -343,12 +375,18 @@ const StoreDetails = () => {
                     autoCorrect={false}
                   />
                 </View>
+                {errors.address && (
+                  <Text style={styles.errorText}>{errors.address}</Text>
+                )}
               </View>
 
               {/* Map Link */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Map Link *</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputWrapper,
+                  errors.mapLink && styles.inputWrapperError
+                ]}>
                   <Ionicons 
                     name="map-outline" 
                     size={20} 
@@ -366,6 +404,9 @@ const StoreDetails = () => {
                     keyboardType="url"
                   />
                 </View>
+                {errors.mapLink && (
+                  <Text style={styles.errorText}>{errors.mapLink}</Text>
+                )}
               </View>
 
               {/* Contact Information */}
@@ -435,8 +476,8 @@ const StoreDetails = () => {
                 </View>
               </View>
 
-              {/* Business Hours */}
-              {renderBusinessHours()}
+              {/* Working Days */}
+              {renderWorkingDays()}
 
               {/* Submit Button */}
               <Animated.View style={{ opacity: fadeAnim }}>
@@ -566,6 +607,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  inputWrapperError: {
+    borderColor: Colors.error,
+    shadowColor: Colors.error,
+    shadowOpacity: 0.3,
+  },
   textAreaWrapper: {
     alignItems: 'flex-start',
     paddingVertical: 16,
@@ -594,14 +640,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  businessHoursContainer: {
+  workingDaysContainer: {
     marginTop: 24,
     marginBottom: 16,
   },
   daysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 8,
     gap: 8,
   },
   dayButton: {
@@ -620,12 +666,17 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  dayButtonClosed: {
-    borderColor: Colors.error,
-    backgroundColor: Colors.error,
-    shadowColor: Colors.error,
+  dayButtonSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
     shadowOpacity: 0.3,
     elevation: 4,
+  },
+  dayButtonError: {
+    borderColor: Colors.error,
+    shadowColor: Colors.error,
+    shadowOpacity: 0.3,
   },
   dayButtonText: {
     fontSize: 14,
@@ -633,55 +684,15 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  dayButtonTextClosed: {
+  dayButtonTextSelected: {
     color: Colors.textPrimary,
   },
-  timeInputsContainer: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 16,
-    padding: 16,
-  },
-  timeInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-  },
-  timeLabel: {
+  errorText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    width: 60,
-    textAlign: 'center',
-  },
-  dayLabel: {
-    fontSize: 14,
+    color: Colors.error,
+    marginTop: 6,
+    marginLeft: 4,
     fontWeight: '500',
-    color: Colors.textSecondary,
-    width: 40,
-  },
-  timeInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.background,
-    textAlign: 'center',
-  },
-  closedIndicator: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  closedText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
   },
   submitButton: {
     borderRadius: 20,

@@ -278,7 +278,6 @@
             
             // Hash password
             const hashedPassword = await bcrypt.hash(password, 10);
-            console.log('Password hashed successfully');
             
             // Create user object for email-only registration
             const userData = { 
@@ -291,11 +290,9 @@
             
             // Create user
             const user = await UserModel.create(userData);
-            console.log('User created:', user._id);
             
             // Generate token
             const token = generateToken(user._id.toString());
-            console.log('Token generated');
             
             // Remove sensitive data from response
             const userResponse = user.toObject();
@@ -370,11 +367,6 @@ async function loginUser(req: Request, res: Response): Promise<void> {
             return;
         }
         
-        console.log('Login attempt:', { 
-            email: email ? 'provided' : 'not provided', 
-            phone: phone ? 'provided' : 'not provided',
-            method: otp ? 'OTP' : 'password'
-        });
         
         let user;
         let loginMethod = '';
@@ -383,7 +375,6 @@ async function loginUser(req: Request, res: Response): Promise<void> {
         if (email) {
             user = await UserModel.findOne({ email: email.toLowerCase().trim() }).select('+password');
             loginMethod = 'email';
-            console.log('Email login attempt for:', email);
         } else if (phone) {
             // Clean and validate phone number
             const phoneValidation = cleanAndValidatePhone(phone);
@@ -397,7 +388,6 @@ async function loginUser(req: Request, res: Response): Promise<void> {
             const cleanPhone = phoneValidation.cleanPhone;
             user = await UserModel.findOne({ phone: cleanPhone }).select('+password');
             loginMethod = 'phone';
-            console.log('Phone login attempt for:', phone, '-> clean phone:', cleanPhone);
         }
         
         if (!user) {
@@ -608,4 +598,180 @@ async function completeProfile(req: Request, res: Response) {
     }
 }
 
-    export { onboarding, verifyOtp, getProfile, registerUser, loginUser, completeProfile };
+async function updateProfile(req: Request, res: Response) {
+    try {
+        // User is already authenticated by middleware
+        const user = (req as any).user;
+        
+        // Get update data from request body
+        const { name, email, gender } = req.body;
+        
+        // Validate input data
+        const updateData: any = {};
+        
+        if (name !== undefined) {
+            if (typeof name !== 'string' || name.trim().length < 2) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Name must be at least 2 characters long"
+                });
+            }
+            updateData.name = name.trim();
+        }
+        
+        if (email !== undefined) {
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please provide a valid email address"
+                });
+            }
+            updateData.email = email ? email.toLowerCase().trim() : email;
+        }
+        
+        if (gender !== undefined) {
+            if (gender && !['male', 'female', 'other'].includes(gender)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Gender must be one of: male, female, other"
+                });
+            }
+            updateData.gender = gender;
+        }
+        
+        // Add updatedAt timestamp
+        updateData.updatedAt = new Date();
+        
+        // Check if email is being changed and if it already exists
+        if (updateData.email && updateData.email !== user.email) {
+            const existingUser = await UserModel.findOne({ 
+                email: updateData.email,
+                _id: { $ne: user._id }
+            });
+            
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: "An account with this email address already exists"
+                });
+            }
+        }
+        
+        // Update user profile
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            user._id,
+            updateData,
+            { new: true }
+        );
+        
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            user: {
+                _id: updatedUser._id,
+                name: updatedUser.name,
+                phone: updatedUser.phone,
+                email: updatedUser.email,
+                gender: updatedUser.gender,
+                isPhoneVerified: updatedUser.isPhoneVerified,
+                isEmailVerified: updatedUser.isEmailVerified,
+                isProfileComplete: updatedUser.isProfileComplete,
+                role: updatedUser.role,
+                createdAt: updatedUser.createdAt,
+                updatedAt: updatedUser.updatedAt
+            }
+        });
+        
+    } catch (error) {
+        console.error("Error updating profile:", error);
+        
+        // Handle MongoDB duplicate key errors
+        if (error instanceof Error && error.message.includes('duplicate key')) {
+            if (error.message.includes('email')) {
+                return res.status(409).json({
+                    success: false,
+                    message: "An account with this email address already exists"
+                });
+            }
+        }
+        
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+async function getUserStats(req: Request, res: Response) {
+    try {
+        // User is already authenticated by middleware
+        const user = (req as any).user;
+        
+        let stats = {};
+        
+        switch (user.role) {
+            case 'user':
+                // Customer stats - orders, wishlist, rating
+                stats = {
+                    totalOrders: 0, // This would come from Order model
+                    wishlistItems: 0, // This would come from Wishlist model
+                    averageRating: 0, // This would come from Review model
+                };
+                break;
+                
+            case 'merchant':
+                // Merchant stats - products, orders, earnings
+                const ProductModel = (await import('../Models/productModel')).default;
+                const StoreModel = (await import('../Models/storeModel')).default;
+                
+                const [productCount, store] = await Promise.all([
+                    ProductModel.countDocuments({ merchantId: user._id }),
+                    StoreModel.findOne({ userId: user._id })
+                ]);
+                
+                stats = {
+                    totalProducts: productCount,
+                    totalOrders: 0, // This would come from Order model
+                    totalEarnings: 0, // This would come from Order model
+                    storeRating: store?.rating?.average || 0,
+                    isStoreActive: store?.isActive || false,
+                };
+                break;
+                
+            case 'delivery':
+                // Delivery stats - deliveries, rating, earnings
+                stats = {
+                    totalDeliveries: 0, // This would come from Delivery model
+                    averageRating: 0, // This would come from Review model
+                    totalEarnings: 0, // This would come from Delivery model
+                    isOnline: false, // This would come from Delivery model
+                };
+                break;
+                
+            default:
+                stats = {};
+        }
+        
+        return res.status(200).json({
+            success: true,
+            message: "User stats retrieved successfully",
+            stats
+        });
+        
+    } catch (error) {
+        console.error("Error getting user stats:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+    export { onboarding, verifyOtp, getProfile, registerUser, loginUser, completeProfile, updateProfile, getUserStats };

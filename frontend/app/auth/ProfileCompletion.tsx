@@ -29,6 +29,11 @@ const ProfileCompletion = () => {
   const [role, setRole] = useState<'user' | 'merchant' | 'delivery' | ''>('');
   const [isLoading, setIsLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
+  const [errors, setErrors] = useState<{
+    name?: string;
+    gender?: string;
+    role?: string;
+  }>({});
 
 
   // Memoized validation
@@ -51,21 +56,57 @@ const ProfileCompletion = () => {
 
   const handleNameChange = useCallback((text: string) => {
     setName(text.trim());
-  }, []);
+    // Clear error when user starts typing
+    if (errors.name) {
+      setErrors(prev => ({ ...prev, name: undefined }));
+    }
+  }, [errors.name]);
 
 
   const handleGenderSelect = useCallback((selectedGender: 'male' | 'female' | 'other') => {
     setGender(selectedGender);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+    // Clear error when user selects gender
+    if (errors.gender) {
+      setErrors(prev => ({ ...prev, gender: undefined }));
+    }
+  }, [errors.gender]);
 
   const handleRoleSelect = useCallback((selectedRole: 'user' | 'merchant' | 'delivery') => {
     setRole(selectedRole);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+    // Clear error when user selects role
+    if (errors.role) {
+      setErrors(prev => ({ ...prev, role: undefined }));
+    }
+  }, [errors.role]);
 
   const handleSubmit = useCallback(async () => {
-    if (!isFormValid || isLoading) return;
+    // Validate form and set errors
+    const newErrors: { name?: string; gender?: string; role?: string } = {};
+
+    if (!name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
+    }
+
+    if (!gender) {
+      newErrors.gender = 'Please select your gender';
+    }
+
+    if (!role) {
+      newErrors.role = 'Please select your role';
+    }
+
+    setErrors(newErrors);
+
+    // If there are errors, don't submit
+    if (Object.keys(newErrors).length > 0) {
+      return;
+    }
+
+    if (isLoading) return;
 
     try {
       setIsLoading(true);
@@ -120,7 +161,7 @@ const ProfileCompletion = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isFormValid, isLoading, fadeAnim, name, gender, role, login, token, router]);
+  }, [name, gender, role, isLoading, fadeAnim, login, token, router]);
 
   return (
     <View style={styles.container}>
@@ -151,7 +192,10 @@ const ProfileCompletion = () => {
               {/* Name Input */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Full Name *</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputWrapper,
+                  errors.name && styles.inputWrapperError
+                ]}>
                   <Ionicons 
                     name="person-outline" 
                     size={20} 
@@ -169,17 +213,18 @@ const ProfileCompletion = () => {
                     autoComplete="name"
                   />
                 </View>
-                {name && !isValidName && (
-                  <Text style={styles.errorText}>
-                    Name must be at least 2 characters long
-                  </Text>
+                {errors.name && (
+                  <Text style={styles.errorText}>{errors.name}</Text>
                 )}
               </View>
 
               {/* Gender Selection */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Gender *</Text>
-                <View style={styles.genderContainer}>
+                <View style={[
+                  styles.genderContainer,
+                  errors.gender && styles.genderContainerError
+                ]}>
                   {([
                     { value: 'male', label: 'Male' },
                     { value: 'female', label: 'Female' },
@@ -189,7 +234,8 @@ const ProfileCompletion = () => {
                       key={option.value}
                       style={[
                         styles.genderOption,
-                        gender === option.value && styles.genderOptionSelected
+                        gender === option.value && styles.genderOptionSelected,
+                        errors.gender && styles.genderOptionError
                       ]}
                       onPress={() => handleGenderSelect(option.value)}
                     >
@@ -202,13 +248,19 @@ const ProfileCompletion = () => {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {errors.gender && (
+                  <Text style={styles.errorText}>{errors.gender}</Text>
+                )}
               </View>
 
               {/* Role Selection */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>What describes you best? *</Text>
                 <Text style={styles.roleSubtitle}>Choose your primary role on our platform</Text>
-                <View style={styles.roleContainer}>
+                <View style={[
+                  styles.roleContainer,
+                  errors.role && styles.roleContainerError
+                ]}>
                   {([
                     { 
                       value: 'user', 
@@ -233,7 +285,8 @@ const ProfileCompletion = () => {
                       key={option.value}
                       style={[
                         styles.roleOption,
-                        role === option.value && styles.roleOptionSelected
+                        role === option.value && styles.roleOptionSelected,
+                        errors.role && styles.roleOptionError
                       ]}
                       onPress={() => handleRoleSelect(option.value)}
                     >
@@ -259,6 +312,9 @@ const ProfileCompletion = () => {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {errors.role && (
+                  <Text style={styles.errorText}>{errors.role}</Text>
+                )}
               </View>
 
 
@@ -383,6 +439,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  inputWrapperError: {
+    borderColor: Colors.error,
+    shadowColor: Colors.error,
+    shadowOpacity: 0.3,
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -401,6 +462,9 @@ const styles = StyleSheet.create({
   genderContainer: {
     flexDirection: 'row',
     gap: 12,
+  },
+  genderContainerError: {
+    // Add error styling if needed
   },
   genderOption: {
     flex: 1,
@@ -425,6 +489,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     elevation: 4,
   },
+  genderOptionError: {
+    borderColor: Colors.error,
+    shadowColor: Colors.error,
+    shadowOpacity: 0.3,
+  },
   genderOptionText: {
     fontSize: 16,
     fontWeight: '600',
@@ -443,6 +512,9 @@ const styles = StyleSheet.create({
   roleContainer: {
     flexDirection: 'row',
     gap: 12,
+  },
+  roleContainerError: {
+    // Add error styling if needed
   },
   roleOption: {
     flex: 1,
@@ -465,6 +537,11 @@ const styles = StyleSheet.create({
     shadowColor: Colors.primary,
     shadowOpacity: 0.3,
     elevation: 4,
+  },
+  roleOptionError: {
+    borderColor: Colors.error,
+    shadowColor: Colors.error,
+    shadowOpacity: 0.3,
   },
   roleIconContainer: {
     marginBottom: 12,

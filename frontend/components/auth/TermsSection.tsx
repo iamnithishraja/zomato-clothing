@@ -8,8 +8,8 @@ interface TermsSectionProps {
 }
 
 const TermsSection: React.FC<TermsSectionProps> = ({ 
-  onTermsPress = () => console.log("https://Locals.com/terms"),
-  onPrivacyPress = () => console.log("https://Locals.com/privacy")
+  onTermsPress = () => {},
+  onPrivacyPress = () => {}
 }) => {
   return (
     <View style={styles.container}>

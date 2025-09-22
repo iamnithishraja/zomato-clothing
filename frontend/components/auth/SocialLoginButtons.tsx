@@ -10,9 +10,9 @@ interface SocialLoginButtonsProps {
 }
 
 const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({ 
-  onGoogleLogin = () => console.log('Google login'), 
-  onEmailLogin = () => console.log('Email login'),
-  onAppleLogin = () => console.log('Apple login')
+  onGoogleLogin = () => {}, 
+  onEmailLogin = () => {},
+  onAppleLogin = () => {}
 }) => {
   return (
     <View style={styles.socialSection}>

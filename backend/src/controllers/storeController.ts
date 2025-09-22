@@ -23,7 +23,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
       address,
       mapLink,
       contact,
-      businessHours
+      workingDays
     } = req.body;
     
     // Basic validation - check required fields
@@ -55,7 +55,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
       address: address.trim(),
       mapLink: mapLink.trim(),
       contact: contact || {},
-      businessHours: businessHours || {}
+      workingDays: workingDays || {}
     };
     
     // Check if store already exists for this user
@@ -99,7 +99,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
         address: store.address,
         mapLink: store.mapLink,
         contact: store.contact,
-        businessHours: store.businessHours,
+        workingDays: store.workingDays,
         isActive: store.isActive,
         createdAt: store.createdAt,
         updatedAt: store.updatedAt
@@ -150,7 +150,7 @@ async function getStoreDetails(req: Request, res: Response) {
         address: store.address,
         mapLink: store.mapLink,
         contact: store.contact,
-        businessHours: store.businessHours,
+        workingDays: store.workingDays,
         rating: store.rating,
         isActive: store.isActive,
         createdAt: store.createdAt,

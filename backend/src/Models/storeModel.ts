@@ -33,14 +33,14 @@ const storeSchema = new mongoose.Schema({
       email: String,
       website: String
     },
-    businessHours: {
-      monday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      tuesday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      wednesday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      thursday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      friday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      saturday: { open: String, close: String, isClosed: { type: Boolean, default: false } },
-      sunday: { open: String, close: String, isClosed: { type: Boolean, default: false } }
+    workingDays: {
+      monday: { type: Boolean, default: false },
+      tuesday: { type: Boolean, default: false },
+      wednesday: { type: Boolean, default: false },
+      thursday: { type: Boolean, default: false },
+      friday: { type: Boolean, default: false },
+      saturday: { type: Boolean, default: false },
+      sunday: { type: Boolean, default: false }
     },
     rating: {
       average: { type: Number, default: 0 },

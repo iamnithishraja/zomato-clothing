@@ -1,22 +1,22 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function CartScreen() {
+const ProfileScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Ionicons name="cart-outline" size={80} color={Colors.primary} />
-        <Text style={styles.title}>Cart</Text>
+        <Ionicons name="person-outline" size={80} color={Colors.primary} />
+        <Text style={styles.title}>Profile</Text>
         <Text style={styles.subtitle}>Coming Soon</Text>
         <Text style={styles.description}>
-          We&apos;re working on an amazing shopping cart experience for you. Stay tuned!
+          We&apos;re working on an amazing profile experience for you. Stay tuned!
         </Text>
       </View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -49,3 +49,5 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+
+export default ProfileScreen;

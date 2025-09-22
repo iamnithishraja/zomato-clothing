@@ -28,7 +28,7 @@ export const BUTTON_PRIMARY_BG       = '#FFD700';          // yellow
 export const BUTTON_PRIMARY_HOVER    = '#FFC107';          // darker yellow
 export const BUTTON_SECONDARY_BG     = '#FFFFFF';          // white
 export const BUTTON_SECONDARY_BORDER = '#FFD700';          // yellow border
-export const BUTTON_SECONDARY_TEXT   = '#FFD700';          // yellow text
+export const BUTTON_SECONDARY_TEXT   = '#2D2D2D';          // black text
 
 // Status / Semantic Colors:contentReference[oaicite:12]{index=12}
 export const INFO       = '#17A2B8';  // informational (blue)
@@ -42,10 +42,11 @@ export const DIVIDER       = '#E0E0E0';     // divider/line color (light gray)
 
 // Consolidated Colors object for easy component usage
 export const Colors = {
-  // Primary Brand Colors
-  primary: ZOMATO_CRANBERRY,
-  primaryDark: BUTTON_PRIMARY_HOVER,
-  primaryLight: FEEDING_CARNATION,
+  // Primary Brand Colors (Yellow Theme)
+  primary: ZOMATO_YELLOW, // Yellow as primary
+  primaryDark: '#E6C200', // Darker yellow
+  primaryLight: '#FFF59D', // Lighter yellow
+  logo: ZOMATO_CRANBERRY, // Keep logo red
   
   // Background Colors
   background: BG_PRIMARY,
@@ -79,6 +80,10 @@ export const Colors = {
   tabActive: ZOMATO_YELLOW,
   tabInactive: TEXT_DISABLED,
   navigationBackground: BG_PRIMARY,
+  
+  // Text Colors with Black Accents
+  textAccent: TEXT_PRIMARY,
+  textLink: TEXT_PRIMARY,
   
       // Gradients
       gradients: {

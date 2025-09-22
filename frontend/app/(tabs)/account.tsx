@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
+    color: Colors.textPrimary, // Use black for title
     marginBottom: 10,
   },
   subtitle: {

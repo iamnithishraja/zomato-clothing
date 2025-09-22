@@ -44,8 +44,8 @@ export const verifyOtpSchema = z.object({
         .regex(/^\d{4}$/, "OTP must contain only digits"),
 });
 
-// Email/Password registration schema
-export const emailRegisterSchema = z.object({
+// Email/Password registration schema (legacy)
+export const emailRegisterSchemaLegacy = z.object({
     email: emailSchema,
     password: passwordRegisterSchema,
 });
@@ -69,16 +69,20 @@ export const loginSchema = z.object({
     path: ["email", "phone"]
 });
 
-// Unified user registration schema (supports both email and phone auth)
-export const userSchema = z.object({
-    name: z.string().min(2, "Name must be at least 2 characters long").trim(),
-    email: emailSchema.optional(),
-    phone: phoneSchema.optional(),
+// Email-only registration schema (simplified)
+export const emailRegisterSchema = z.object({
+    email: emailSchema,
     password: passwordRegisterSchema,
-}).refine((data) => {
-    // Must have either email OR phone (but not both required)
-    return data.email || data.phone;
-}, {
-    message: "Either email or phone number must be provided",
-    path: ["email", "phone"]
+});
+
+
+// Profile completion schema
+export const profileCompletionSchema = z.object({
+    name: z.string().min(2, "Name must be at least 2 characters long").trim(),
+    gender: z.enum(["male", "female", "other"], {
+        message: "Gender must be male, female, or other"
+    }),
+    role: z.enum(["user", "merchant", "delivery"], {
+        message: "Role must be user, merchant, or delivery"
+    }),
 });

@@ -48,7 +48,7 @@ export async function isAuthenticated(
     }
 
     // Check if user is verified through either phone or email
-    if (!user.isPhoneVerified && !user.email) {
+    if (!user.isPhoneVerified && !user.isEmailVerified) {
        res.status(401).json({
         success: false,
         message: "Account not verified",

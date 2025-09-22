@@ -20,7 +20,7 @@ export async function sendPhoneOtp(phone: string, phoneOtp: string): Promise<str
 
     // Send real SMS via 2Factor.in API
     const url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${phoneOtp}`;
-    const response = await axios.get(url, { timeout: 10000 });
+    const response = await axios.get(url, { timeout: 20000 });
 
     if (response.status === 200 && response.data.Status === 'Success') {
       console.log(`SMS sent successfully to ${phone}`);

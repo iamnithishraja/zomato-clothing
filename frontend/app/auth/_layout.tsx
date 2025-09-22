@@ -5,6 +5,7 @@ export default function AuthLayout() {
     <Stack>
       <Stack.Screen name="Auth" options={{ headerShown: false }} />
       <Stack.Screen name="OtpScreen" options={{ headerShown: false }} />
+      <Stack.Screen name="ProfileCompletion" options={{ headerShown: false }} />
       <Stack.Screen name="country" options={{ headerShown: false }} />
     </Stack>
   );

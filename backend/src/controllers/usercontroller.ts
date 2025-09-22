@@ -1,6 +1,6 @@
 
     import UserModel from "../Models/userModel";
-    import { onbooardingSchema, verifyOtpSchema, userSchema, loginSchema } from "../schemas/onboardingSchema";
+    import { onbooardingSchema, verifyOtpSchema, loginSchema, profileCompletionSchema, emailRegisterSchema } from "../schemas/onboardingSchema";
     import { generateOTP } from "../utils/otp";
     import { sendPhoneOtp } from "../utils/sms";
     import type { Response, Request } from "express";
@@ -9,11 +9,50 @@
     import type { User } from "../types/user";
     import bcrypt from "bcrypt";
 
+    // Utility function to clean and validate phone numbers
+    function cleanAndValidatePhone(phone: string): { cleanPhone: string; isValid: boolean; error?: string } {
+        // Remove all non-digit characters
+        const cleaned = phone.replace(/\D/g, '');
+        
+        // Remove country code if present (91 for India)
+        const withoutCountryCode = cleaned.replace(/^91/, '');
+        
+        // Validate length
+        if (withoutCountryCode.length !== 10) {
+            return {
+                cleanPhone: '',
+                isValid: false,
+                error: 'Phone number must be exactly 10 digits after removing country code'
+            };
+        }
+        
+        // Validate that it's a valid Indian mobile number (starts with 6, 7, 8, or 9)
+        if (!/^[6-9]/.test(withoutCountryCode)) {
+            return {
+                cleanPhone: '',
+                isValid: false,
+                error: 'Invalid phone number. Indian mobile numbers must start with 6, 7, 8, or 9'
+            };
+        }
+        
+        return {
+            cleanPhone: withoutCountryCode,
+            isValid: true
+        };
+    }
+
     async function onboarding(req: Request, res: Response) {
     try {
         const { phone } = onbooardingSchema.parse(req.body);
-        // Store phone as 10-digit number like registerUser (e.g., 9876543210)
-        const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+        // Clean and validate phone number
+        const phoneValidation = cleanAndValidatePhone(phone);
+        if (!phoneValidation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: phoneValidation.error || "Invalid phone number format.",
+            });
+        }
+        const cleanPhone = phoneValidation.cleanPhone;
         const user: User | null = await UserModel.findOne({ phone: cleanPhone });
         
         const otp = generateOTP();
@@ -35,7 +74,8 @@
                 phone: cleanPhone,
                 otp,
                 otpExpiry,
-                role: 'user'
+                role: 'user',
+                isProfileComplete: false // Always false for new users
             });
             
             return res.status(201).json({
@@ -90,8 +130,15 @@
     try {
         const { phone, otp } = verifyOtpSchema.parse(req.body);
 
-        // Store phone as 10-digit number like onboarding (e.g., 9876543210)
-        const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+        // Clean and validate phone number
+        const phoneValidation = cleanAndValidatePhone(phone);
+        if (!phoneValidation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: phoneValidation.error || "Invalid phone number format.",
+            });
+        }
+        const cleanPhone = phoneValidation.cleanPhone;
         const user: User | null = await UserModel.findOne({ phone: cleanPhone });
         if (!user) {
             return res.status(400).json({ 
@@ -143,10 +190,11 @@
                 _id: user._id,
                 phone: user.phone,
                 isPhoneVerified: true,
-                role: user.role
+                role: user.role,
+                isProfileComplete: user.isProfileComplete
             },
             token,
-            isProfileComplete: true,
+            isProfileComplete: user.isProfileComplete,
         });
 
     } catch (error) {
@@ -184,8 +232,10 @@
                 name: user.name,
                 phone: user.phone,
                 email: user.email,
+                gender: user.gender,
                 isPhoneVerified: user.isPhoneVerified,
                 isEmailVerified: user.isEmailVerified,
+                isProfileComplete: user.isProfileComplete,
                 role: user.role
             }
         });
@@ -211,58 +261,49 @@
                 return;
             }
             
-            const { name, email, phone, password } = userSchema.parse(req.body);
-            console.log('Parsed data:', { name, email, phone });
+            // Parse email and password for registration
+            const { email, password } = emailRegisterSchema.parse(req.body);
+            console.log('Parsed data:', { email });
             
-            // Check if user already exists by email (if email provided)
-            if (email) {
-                const existingUserByEmail = await UserModel.findOne({ email: email.toLowerCase().trim() });
-                if (existingUserByEmail) {
-                    res.status(400).json({ 
-                        success: false,
-                        message: 'User with this email already exists' 
-                    });
-                    return;
-                }
+            // Check if user already exists by email
+            const existingUserByEmail = await UserModel.findOne({ email: email.toLowerCase().trim() });
+            if (existingUserByEmail) {
+                res.status(409).json({ 
+                    success: false,
+                    message: 'An account with this email address already exists. Please use a different email or try logging in.' 
+                });
+                return;
             }
             
-            // Check if user already exists by phone (if phone provided)
-            if (phone) {
-                // Store phone as 10-digit number like onboarding (e.g., 9876543210)
-                const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
-                const existingUserByPhone = await UserModel.findOne({ phone: cleanPhone });
-                if (existingUserByPhone) {
-                    res.status(400).json({ 
-                        success: false,
-                        message: 'User with this phone number already exists' 
-                    });
-                    return;
-                }
+            // Additional check: Ensure no user exists with this email in any form
+            // This prevents edge cases where email might be stored differently
+            const existingUserByEmailAny = await UserModel.findOne({ 
+                $or: [
+                    { email: email.toLowerCase().trim() },
+                    { email: email.trim() },
+                    { email: email }
+                ]
+            });
+            if (existingUserByEmailAny) {
+                res.status(409).json({ 
+                    success: false,
+                    message: 'An account with this email address already exists. Please use a different email or try logging in.' 
+                });
+                return;
             }
             
             // Hash password
             const hashedPassword = await bcrypt.hash(password, 10);
             console.log('Password hashed successfully');
             
-            // Create user object
-            const userData: any = { 
-                name: name.trim(),
+            // Create user object for email-only registration
+            const userData = { 
+                email: email.toLowerCase().trim(),
                 password: hashedPassword,
-                role: 'user' // Always default to user role
+                role: 'user',
+                isEmailVerified: true,
+                isProfileComplete: false // Always false for new users
             };
-            
-            // Add email if provided
-            if (email) {
-                userData.email = email.toLowerCase().trim();
-                userData.isEmailVerified = true; // Email auth is verified immediately
-            }
-            
-            // Add phone if provided
-            if (phone) {
-                // Store phone as 10-digit number like onboarding (e.g., 9876543210)
-                userData.phone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
-                userData.isPhoneVerified = false; // Phone needs to be verified via OTP later
-            }
             
             // Create user
             const user = await UserModel.create(userData);
@@ -282,6 +323,7 @@
                 success: true,
                 user: userResponse,
                 token,
+                isProfileComplete: userResponse.isProfileComplete,
                 message: 'Registration successful'
             });
         } catch (error) {
@@ -303,19 +345,19 @@
             // Handle MongoDB duplicate key errors
             if (error instanceof Error && error.message.includes('duplicate key')) {
                 if (error.message.includes('email')) {
-                    res.status(400).json({ 
+                    res.status(409).json({ 
                         success: false,
-                        message: 'User with this email already exists' 
+                        message: 'An account with this email address already exists. Please use a different email or try logging in.' 
                     });
                 } else if (error.message.includes('phone')) {
-                    res.status(400).json({ 
+                    res.status(409).json({ 
                         success: false,
-                        message: 'User with this phone number already exists' 
+                        message: 'An account with this phone number already exists. Please use a different phone number or try logging in.' 
                     });
                 } else {
-                    res.status(400).json({ 
+                    res.status(409).json({ 
                         success: false,
-                        message: 'User already exists' 
+                        message: 'An account with this information already exists. Please try logging in instead.' 
                     });
                 }
                 return;
@@ -359,8 +401,16 @@ async function loginUser(req: Request, res: Response): Promise<void> {
             loginMethod = 'email';
             console.log('Email login attempt for:', email);
         } else if (phone) {
-            // Store phone as 10-digit number like onboarding (e.g., 9876543210)
-            const cleanPhone = phone.replace(/\D/g, '').replace(/^91/, ''); // Remove all non-digits and remove 91 prefix
+            // Clean and validate phone number
+            const phoneValidation = cleanAndValidatePhone(phone);
+            if (!phoneValidation.isValid) {
+                res.status(400).json({
+                    success: false,
+                    message: phoneValidation.error || "Invalid phone number format.",
+                });
+                return;
+            }
+            const cleanPhone = phoneValidation.cleanPhone;
             user = await UserModel.findOne({ phone: cleanPhone }).select('+password');
             loginMethod = 'phone';
             console.log('Phone login attempt for:', phone, '-> clean phone:', cleanPhone);
@@ -467,6 +517,7 @@ async function loginUser(req: Request, res: Response): Promise<void> {
             success: true, 
             user: userResponse, 
             token,
+            isProfileComplete: userResponse.isProfileComplete,
             message: 'Login successful'
         });
     } catch (error) {
@@ -494,4 +545,80 @@ async function loginUser(req: Request, res: Response): Promise<void> {
 }
 
 
-    export { onboarding, verifyOtp, getProfile, registerUser, loginUser };
+async function completeProfile(req: Request, res: Response) {
+    try {
+        // User is already authenticated by middleware
+        const user = (req as any).user;
+        
+        // Validate request body
+        const { name, gender, role } = profileCompletionSchema.parse(req.body);
+        
+        // Check if user already has a complete profile
+        if (user.isProfileComplete) {
+            return res.status(400).json({
+                success: false,
+                message: "Profile is already complete"
+            });
+        }
+        
+        // Prepare update data
+        const updateData = {
+            name: name.trim(),
+            gender,
+            role,
+            isProfileComplete: true,
+            updatedAt: new Date()
+        };
+        
+        // Update user profile
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            user._id,
+            updateData,
+            { new: true }
+        );
+        
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+        
+        return res.status(200).json({
+            success: true,
+            message: "Profile completed successfully",
+            user: {
+                _id: updatedUser._id,
+                name: updatedUser.name,
+                phone: updatedUser.phone,
+                email: updatedUser.email,
+                gender: updatedUser.gender,
+                isPhoneVerified: updatedUser.isPhoneVerified,
+                isEmailVerified: updatedUser.isEmailVerified,
+                isProfileComplete: updatedUser.isProfileComplete,
+                role: updatedUser.role
+            }
+        });
+        
+    } catch (error) {
+        console.error("Error completing profile:", error);
+        
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid input data",
+                errors: error.issues.map((err: any) => ({
+                    field: err.path.join('.'),
+                    message: err.message
+                }))
+            });
+        }
+        
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+    export { onboarding, verifyOtp, getProfile, registerUser, loginUser, completeProfile };

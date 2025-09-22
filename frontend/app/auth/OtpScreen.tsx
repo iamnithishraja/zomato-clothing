@@ -29,6 +29,7 @@ const OtpScreen = () => {
   const [, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
+  
   const [activeIndex, setActiveIndex] = useState(0);
   const [boxAnimations] = useState([
     new Animated.Value(1),
@@ -88,13 +89,19 @@ const OtpScreen = () => {
 
       if (response.data.success) {
         // Store token and user data using AuthContext
-        const { token, user } = response.data;
+        const { token, user, isProfileComplete } = response.data;
         
         // Login through AuthContext
         await login(user, token);
         
-        // Auto navigate to home screen without alert
-        router.replace('/(tabs)');
+        // Check if profile is complete
+        if (isProfileComplete) {
+          // Navigate to home screen
+          router.replace('/(tabs)');
+        } else {
+          // Navigate to profile completion screen
+          router.replace('/auth/ProfileCompletion' as any);
+        }
       } else {
         // Wrong OTP - clear without shake
         setOtp(['', '', '', '']);
@@ -393,14 +400,14 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 28,
     fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.logo, // Keep logo red
     letterSpacing: -0.8,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   logoUnderline: {
     width: 50,
     height: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.logo, // Keep logo red
     borderRadius: 2,
     marginTop: 4,
   },

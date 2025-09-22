@@ -8,23 +8,29 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     unique: true,
-    sparse: true, // Allows multiple null values
   },
   email: {
     type: String,
     unique: true,
-    sparse: true, // Allows multiple null values
     lowercase: true,
     trim: true,
   },
   password: {
     type: String,
   },
+  gender: {
+    type: String,
+    enum: ["male", "female", "other"],
+  },
   isPhoneVerified: {
     type: Boolean,
     default: false,
   },
   isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  isProfileComplete: {
     type: Boolean,
     default: false,
   },

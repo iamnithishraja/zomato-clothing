@@ -4,9 +4,13 @@ import apiClient from '../api/client';
 
 interface User {
   _id: string;
+  name?: string;
   phone?: string;
   email?: string;
+  gender?: string;
   isPhoneVerified: boolean;
+  isEmailVerified: boolean;
+  isProfileComplete: boolean;
   role: string;
 }
 

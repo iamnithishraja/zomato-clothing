@@ -20,8 +20,13 @@ export default function AccountScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await logout();
-            router.replace('/auth/Auth');
+            try {
+              await logout();
+              router.replace('/auth/Auth' as any);
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           },
         },
       ]

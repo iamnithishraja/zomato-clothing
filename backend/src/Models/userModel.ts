@@ -3,20 +3,24 @@ import mongoose from "mongoose";
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
+    required: false,
     trim: true,
   },
   phone: {
     type: String,
     unique: true,
+    sparse: true, // This allows multiple null values while maintaining uniqueness for non-null values
   },
   email: {
     type: String,
     unique: true,
+    sparse: true, // This allows multiple null values while maintaining uniqueness for non-null values
     lowercase: true,
     trim: true,
   },
   password: {
     type: String,
+    required: false,
   },
   gender: {
     type: String,
@@ -38,6 +42,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["user", "merchant", "delivery"],
     default: "user",
+    required: true,
   },
   otp: {
     type: String,
@@ -54,6 +59,8 @@ const userSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+userSchema.index({ role: 1 });
 
 const User = mongoose.model("User", userSchema);
 

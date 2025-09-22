@@ -99,8 +99,17 @@ const ProfileCompletion = () => {
         const { user: updatedUser } = response.data;
         await login(updatedUser, token || '');
         
-        // Navigate to home screen
-        router.replace('/(tabs)');
+        // Navigate based on user role
+        if (updatedUser.role === 'merchant') {
+          // For merchants, navigate to store details screen
+          router.push('/auth/StoreDetails');
+        } else if (updatedUser.role === 'delivery') {
+          // For delivery users, navigate to delivery tabs
+          router.replace('/(deliveryTabs)/' as any);
+        } else {
+          // For regular users, navigate to user tabs
+          router.replace('/(tabs)');
+        }
       } else {
         Alert.alert('Error', response.data.message || 'Failed to complete profile. Please try again.');
       }

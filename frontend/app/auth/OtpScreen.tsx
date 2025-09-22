@@ -94,10 +94,15 @@ const OtpScreen = () => {
         // Login through AuthContext
         await login(user, token);
         
-        // Check if profile is complete
+        // Check if profile is complete and navigate based on role
         if (isProfileComplete) {
-          // Navigate to home screen
-          router.replace('/(tabs)');
+          if (user.role === 'merchant') {
+            router.replace('/(merchantTabs)/' as any);
+          } else if (user.role === 'delivery') {
+            router.replace('/(deliveryTabs)/' as any);
+          } else {
+            router.replace('/(tabs)');
+          }
         } else {
           // Navigate to profile completion screen
           router.replace('/auth/ProfileCompletion' as any);

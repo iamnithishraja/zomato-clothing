@@ -265,26 +265,10 @@
             const { email, password } = emailRegisterSchema.parse(req.body);
             console.log('Parsed data:', { email });
             
-            // Check if user already exists by email
-            const existingUserByEmail = await UserModel.findOne({ email: email.toLowerCase().trim() });
-            if (existingUserByEmail) {
-                res.status(409).json({ 
-                    success: false,
-                    message: 'An account with this email address already exists. Please use a different email or try logging in.' 
-                });
-                return;
-            }
-            
-            // Additional check: Ensure no user exists with this email in any form
-            // This prevents edge cases where email might be stored differently
-            const existingUserByEmailAny = await UserModel.findOne({ 
-                $or: [
-                    { email: email.toLowerCase().trim() },
-                    { email: email.trim() },
-                    { email: email }
-                ]
-            });
-            if (existingUserByEmailAny) {
+            // Check if user already exists by email (normalized)
+            const normalizedEmail = email.toLowerCase().trim();
+            const existingUser = await UserModel.findOne({ email: normalizedEmail });
+            if (existingUser) {
                 res.status(409).json({ 
                     success: false,
                     message: 'An account with this email address already exists. Please use a different email or try logging in.' 
@@ -298,7 +282,7 @@
             
             // Create user object for email-only registration
             const userData = { 
-                email: email.toLowerCase().trim(),
+                email: normalizedEmail,
                 password: hashedPassword,
                 role: 'user',
                 isEmailVerified: true,
@@ -562,11 +546,14 @@ async function completeProfile(req: Request, res: Response) {
         }
         
         // Prepare update data
+        // For merchants, profile is not complete until store details are filled
+        const isProfileComplete = role === 'merchant' ? false : true;
+        
         const updateData = {
             name: name.trim(),
             gender,
             role,
-            isProfileComplete: true,
+            isProfileComplete,
             updatedAt: new Date()
         };
         

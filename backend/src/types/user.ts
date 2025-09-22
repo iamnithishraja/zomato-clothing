@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-export type UserRole = "user" | "marchant" | "delivery";
+export type UserRole = "user" | "merchant" | "delivery";
 
 export interface User {
     _id: mongoose.Types.ObjectId;

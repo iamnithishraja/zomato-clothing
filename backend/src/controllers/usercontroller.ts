@@ -9,6 +9,42 @@
     import type { User } from "../types/user";
     import bcrypt from "bcrypt";
 
+    // Utility function to validate email domains - only allow legitimate providers
+    function validateEmailDomain(email: string): { isValid: boolean; error?: string } {
+        const domain = email.split('@')[1];
+        
+        // List of legitimate email providers
+        const legitimateDomains = [
+            'gmail.com',
+            'yahoo.com',
+            'hotmail.com',
+            'outlook.com',
+            'live.com',
+            'msn.com',
+            'aol.com',
+            'icloud.com',
+            'me.com',
+            'mac.com',
+            'protonmail.com',
+            'yandex.com',
+            'mail.com',
+            'gmx.com',
+            'zoho.com',
+            'fastmail.com',
+            'tutanota.com'
+        ];
+        
+        // Check if domain is legitimate
+        if (!domain || !legitimateDomains.includes(domain)) {
+            return {
+                isValid: false,
+                error: `Please use a legitimate email provider like Gmail, Yahoo, Outlook, etc. "${domain || 'invalid'}" is not recognized as a valid email provider.`
+            };
+        }
+        
+        return { isValid: true };
+    }
+
     // Utility function to clean and validate phone numbers
     function cleanAndValidatePhone(phone: string): { cleanPhone: string; isValid: boolean; error?: string } {
         // Remove all non-digit characters
@@ -265,6 +301,16 @@
             const { email, password } = emailRegisterSchema.parse(req.body);
             console.log('Parsed data:', { email });
             
+            // Additional email domain validation
+            const emailValidation = validateEmailDomain(email);
+            if (!emailValidation.isValid) {
+                res.status(400).json({
+                    success: false,
+                    message: emailValidation.error || "Invalid email domain"
+                });
+                return;
+            }
+            
             // Check if user already exists by email (normalized)
             const normalizedEmail = email.toLowerCase().trim();
             const existingUser = await UserModel.findOne({ email: normalizedEmail });
@@ -373,6 +419,16 @@ async function loginUser(req: Request, res: Response): Promise<void> {
         
         // Find user by email or phone
         if (email) {
+            // Additional email domain validation for login
+            const emailValidation = validateEmailDomain(email);
+            if (!emailValidation.isValid) {
+                res.status(400).json({
+                    success: false,
+                    message: emailValidation.error || "Invalid email domain"
+                });
+                return;
+            }
+            
             user = await UserModel.findOne({ email: email.toLowerCase().trim() }).select('+password');
             loginMethod = 'email';
         } else if (phone) {

@@ -12,13 +12,43 @@ const phoneSchema = z.string()
         return cleaned.startsWith('+') ? cleaned : `+91${cleaned}`;
     });
 
-// Email validation
+// Email validation with strict domain checking
 const emailSchema = z.string()
     .min(1, "Email is required")
     .trim()
     .toLowerCase()
     .email("Please provide a valid email address")
-    .max(320, "Email is too long"); // RFC 5321 limit
+    .max(320, "Email is too long") // RFC 5321 limit
+    .refine((email) => {
+        // Extract domain from email
+        const domain = email.split('@')[1];
+        
+        // List of legitimate email providers only
+        const legitimateDomains = [
+            'gmail.com',
+            'yahoo.com',
+            'hotmail.com',
+            'outlook.com',
+            'live.com',
+            'msn.com',
+            'aol.com',
+            'icloud.com',
+            'me.com',
+            'mac.com',
+            'protonmail.com',
+            'yandex.com',
+            'mail.com',
+            'gmx.com',
+            'zoho.com',
+            'fastmail.com',
+            'tutanota.com'
+        ];
+        
+        // Check if domain is legitimate
+        return domain && legitimateDomains.includes(domain);
+    }, {
+        message: "Please use a legitimate email provider like Gmail, Yahoo, Outlook, etc. Invalid domains are not allowed."
+    });
 
 // Password validation for registration
 const passwordRegisterSchema = z.string()

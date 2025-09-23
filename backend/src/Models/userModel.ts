@@ -3,29 +3,42 @@ import mongoose from "mongoose";
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: false,
     trim: true,
   },
   phone: {
     type: String,
     unique: true,
-    sparse: true, // This allows multiple null values while maintaining uniqueness for non-null values
+    sparse: true, // Allows multiple null values
   },
   email: {
     type: String,
     unique: true,
-    sparse: true, // This allows multiple null values while maintaining uniqueness for non-null values
+    sparse: true,
     lowercase: true,
     trim: true,
   },
   password: {
-    type: String,
-    required: false,
+    type: String, // bcrypt-hashed
   },
+    // Avatar/profile picture
+  avatar: {
+    type: String, // S3 URL
+    default: null,
+    },
   gender: {
     type: String,
-    enum: ["male", "female", "other"],
+    enum: ["Male", "Female", "Other"],
   },
+
+  // Role management
+  role: {
+    type: String,
+    enum: ["User", "Merchant", "Delivery"],
+    default: "User",
+    required: true,
+  },
+
+  // Verification flags
   isPhoneVerified: {
     type: Boolean,
     default: false,
@@ -38,30 +51,20 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  role: {
-    type: String,
-    enum: ["user", "merchant", "delivery"],
-    default: "user",
-    required: true,
+  // Security / auth fields
+  otp: String,
+  otpExpiry: Date,
+
+  // Meta fields
+  isActive: {
+    type: Boolean,
+    default: true,
   },
-  otp: {
-    type: String,
-  },
-  otpExpiry: {
-    type: Date,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
+}, {
+  timestamps: true,
 });
 
 userSchema.index({ role: 1 });
 
 const User = mongoose.model("User", userSchema);
-
 export default User;

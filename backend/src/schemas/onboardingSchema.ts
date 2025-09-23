@@ -1,15 +1,15 @@
 import z from "zod";
 
-// Phone number validation with proper formatting
+// Phone number validation for 10-digit Indian mobile numbers
 const phoneSchema = z.string()
-    .min(10, "Phone number must be at least 10 characters long")
-    .max(15, "Phone number must be at most 15 characters long")
-    .regex(/^[\+]?[1-9][\d]{0,15}$/, "Invalid phone number format")
+    .min(10, "Phone number must be exactly 10 digits")
+    .max(10, "Phone number must be exactly 10 digits")
+    .regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number format (must start with 6, 7, 8, or 9)")
     .transform((phone) => {
-        // Clean phone number - remove all non-digit characters except +
-        const cleaned = phone.replace(/[^\d+]/g, '');
-        // If it starts with +, keep it, otherwise add +91 for Indian numbers
-        return cleaned.startsWith('+') ? cleaned : `+91${cleaned}`;
+        // Clean phone number - remove all non-digit characters
+        const cleaned = phone.replace(/\D/g, '');
+        // Return clean 10-digit number
+        return cleaned;
     });
 
 // Email validation with strict domain checking
@@ -109,10 +109,11 @@ export const emailRegisterSchema = z.object({
 // Profile completion schema
 export const profileCompletionSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters long").trim(),
-    gender: z.enum(["male", "female", "other"], {
-        message: "Gender must be male, female, or other"
+    gender: z.enum(["Male", "Female", "Other"], {
+        message: "Gender must be Male, Female, or Other"
     }),
-    role: z.enum(["user", "merchant", "delivery"], {
-        message: "Role must be user, merchant, or delivery"
+    role: z.enum(["User", "Merchant", "Delivery"], {
+        message: "Role must be User, Merchant, or Delivery"
     }),
+    avatar: z.string().url("Avatar must be a valid URL").optional(),
 });

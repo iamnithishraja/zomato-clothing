@@ -1,11 +1,12 @@
 import React from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, StatusBar } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 
 const ProfileScreen = () => {
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       <View style={styles.content}>
         <Ionicons name="person-outline" size={80} color={Colors.primary} />
         <Text style={styles.title}>Profile</Text>

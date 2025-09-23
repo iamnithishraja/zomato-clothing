@@ -1,17 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function MerchantHome() {
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <LinearGradient
-        colors={Colors.gradients.primary as [string, string]}
-        style={styles.header}
-      >
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <LinearGradient
+          colors={Colors.gradients.primary as [string, string]}
+          style={styles.header}
+        >
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.greeting}>Good Morning!</Text>
@@ -129,7 +131,8 @@ export default function MerchantHome() {
           </View>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -137,6 +140,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   header: {
     paddingTop: 60,

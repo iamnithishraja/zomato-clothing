@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   Alert, 
   RefreshControl,
-  Platform 
+  Platform,
+  StatusBar 
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -141,6 +142,7 @@ export default function MerchantProducts() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       {/* Header */}
       <LinearGradient
         colors={Colors.gradients.primary as [string, string]}

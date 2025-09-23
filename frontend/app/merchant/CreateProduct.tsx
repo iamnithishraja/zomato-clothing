@@ -17,25 +17,21 @@ import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import ImageUploader from '../../components/ui/ImageUploader';
 
 interface ProductData {
   name: string;
   description: string;
   category: string;
-  subcategory: string;
   images: string[];
   price: string;
   sizes: string[];
   quantity: string;
-  material: string;
-  isFeatured: boolean;
 }
 
 interface FormErrors {
   name?: string;
   category?: string;
-  subcategory?: string;
   price?: string;
   quantity?: string;
   images?: string;
@@ -43,19 +39,15 @@ interface FormErrors {
 
 const CreateProduct = () => {
   const router = useRouter();
-  const { user } = useAuth();
   
   const [productData, setProductData] = useState<ProductData>({
     name: '',
     description: '',
     category: '',
-    subcategory: '',
     images: [],
     price: '',
     sizes: [],
     quantity: '',
-    material: 'Mixed',
-    isFeatured: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -63,12 +55,6 @@ const CreateProduct = () => {
   const [errors, setErrors] = useState<FormErrors>({});
 
   const categories = ['Men', 'Women', 'Kids'];
-  const subcategories = {
-    Men: ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Jackets', 'Shoes', 'Accessories'],
-    Women: ['Dresses', 'Tops', 'T-Shirts', 'Pants', 'Jeans', 'Jackets', 'Shoes', 'Accessories'],
-    Kids: ['Kids Wear', 'T-Shirts', 'Pants', 'Dresses', 'Shoes', 'Accessories'],
-  };
-  const materials = ['Cotton', 'Polyester', 'Silk', 'Denim', 'Leather', 'Mixed'];
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 
   // Validation function
@@ -83,10 +69,6 @@ const CreateProduct = () => {
 
     if (!productData.category) {
       newErrors.category = 'Please select a category';
-    }
-
-    if (!productData.subcategory) {
-      newErrors.subcategory = 'Please select a subcategory';
     }
 
     if (!productData.price.trim()) {
@@ -132,25 +114,13 @@ const CreateProduct = () => {
   const handleCategorySelect = useCallback((category: string) => {
     setProductData(prev => ({
       ...prev,
-      category,
-      subcategory: '' // Reset subcategory when category changes
+      category
     }));
 
     if (errors.category) {
       setErrors(prev => ({ ...prev, category: undefined }));
     }
   }, [errors.category]);
-
-  const handleSubcategorySelect = useCallback((subcategory: string) => {
-    setProductData(prev => ({
-      ...prev,
-      subcategory
-    }));
-
-    if (errors.subcategory) {
-      setErrors(prev => ({ ...prev, subcategory: undefined }));
-    }
-  }, [errors.subcategory]);
 
   const handleSizeToggle = useCallback((size: string) => {
     setProductData(prev => ({
@@ -161,26 +131,16 @@ const CreateProduct = () => {
     }));
   }, []);
 
-  const handleImageAdd = useCallback(() => {
-    // For now, we'll add a placeholder image URL
-    // In a real app, you'd implement image picker functionality
-    const placeholderImage = 'https://via.placeholder.com/300x300?text=Product+Image';
+  const handleImagesChange = useCallback((images: string[]) => {
     setProductData(prev => ({
       ...prev,
-      images: [...prev.images, placeholderImage]
+      images
     }));
 
     if (errors.images) {
       setErrors(prev => ({ ...prev, images: undefined }));
     }
   }, [errors.images]);
-
-  const handleImageRemove = useCallback((index: number) => {
-    setProductData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
-  }, []);
 
   const handleSubmit = useCallback(async () => {
     // Validate form
@@ -359,38 +319,6 @@ const CreateProduct = () => {
               )}
             </View>
 
-            {/* Subcategory Selection */}
-            {productData.category && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Subcategory *</Text>
-                <View style={[
-                  styles.selectionContainer,
-                  errors.subcategory && styles.selectionContainerError
-                ]}>
-                  {subcategories[productData.category as keyof typeof subcategories]?.map((subcategory) => (
-                    <TouchableOpacity
-                      key={subcategory}
-                      style={[
-                        styles.selectionOption,
-                        productData.subcategory === subcategory && styles.selectionOptionSelected,
-                        errors.subcategory && styles.selectionOptionError
-                      ]}
-                      onPress={() => handleSubcategorySelect(subcategory)}
-                    >
-                      <Text style={[
-                        styles.selectionOptionText,
-                        productData.subcategory === subcategory && styles.selectionOptionTextSelected
-                      ]}>
-                        {subcategory}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {errors.subcategory && (
-                  <Text style={styles.errorText}>{errors.subcategory}</Text>
-                )}
-              </View>
-            )}
 
             {/* Price and Quantity Row */}
             <View style={styles.rowContainer}>
@@ -421,7 +349,7 @@ const CreateProduct = () => {
               </View>
 
               <View style={[styles.inputContainer, styles.halfWidth]}>
-                <Text style={styles.inputLabel}>Quantity *</Text>
+                <Text style={styles.inputLabel}>Available Quantity *</Text>
                 <View style={[
                   styles.inputWrapper,
                   errors.quantity && styles.inputWrapperError
@@ -447,29 +375,6 @@ const CreateProduct = () => {
               </View>
             </View>
 
-            {/* Material Selection */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Material</Text>
-              <View style={styles.selectionContainer}>
-                {materials.map((material) => (
-                  <TouchableOpacity
-                    key={material}
-                    style={[
-                      styles.selectionOption,
-                      productData.material === material && styles.selectionOptionSelected
-                    ]}
-                    onPress={() => handleInputChange('material', material)}
-                  >
-                    <Text style={[
-                      styles.selectionOptionText,
-                      productData.material === material && styles.selectionOptionTextSelected
-                    ]}>
-                      {material}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
 
             {/* Sizes Selection */}
             <View style={styles.inputContainer}>
@@ -497,57 +402,18 @@ const CreateProduct = () => {
 
             {/* Images */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Product Images *</Text>
-              <View style={styles.imagesContainer}>
-                {productData.images.map((image, index) => (
-                  <View key={index} style={styles.imageItem}>
-                    <View style={styles.imagePlaceholder}>
-                      <Ionicons name="image" size={24} color={Colors.textSecondary} />
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => handleImageRemove(index)}
-                    >
-                      <Ionicons name="close" size={16} color={Colors.textPrimary} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                <TouchableOpacity
-                  style={styles.addImageButton}
-                  onPress={handleImageAdd}
-                >
-                  <Ionicons name="add" size={24} color={Colors.textPrimary} />
-                  <Text style={styles.addImageText}>Add Image</Text>
-                </TouchableOpacity>
-              </View>
-              {errors.images && (
-                <Text style={styles.errorText}>{errors.images}</Text>
-              )}
+              <ImageUploader
+                images={productData.images}
+                onImagesChange={handleImagesChange}
+                maxImages={5}
+                title="Product Images"
+                subtitle="Upload high-quality photos of your product"
+                required={true}
+                error={errors.images}
+                style={styles.imageUploader}
+              />
             </View>
 
-            {/* Featured Toggle */}
-            <View style={styles.inputContainer}>
-              <TouchableOpacity
-                style={styles.featuredToggle}
-                onPress={() => handleInputChange('isFeatured', !productData.isFeatured)}
-              >
-                <View style={[
-                  styles.toggleSwitch,
-                  productData.isFeatured && styles.toggleSwitchActive
-                ]}>
-                  <View style={[
-                    styles.toggleThumb,
-                    productData.isFeatured && styles.toggleThumbActive
-                  ]} />
-                </View>
-                <View style={styles.toggleContent}>
-                  <Text style={styles.toggleLabel}>Featured Product</Text>
-                  <Text style={styles.toggleDescription}>
-                    Make this product stand out in search results
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
 
             {/* Submit Button */}
             <Animated.View style={{ opacity: fadeAnim }}>
@@ -715,90 +581,8 @@ const styles = StyleSheet.create({
   selectionOptionTextSelected: {
     color: Colors.textPrimary,
   },
-  imagesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  imageItem: {
-    position: 'relative',
-  },
-  imagePlaceholder: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addImageButton: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-  },
-  addImageText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  featuredToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  toggleSwitch: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.border,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleSwitchActive: {
-    backgroundColor: Colors.primary,
-  },
-  toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.textPrimary,
-    alignSelf: 'flex-start',
-  },
-  toggleThumbActive: {
-    alignSelf: 'flex-end',
-  },
-  toggleContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  toggleDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 2,
+  imageUploader: {
+    marginTop: 8,
   },
   errorText: {
     fontSize: 14,

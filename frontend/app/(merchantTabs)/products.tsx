@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import apiClient from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
 import ProductCard from '../../components/merchant/ProductCard';
 
 interface Product {
@@ -22,35 +21,26 @@ interface Product {
   name: string;
   description: string;
   category: string;
-  subcategory: string;
   images: string[];
   price: number;
   sizes: string[];
   quantity: number;
-  material: string;
-  rating: {
-    average: number;
-    totalReviews: number;
-  };
-  isActive: boolean;
-  isFeatured: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export default function MerchantProducts() {
   const router = useRouter();
-  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'inactive' | 'featured'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'men' | 'women' | 'kids'>('all');
 
   const filters = [
     { key: 'all', label: 'All Products' },
-    { key: 'active', label: 'Active' },
-    { key: 'inactive', label: 'Inactive' },
-    { key: 'featured', label: 'Featured' }
+    { key: 'men', label: 'Men' },
+    { key: 'women', label: 'Women' },
+    { key: 'kids', label: 'Kids' }
   ];
 
   const fetchProducts = useCallback(async () => {
@@ -88,9 +78,6 @@ export default function MerchantProducts() {
     router.push(`/merchant/ProductInfo/${productId}` as any);
   };
 
-  const handleCardPress = (productId: string) => {
-    router.push(`/merchant/ProductInfo/${productId}` as any);
-  };
 
   const handleDeleteProduct = async (productId: string, productName: string) => {
     Alert.alert(
@@ -120,32 +107,15 @@ export default function MerchantProducts() {
     );
   };
 
-  const handleToggleStatus = async (productId: string, currentStatus: boolean, productName: string) => {
-    try {
-      const response = await apiClient.patch(`/api/v1/product/${productId}/toggle-status`);
-      if (response.data.success) {
-        Alert.alert(
-          'Success', 
-          `Product ${response.data.product.isActive ? 'activated' : 'deactivated'} successfully`
-        );
-        fetchProducts(); // Refresh the list
-      } else {
-        Alert.alert('Error', response.data.message || 'Failed to update product status');
-      }
-    } catch (error: any) {
-      console.error('Error toggling product status:', error);
-      Alert.alert('Error', 'Failed to update product status. Please try again.');
-    }
-  };
 
   const filteredProducts = products.filter(product => {
     switch (selectedFilter) {
-      case 'active':
-        return product.isActive;
-      case 'inactive':
-        return !product.isActive;
-      case 'featured':
-        return product.isFeatured;
+      case 'men':
+        return product.category === 'Men';
+      case 'women':
+        return product.category === 'Women';
+      case 'kids':
+        return product.category === 'Kids';
       default:
         return true;
     }
@@ -229,8 +199,6 @@ export default function MerchantProducts() {
             product={product}
             onEdit={() => handleEditProduct(product._id)}
             onDelete={() => handleDeleteProduct(product._id, product.name)}
-            onToggleStatus={() => handleToggleStatus(product._id, product.isActive, product.name)}
-            onCardPress={() => handleCardPress(product._id)}
           />
         ))}
 

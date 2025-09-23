@@ -22,13 +22,10 @@ async function createProduct(req: Request, res: Response) {
       name,
       description,
       category,
-      subcategory,
       images,
       price,
       sizes,
-      quantity,
-      material,
-      isFeatured
+      quantity
     } = req.body;
 
     // Basic validation
@@ -39,10 +36,10 @@ async function createProduct(req: Request, res: Response) {
       });
     }
 
-    if (!category || !subcategory) {
+    if (!category) {
       return res.status(400).json({
         success: false,
-        message: "Category and subcategory are required"
+        message: "Category is required"
       });
     }
 
@@ -83,13 +80,10 @@ async function createProduct(req: Request, res: Response) {
       name: name.trim(),
       description: description ? description.trim() : '',
       category,
-      subcategory,
       images,
       price,
       sizes: sizes || [],
-      quantity,
-      material: material || 'Mixed',
-      isFeatured: isFeatured || false
+      quantity
     });
 
     return res.status(201).json({
@@ -100,15 +94,10 @@ async function createProduct(req: Request, res: Response) {
         name: product.name,
         description: product.description,
         category: product.category,
-        subcategory: product.subcategory,
         images: product.images,
         price: product.price,
         sizes: product.sizes,
         quantity: product.quantity,
-        material: product.material,
-        rating: product.rating,
-        isActive: product.isActive,
-        isFeatured: product.isFeatured,
         createdAt: product.createdAt,
         updatedAt: product.updatedAt
       }
@@ -141,15 +130,11 @@ async function getMerchantProducts(req: Request, res: Response) {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const category = req.query.category as string;
-    const subcategory = req.query.subcategory as string;
-    const isActive = req.query.isActive as string;
 
     // Build filter object
     const filter: any = { merchantId: user._id };
     
     if (category) filter.category = category;
-    if (subcategory) filter.subcategory = subcategory;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     // Calculate skip value for pagination
     const skip = (page - 1) * limit;
@@ -349,69 +334,11 @@ async function deleteProduct(req: Request, res: Response) {
   }
 }
 
-// Toggle product active status
-async function toggleProductStatus(req: Request, res: Response) {
-  try {
-    // User is already authenticated by middleware
-    const user = (req as any).user;
-    
-    // Check if user is a merchant
-    if (user.role !== 'merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can toggle product status"
-      });
-    }
-
-    const { productId } = req.params;
-
-    // Check if product exists and belongs to the merchant
-    const product = await ProductModel.findOne({
-      _id: productId,
-      merchantId: user._id
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found or you don't have permission to modify it"
-      });
-    }
-
-    // Toggle active status
-    const updatedProduct = await ProductModel.findByIdAndUpdate(
-      productId,
-      { isActive: !product.isActive, updatedAt: new Date() },
-      { new: true }
-    );
-
-    if (!updatedProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `Product ${updatedProduct.isActive ? 'activated' : 'deactivated'} successfully`,
-      product: updatedProduct
-    });
-
-  } catch (error) {
-    console.error("Error toggling product status:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-}
 
 export { 
   createProduct, 
   getMerchantProducts, 
   getProductById, 
   updateProduct, 
-  deleteProduct, 
-  toggleProductStatus 
+  deleteProduct
 };

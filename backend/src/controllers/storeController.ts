@@ -20,6 +20,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
     const {
       storeName,
       storeDescription,
+      storeImages,
       address,
       mapLink,
       contact,
@@ -52,6 +53,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
     const storeData = {
       storeName: storeName.trim(),
       storeDescription: storeDescription ? storeDescription.trim() : '',
+      storeImages: storeImages || [],
       address: address.trim(),
       mapLink: mapLink.trim(),
       contact: contact || {},
@@ -96,6 +98,7 @@ async function createOrUpdateStore(req: Request, res: Response) {
         _id: store._id,
         storeName: store.storeName,
         storeDescription: store.storeDescription,
+        storeImages: store.storeImages,
         address: store.address,
         mapLink: store.mapLink,
         contact: store.contact,

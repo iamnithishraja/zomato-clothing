@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import ImageUploader from '../../components/ui/ImageUploader';
 
 interface WorkingDays {
   monday: boolean;
@@ -32,6 +33,7 @@ interface WorkingDays {
 interface StoreData {
   storeName: string;
   storeDescription: string;
+  storeImages: string[];
   address: string;
   mapLink: string;
   contact: {
@@ -56,6 +58,7 @@ const StoreDetails = () => {
   const [storeData, setStoreData] = useState<StoreData>({
     storeName: '',
     storeDescription: '',
+    storeImages: [],
     address: '',
     mapLink: '',
     contact: {
@@ -142,6 +145,13 @@ const StoreDetails = () => {
     }
   }, [errors]);
 
+  const handleImagesChange = useCallback((images: string[]) => {
+    setStoreData(prev => ({
+      ...prev,
+      storeImages: images
+    }));
+  }, []);
+
   const handleWorkingDayToggle = useCallback((day: keyof WorkingDays) => {
     setStoreData(prev => ({
       ...prev,
@@ -222,21 +232,25 @@ const StoreDetails = () => {
 
   const renderWorkingDays = () => {
     const days = [
-      { key: 'monday' as keyof WorkingDays, label: 'Mon' },
-      { key: 'tuesday' as keyof WorkingDays, label: 'Tue' },
-      { key: 'wednesday' as keyof WorkingDays, label: 'Wed' },
-      { key: 'thursday' as keyof WorkingDays, label: 'Thu' },
-      { key: 'friday' as keyof WorkingDays, label: 'Fri' },
-      { key: 'saturday' as keyof WorkingDays, label: 'Sat' },
-      { key: 'sunday' as keyof WorkingDays, label: 'Sun' },
+      { key: 'monday' as keyof WorkingDays, label: 'Monday', short: 'Mon' },
+      { key: 'tuesday' as keyof WorkingDays, label: 'Tuesday', short: 'Tue' },
+      { key: 'wednesday' as keyof WorkingDays, label: 'Wednesday', short: 'Wed' },
+      { key: 'thursday' as keyof WorkingDays, label: 'Thursday', short: 'Thu' },
+      { key: 'friday' as keyof WorkingDays, label: 'Friday', short: 'Fri' },
+      { key: 'saturday' as keyof WorkingDays, label: 'Saturday', short: 'Sat' },
+      { key: 'sunday' as keyof WorkingDays, label: 'Sunday', short: 'Sun' },
     ];
 
     return (
       <View style={styles.workingDaysContainer}>
-        <Text style={styles.sectionTitle}>Working Days *</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="calendar" size={20} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>Working Days *</Text>
+        </View>
+        <Text style={styles.sectionSubtitle}>Select the days your store will be open</Text>
         
-        {/* Days Row */}
-        <View style={styles.daysRow}>
+        {/* Days Grid */}
+        <View style={styles.daysGrid}>
           {days.map((day) => {
             const isSelected = storeData.workingDays[day.key];
             return (
@@ -248,17 +262,33 @@ const StoreDetails = () => {
                   errors.workingDays && styles.dayButtonError
                 ]}
                 onPress={() => handleWorkingDayToggle(day.key)}
+                activeOpacity={0.7}
               >
                 <Text style={[
                   styles.dayButtonText,
                   isSelected && styles.dayButtonTextSelected
                 ]}>
-                  {day.label}
+                  {day.short}
                 </Text>
+                {isSelected && (
+                  <View style={styles.selectedIndicator}>
+                    <Ionicons name="checkmark" size={12} color={Colors.textPrimary} />
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
+
+        {/* Selected Days Summary */}
+        {Object.values(storeData.workingDays).some(day => day === true) && (
+          <View style={styles.selectedDaysSummary}>
+            <Ionicons name="calendar" size={16} color={Colors.primary} />
+            <Text style={styles.selectedDaysText}>
+              Store open on: {days.filter(day => storeData.workingDays[day.key]).map(day => day.short).join(', ')}
+            </Text>
+          </View>
+        )}
 
         {/* Error message for working days */}
         {errors.workingDays && (
@@ -277,16 +307,28 @@ const StoreDetails = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
+        {/* Header */}
+        <LinearGradient
+          colors={Colors.gradients.primary as [string, string]}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Store Setup</Text>
+              <Text style={styles.headerSubtitle}>Complete your store details</Text>
+            </View>
+            <View style={styles.placeholder} />
+          </View>
+        </LinearGradient>
+
         {/* Main Content */}
         <View style={styles.content}>
-          {/* Back Button */}
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          
           <ScrollView 
             style={styles.scrollContainer}
             contentContainerStyle={styles.scrollContent}
@@ -294,10 +336,15 @@ const StoreDetails = () => {
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
-            <Text style={styles.title}>Complete Your Store Setup</Text>
-            <Text style={styles.subtitle}>
-              Add your store details to start selling on our platform
-            </Text>
+            <View style={styles.welcomeSection}>
+              <View style={styles.welcomeIconContainer}>
+                <Ionicons name="storefront" size={32} color={Colors.primary} />
+              </View>
+              <Text style={styles.title}>Complete Your Store Setup</Text>
+              <Text style={styles.subtitle}>
+                Add your store details to start selling on our platform
+              </Text>
+            </View>
 
             {/* Form Content */}
             <View style={styles.formContent}>
@@ -350,6 +397,18 @@ const StoreDetails = () => {
                     textAlignVertical="top"
                   />
                 </View>
+              </View>
+
+              {/* Store Images */}
+              <View style={styles.inputContainer}>
+                <ImageUploader
+                  images={storeData.storeImages}
+                  onImagesChange={handleImagesChange}
+                  maxImages={5}
+                  title="Store Images"
+                  subtitle="Upload photos of your store to showcase your business"
+                  style={styles.imageUploader}
+                />
               </View>
 
               {/* Address */}
@@ -411,7 +470,10 @@ const StoreDetails = () => {
 
               {/* Contact Information */}
               <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Contact Information</Text>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="call" size={20} color={Colors.primary} />
+                  <Text style={styles.sectionTitle}>Contact Information</Text>
+                </View>
                 
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Phone</Text>
@@ -514,15 +576,6 @@ const StoreDetails = () => {
                 </TouchableOpacity>
               </Animated.View>
 
-              {/* Security Info */}
-              <View style={styles.securityInfo}>
-                <View style={styles.securityIconContainer}>
-                  <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
-                </View>
-                <Text style={styles.securityText}>
-                  Your store information is secure and encrypted
-                </Text>
-              </View>
             </View>
           </ScrollView>
         </View>
@@ -538,28 +591,70 @@ const styles = StyleSheet.create({
   },
   keyboardContainer: {
     flex: 1,
+    paddingBottom: Platform.OS === 'ios' ? 0 : 0,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    opacity: 0.8,
+  },
+  placeholder: {
+    width: 40,
   },
   content: {
     flex: 1,
     backgroundColor: Colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    marginTop: 'auto',
+    marginTop: -20,
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: 10,
   },
   backButton: {
     padding: 8,
     borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  welcomeSection: {
+    alignItems: 'center',
+
+  },
+  welcomeIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.backgroundSecondary,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: Colors.border,
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingBottom: 0,
   },
   formContent: {
     paddingTop: 20,
@@ -583,7 +678,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   inputContainer: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   inputLabel: {
     fontSize: 15,
@@ -630,28 +725,40 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   sectionContainer: {
-    marginTop: 24,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.textPrimary,
-    marginBottom: 16,
+    marginLeft: 8,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   workingDaysContainer: {
-    marginTop: 24,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 16,
   },
-  daysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
-  },
   dayButton: {
-    flex: 1,
+    width: '18%',
+    minWidth: 50,
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderRadius: 12,
@@ -662,16 +769,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
   },
   dayButtonSelected: {
     borderColor: Colors.primary,
     backgroundColor: Colors.primary,
     shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     elevation: 4,
+    transform: [{ scale: 1.05 }],
   },
   dayButtonError: {
     borderColor: Colors.error,
@@ -687,6 +796,40 @@ const styles = StyleSheet.create({
   dayButtonTextSelected: {
     color: Colors.textPrimary,
   },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  selectedDaysSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 8,
+  },
+  selectedDaysText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+    marginLeft: 8,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
   errorText: {
     fontSize: 14,
     color: Colors.error,
@@ -698,7 +841,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     marginTop: 24,
-    marginBottom: 24,
+    marginBottom: 40,
     elevation: 8,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 8 },
@@ -734,27 +877,8 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     opacity: 0.7,
   },
-  securityInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    marginHorizontal: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  securityIconContainer: {
-    marginRight: 12,
-    padding: 4,
-  },
-  securityText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  imageUploader: {
+    marginTop: 8,
   },
 });
 

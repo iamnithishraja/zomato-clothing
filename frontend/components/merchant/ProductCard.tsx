@@ -5,29 +5,20 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Pressable,
+  Platform,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface Product {
   _id: string;
   name: string;
   description: string;
   category: string;
-  subcategory: string;
   images: string[];
   price: number;
   sizes: string[];
   quantity: number;
-  material: string;
-  rating: {
-    average: number;
-    totalReviews: number;
-  };
-  isActive: boolean;
-  isFeatured: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,19 +27,15 @@ interface ProductCardProps {
   product: Product;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleStatus: () => void;
-  onCardPress?: () => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onEdit,
   onDelete,
-  onToggleStatus,
-  onCardPress,
 }) => {
   const formatPrice = (price: number) => {
-    return `₹${price.toLocaleString()}`;
+    return price.toLocaleString();
   };
 
   const formatDate = (dateString: string) => {
@@ -56,27 +43,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
     });
   };
 
-  const getStatusColor = (isActive: boolean) => {
-    return isActive ? Colors.success : Colors.error;
-  };
-
-  const getStatusText = (isActive: boolean) => {
-    return isActive ? 'Active' : 'Inactive';
-  };
-
   return (
-    <Pressable 
-      style={({ pressed }) => [
-        styles.card,
-        pressed && styles.cardPressed
-      ]}
-      onPress={onCardPress}
-    >
-      {/* Product Image with Gradient Overlay */}
+    <View style={styles.card}>
+      {/* Left Side - Product Image */}
       <View style={styles.imageContainer}>
         {product.images && product.images.length > 0 ? (
           <Image
@@ -85,55 +57,20 @@ const ProductCard: React.FC<ProductCardProps> = ({
             resizeMode="cover"
           />
         ) : (
-          <LinearGradient
-            colors={[Colors.backgroundSecondary, Colors.backgroundTertiary]}
-            style={styles.placeholderImage}
-          >
-            <Ionicons name="shirt-outline" size={48} color={Colors.textSecondary} />
-          </LinearGradient>
+          <View style={styles.placeholderImage}>
+            <Ionicons name="shirt-outline" size={32} color={Colors.textSecondary} />
+          </View>
         )}
-        
-        {/* Gradient Overlay for better text readability */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.3)']}
-          style={styles.imageOverlay}
-        />
-        
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(product.isActive) }]}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>{getStatusText(product.isActive)}</Text>
-        </View>
-
-        {/* Featured Badge */}
-        {product.isFeatured && (
-          <LinearGradient
-            colors={[Colors.warning, Colors.primary]}
-            style={styles.featuredBadge}
-          >
-            <Ionicons name="star" size={14} color={Colors.textPrimary} />
-            <Text style={styles.featuredText}>Featured</Text>
-          </LinearGradient>
-        )}
-
-        {/* Quick Action Overlay */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={onEdit}
-          >
-            <Ionicons name="pencil" size={16} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
       </View>
 
-      {/* Product Info */}
+      {/* Middle - Product Info */}
       <View style={styles.productInfo}>
         <View style={styles.headerRow}>
-          <Text style={styles.productName} numberOfLines={2}>
+          <Text style={styles.productName} numberOfLines={1}>
             {product.name}
           </Text>
           <View style={styles.priceContainer}>
+            <Text style={styles.currencySymbol}>₹</Text>
             <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
           </View>
         </View>
@@ -142,104 +79,79 @@ const ProductCard: React.FC<ProductCardProps> = ({
           {product.description || 'No description available'}
         </Text>
 
-        <View style={styles.categoryRow}>
+        <View style={styles.detailsRow}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{product.category}</Text>
           </View>
-          <View style={styles.subcategoryBadge}>
-            <Text style={styles.subcategoryText}>{product.subcategory}</Text>
-          </View>
-        </View>
-
-        <View style={styles.detailsRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="layers-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.detailText}>Qty: {product.quantity}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="shirt-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.detailText}>{product.material}</Text>
+          <View style={styles.quantityBadge}>
+            <Ionicons name="cube-outline" size={12} color={Colors.textSecondary} />
+            <Text style={styles.quantityText}>{product.quantity}</Text>
           </View>
         </View>
 
         {product.sizes && product.sizes.length > 0 && (
           <View style={styles.sizesContainer}>
-            <Text style={styles.sizesLabel}>Sizes: </Text>
+            <Ionicons name="resize-outline" size={12} color={Colors.textSecondary} />
             <Text style={styles.sizesText}>{product.sizes.join(', ')}</Text>
           </View>
         )}
 
-        <View style={styles.ratingRow}>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={14} color={Colors.warning} />
-            <Text style={styles.ratingText}>
-              {product.rating.average.toFixed(1)} ({product.rating.totalReviews})
-            </Text>
-          </View>
-          <Text style={styles.dateText}>Added {formatDate(product.createdAt)}</Text>
+        <View style={styles.dateContainer}>
+          <Ionicons name="time-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.dateText}>{formatDate(product.createdAt)}</Text>
         </View>
       </View>
 
-      {/* Action Buttons */}
+      {/* Right Side - Action Buttons */}
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={[styles.actionButton, styles.editButton]}
           onPress={onEdit}
+          activeOpacity={0.7}
         >
-          <Ionicons name="pencil" size={16} color={Colors.textPrimary} />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            product.isActive ? styles.deactivateButton : styles.activateButton
-          ]}
-          onPress={onToggleStatus}
-        >
-          <Ionicons 
-            name={product.isActive ? "pause" : "play"} 
-            size={16} 
-            color={Colors.textPrimary} 
-          />
-          <Text style={styles.actionButtonText}>
-            {product.isActive ? 'Deactivate' : 'Activate'}
-          </Text>
+          <Ionicons name="create-outline" size={20} color={Colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
           onPress={onDelete}
+          activeOpacity={0.7}
         >
-          <Ionicons name="trash" size={16} color={Colors.textPrimary} />
-          <Text style={styles.actionButtonText}>Delete</Text>
+          <Ionicons name="trash-outline" size={20} color={Colors.error} />
         </TouchableOpacity>
       </View>
-    </Pressable>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.background,
-    borderRadius: 20,
-    marginBottom: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    marginHorizontal: 4,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    shadowOpacity: 0.25,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    padding: 10,
+    minHeight: 60,
+    width: '100%',
   },
   imageContainer: {
-    position: 'relative',
-    height: 180,
+    width: 85,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: Colors.backgroundSecondary,
+    marginRight: 16,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   productImage: {
     width: '100%',
@@ -250,219 +162,125 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-  },
-  statusBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.textPrimary,
-    marginRight: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  featuredBadge: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  featuredText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginLeft: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  quickActions: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickActionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: Colors.backgroundSecondary,
   },
   productInfo: {
-    padding: 20,
+    flex: 1,
+    paddingRight: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 2,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   productName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.textPrimary,
     flex: 1,
     marginRight: 12,
-    lineHeight: 24,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   priceContainer: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencySymbol: {
+    paddingRight: 4,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFD700',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   productPrice: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Colors.textPrimary,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   productDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
-    marginBottom: 16,
-    lineHeight: 20,
+    marginBottom: 10,
+    lineHeight: 18,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  categoryRow: {
+  detailsRow: {
     flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
   },
   categoryBadge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: Colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  subcategoryBadge: {
-    backgroundColor: Colors.backgroundSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  subcategoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  detailItem: {
+  quantityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
   },
-  detailText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginLeft: 6,
-    fontWeight: '500',
+  quantityText: {
+    fontSize: 11,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   sizesContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
-    flexWrap: 'wrap',
-  },
-  sizesLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 4,
   },
   sizesText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  dateText: {
     fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  actionButtons: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
+  dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  actionButtons: {
+    flexDirection: 'column',
+    gap: 12,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    gap: 6,
+    paddingLeft: 8,
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -470,23 +288,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   editButton: {
-    backgroundColor: Colors.info,
-  },
-  activateButton: {
-    backgroundColor: Colors.success,
-  },
-  deactivateButton: {
-    backgroundColor: Colors.warning,
+    backgroundColor: Colors.background,
+    borderColor: Colors.background,
   },
   deleteButton: {
-    backgroundColor: Colors.error,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    backgroundColor: Colors.background,
+    borderColor: Colors.background,
   },
 });
 

@@ -4,8 +4,7 @@ import {
   getMerchantProducts, 
   getProductById, 
   updateProduct, 
-  deleteProduct, 
-  toggleProductStatus 
+  deleteProduct
 } from '../controllers/productController';
 import { isAuthenticated } from '../middleware/auth';
 
@@ -20,6 +19,5 @@ router.get('/merchant', getMerchantProducts);
 router.get('/:productId', getProductById);
 router.put('/:productId', updateProduct);
 router.delete('/:productId', deleteProduct);
-router.patch('/:productId/toggle-status', toggleProductStatus);
 
 export default router;

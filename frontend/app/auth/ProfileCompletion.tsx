@@ -25,8 +25,8 @@ const ProfileCompletion = () => {
   const { token, login } = useAuth();
   
   const [name, setName] = useState('');
-  const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
-  const [role, setRole] = useState<'user' | 'merchant' | 'delivery' | ''>('');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | ''>('');
+  const [role, setRole] = useState<'User' | 'Merchant' | 'Delivery' | ''>('');
   const [isLoading, setIsLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
   const [errors, setErrors] = useState<{
@@ -63,7 +63,7 @@ const ProfileCompletion = () => {
   }, [errors.name]);
 
 
-  const handleGenderSelect = useCallback((selectedGender: 'male' | 'female' | 'other') => {
+  const handleGenderSelect = useCallback((selectedGender: 'Male' | 'Female' | 'Other') => {
     setGender(selectedGender);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Clear error when user selects gender
@@ -72,7 +72,7 @@ const ProfileCompletion = () => {
     }
   }, [errors.gender]);
 
-  const handleRoleSelect = useCallback((selectedRole: 'user' | 'merchant' | 'delivery') => {
+  const handleRoleSelect = useCallback((selectedRole: 'User' | 'Merchant' | 'Delivery') => {
     setRole(selectedRole);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Clear error when user selects role
@@ -141,10 +141,10 @@ const ProfileCompletion = () => {
         await login(updatedUser, token || '');
         
         // Navigate based on user role
-        if (updatedUser.role === 'merchant') {
+        if (updatedUser.role === 'Merchant') {
           // For merchants, navigate to store details screen
           router.push('/auth/StoreDetails');
-        } else if (updatedUser.role === 'delivery') {
+        } else if (updatedUser.role === 'Delivery') {
           // For delivery users, navigate to delivery tabs
           router.replace('/(deliveryTabs)/' as any);
         } else {
@@ -226,9 +226,9 @@ const ProfileCompletion = () => {
                   errors.gender && styles.genderContainerError
                 ]}>
                   {([
-                    { value: 'male', label: 'Male' },
-                    { value: 'female', label: 'Female' },
-                    { value: 'other', label: 'Other' }
+                    { value: 'Male', label: 'Male' },
+                    { value: 'Female', label: 'Female' },
+                    { value: 'Other', label: 'Other' }
                   ] as const).map((option) => (
                     <TouchableOpacity
                       key={option.value}
@@ -263,19 +263,19 @@ const ProfileCompletion = () => {
                 ]}>
                   {([
                     { 
-                      value: 'user', 
+                      value: 'User', 
                       label: 'Customer', 
                       description: 'Shop & Buy',
                       icon: 'bag-outline' 
                     },
                     { 
-                      value: 'merchant', 
+                      value: 'Merchant', 
                       label: 'Seller', 
                       description: 'Sell Products',
                       icon: 'storefront-outline' 
                     },
                     { 
-                      value: 'delivery', 
+                      value: 'Delivery', 
                       label: 'Delivery Partner', 
                       description: 'Deliver Orders',
                       icon: 'bicycle-outline' 

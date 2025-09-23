@@ -32,7 +32,7 @@ interface WorkingDays {
 
 interface StoreData {
   storeName: string;
-  storeDescription: string;
+  description: string;
   storeImages: string[];
   address: string;
   mapLink: string;
@@ -49,6 +49,7 @@ interface FormErrors {
   address?: string;
   mapLink?: string;
   workingDays?: string;
+  contact?: string;
 }
 
 const StoreDetails = () => {
@@ -57,7 +58,7 @@ const StoreDetails = () => {
   
   const [storeData, setStoreData] = useState<StoreData>({
     storeName: '',
-    storeDescription: '',
+    description: '',
     storeImages: [],
     address: '',
     mapLink: '',
@@ -108,6 +109,19 @@ const StoreDetails = () => {
     const hasWorkingDays = Object.values(storeData.workingDays).some(day => day === true);
     if (!hasWorkingDays) {
       newErrors.workingDays = 'Please select at least one working day';
+    }
+
+    // Contact validation (optional but if provided, should be valid)
+    if (storeData.contact.phone && (storeData.contact.phone.length < 10 || storeData.contact.phone.length > 12)) {
+      newErrors.contact = 'Phone number must be between 10-12 digits';
+    }
+
+    if (storeData.contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(storeData.contact.email)) {
+      newErrors.contact = 'Please provide a valid email address';
+    }
+
+    if (storeData.contact.website && !/^https?:\/\/.+/.test(storeData.contact.website)) {
+      newErrors.contact = 'Website must be a valid URL starting with http:// or https://';
     }
 
     return newErrors;
@@ -200,7 +214,18 @@ const StoreDetails = () => {
 
       console.log('Creating store with data:', storeData);
 
-      const response = await apiClient.post('/api/v1/store/create', storeData);
+      // Transform data to match backend expectations
+      const backendData = {
+        storeName: storeData.storeName,
+        storeDescription: storeData.description, // Backend expects storeDescription in request body
+        storeImages: storeData.storeImages,
+        address: storeData.address,
+        mapLink: storeData.mapLink,
+        contact: storeData.contact,
+        workingDays: storeData.workingDays
+      };
+
+      const response = await apiClient.post('/api/v1/store/create', backendData);
 
       if (response.data.success) {
         // Update user data in context to reflect profile completion
@@ -383,13 +408,13 @@ const StoreDetails = () => {
                   <Ionicons 
                     name="document-text-outline" 
                     size={20} 
-                    color={storeData.storeDescription ? Colors.buttonPrimary : Colors.textMuted} 
+                    color={storeData.description ? Colors.buttonPrimary : Colors.textMuted} 
                     style={styles.inputIcon}
                   />
                   <TextInput
                     style={[styles.textInput, styles.textArea]}
-                    value={storeData.storeDescription}
-                    onChangeText={(value) => handleInputChange('storeDescription', value)}
+                    value={storeData.description}
+                    onChangeText={(value) => handleInputChange('description', value)}
                     placeholder="Describe your store and what you sell"
                     placeholderTextColor={Colors.textMuted}
                     multiline
@@ -537,6 +562,13 @@ const StoreDetails = () => {
                   </View>
                 </View>
               </View>
+
+              {/* Contact Error Display */}
+              {errors.contact && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{errors.contact}</Text>
+                </View>
+              )}
 
               {/* Working Days */}
               {renderWorkingDays()}
@@ -836,6 +868,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 4,
     fontWeight: '500',
+  },
+  errorContainer: {
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   submitButton: {
     borderRadius: 20,

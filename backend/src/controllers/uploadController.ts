@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export const generateUploadUrl = async (req: Request, res: Response): Promise<void> => {
     try {
         const user = (req as any).user;
-        const { fileType, fileName, isPermanent, role = 'merchant' } = req.body;
+        const { fileType, fileName, isPermanent, role = 'Merchant' } = req.body;
 
         console.log('Upload request received:', { 
             userId: user?._id, 
@@ -71,7 +71,7 @@ export const generateUploadUrl = async (req: Request, res: Response): Promise<vo
 export const generateMultipleUploadUrls = async (req: Request, res: Response): Promise<void> => {
     try {
         const user = (req as any).user;
-        const { files, role = 'merchant' } = req.body;
+        const { files, role = 'Merchant' } = req.body;
 
         console.log('Multiple upload request received:', { 
             userId: user?._id, 

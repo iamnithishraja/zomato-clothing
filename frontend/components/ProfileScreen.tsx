@@ -39,11 +39,11 @@ const ProfileScreen = () => {
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
-      case 'merchant':
+      case 'Merchant':
         return 'Merchant';
-      case 'delivery':
+      case 'Delivery':
         return 'Delivery Partner';
-      case 'user':
+      case 'User':
         return 'Customer';
       default:
         return role;
@@ -52,11 +52,11 @@ const ProfileScreen = () => {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'merchant':
+      case 'Merchant':
         return 'storefront';
-      case 'delivery':
+      case 'Delivery':
         return 'bicycle';
-      case 'user':
+      case 'User':
         return 'person';
       default:
         return 'person';

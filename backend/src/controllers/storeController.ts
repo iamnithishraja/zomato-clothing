@@ -2,14 +2,14 @@ import StoreModel from "../Models/storeModel";
 import UserModel from "../Models/userModel";
 import type { Response, Request } from "express";
 
-// Create or update store details
-async function createOrUpdateStore(req: Request, res: Response) {
+// Create store details
+async function createStore(req: Request, res: Response) {
   try {
     // User is already authenticated by middleware
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can create store details"
@@ -49,10 +49,58 @@ async function createOrUpdateStore(req: Request, res: Response) {
       });
     }
     
+    // Validate contact information if provided
+    if (contact) {
+      if (contact.phone && (contact.phone.length < 10 || contact.phone.length > 12)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number must be between 10-12 digits"
+        });
+      }
+      
+      if (contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address"
+        });
+      }
+      
+      if (contact.website && !/^https?:\/\/.+/.test(contact.website)) {
+        return res.status(400).json({
+          success: false,
+          message: "Website must be a valid URL starting with http:// or https://"
+        });
+      }
+    }
+    
+    // Validate working days if provided
+    if (workingDays) {
+      const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      const providedDays = Object.keys(workingDays);
+      
+      // Check if all provided days are valid
+      const invalidDays = providedDays.filter(day => !validDays.includes(day));
+      if (invalidDays.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid working days: ${invalidDays.join(', ')}`
+        });
+      }
+      
+      // Check if at least one day is selected
+      const hasWorkingDays = Object.values(workingDays).some(day => day === true);
+      if (!hasWorkingDays) {
+        return res.status(400).json({
+          success: false,
+          message: "Please select at least one working day"
+        });
+      }
+    }
+    
     // Prepare store data
     const storeData = {
       storeName: storeName.trim(),
-      storeDescription: storeDescription ? storeDescription.trim() : '',
+      description: storeDescription ? storeDescription.trim() : '',
       storeImages: storeImages || [],
       address: address.trim(),
       mapLink: mapLink.trim(),
@@ -61,22 +109,20 @@ async function createOrUpdateStore(req: Request, res: Response) {
     };
     
     // Check if store already exists for this user
-    let store = await StoreModel.findOne({ userId: user._id });
+    const existingStore = await StoreModel.findOne({ merchantId: user._id });
     
-    if (store) {
-      // Update existing store
-      store = await StoreModel.findByIdAndUpdate(
-        store._id,
-        { ...storeData, updatedAt: new Date() },
-        { new: true }
-      );
-    } else {
-      // Create new store
-      store = await StoreModel.create({
-        userId: user._id,
-        ...storeData
+    if (existingStore) {
+      return res.status(409).json({
+        success: false,
+        message: "Store already exists. Use PUT /update to modify store details."
       });
     }
+    
+    // Create new store
+    const store = await StoreModel.create({
+      merchantId: user._id,
+      ...storeData
+    });
     
     if (!store) {
       return res.status(500).json({
@@ -91,13 +137,13 @@ async function createOrUpdateStore(req: Request, res: Response) {
       { isProfileComplete: true, updatedAt: new Date() }
     );
     
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: "Store details saved successfully",
+      message: "Store created successfully",
       store: {
         _id: store._id,
         storeName: store.storeName,
-        storeDescription: store.storeDescription,
+        description: store.description,
         storeImages: store.storeImages,
         address: store.address,
         mapLink: store.mapLink,
@@ -110,7 +156,165 @@ async function createOrUpdateStore(req: Request, res: Response) {
     });
     
   } catch (error) {
-    console.error("Error creating/updating store:", error);
+    console.error("Error creating store:", error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+// Update store details
+async function updateStore(req: Request, res: Response) {
+  try {
+    // User is already authenticated by middleware
+    const user = (req as any).user;
+    
+    // Check if user is a merchant
+    if (user.role !== 'Merchant') {
+      return res.status(403).json({
+        success: false,
+        message: "Only merchants can update store details"
+      });
+    }
+    
+    // Get store data from request body
+    const {
+      storeName,
+      storeDescription,
+      storeImages,
+      address,
+      mapLink,
+      contact,
+      workingDays
+    } = req.body;
+    
+    // Basic validation - check required fields
+    if (storeName && storeName.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Store name must be at least 2 characters long"
+      });
+    }
+    
+    if (address && address.trim().length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Address must be at least 5 characters long"
+      });
+    }
+    
+    if (mapLink && mapLink.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Map link is required"
+      });
+    }
+    
+    // Validate contact information if provided
+    if (contact) {
+      if (contact.phone && (contact.phone.length < 10 || contact.phone.length > 12)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number must be between 10-12 digits"
+        });
+      }
+      
+      if (contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address"
+        });
+      }
+      
+      if (contact.website && !/^https?:\/\/.+/.test(contact.website)) {
+        return res.status(400).json({
+          success: false,
+          message: "Website must be a valid URL starting with http:// or https://"
+        });
+      }
+    }
+    
+    // Validate working days if provided
+    if (workingDays) {
+      const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      const providedDays = Object.keys(workingDays);
+      
+      // Check if all provided days are valid
+      const invalidDays = providedDays.filter(day => !validDays.includes(day));
+      if (invalidDays.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid working days: ${invalidDays.join(', ')}`
+        });
+      }
+      
+      // Check if at least one day is selected
+      const hasWorkingDays = Object.values(workingDays).some(day => day === true);
+      if (!hasWorkingDays) {
+        return res.status(400).json({
+          success: false,
+          message: "Please select at least one working day"
+        });
+      }
+    }
+    
+    // Check if store exists
+    const existingStore = await StoreModel.findOne({ merchantId: user._id });
+    
+    if (!existingStore) {
+      return res.status(404).json({
+        success: false,
+        message: "Store not found. Create a store first."
+      });
+    }
+    
+    // Prepare update data (only include provided fields)
+    const updateData: any = { updatedAt: new Date() };
+    
+    if (storeName !== undefined) updateData.storeName = storeName.trim();
+    if (storeDescription !== undefined) updateData.description = storeDescription ? storeDescription.trim() : '';
+    if (storeImages !== undefined) updateData.storeImages = storeImages || [];
+    if (address !== undefined) updateData.address = address.trim();
+    if (mapLink !== undefined) updateData.mapLink = mapLink.trim();
+    if (contact !== undefined) updateData.contact = contact || {};
+    if (workingDays !== undefined) updateData.workingDays = workingDays || {};
+    
+    // Update store
+    const updatedStore = await StoreModel.findByIdAndUpdate(
+      existingStore._id,
+      updateData,
+      { new: true }
+    );
+    
+    if (!updatedStore) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update store details"
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: "Store updated successfully",
+      store: {
+        _id: updatedStore._id,
+        storeName: updatedStore.storeName,
+        description: updatedStore.description,
+        storeImages: updatedStore.storeImages,
+        address: updatedStore.address,
+        mapLink: updatedStore.mapLink,
+        contact: updatedStore.contact,
+        workingDays: updatedStore.workingDays,
+        isActive: updatedStore.isActive,
+        createdAt: updatedStore.createdAt,
+        updatedAt: updatedStore.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error updating store:", error);
     
     return res.status(500).json({
       success: false,
@@ -126,14 +330,14 @@ async function getStoreDetails(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can access store details"
       });
     }
     
-    const store = await StoreModel.findOne({ userId: user._id });
+    const store = await StoreModel.findOne({ merchantId: user._id });
     
     if (!store) {
       return res.status(404).json({
@@ -148,7 +352,7 @@ async function getStoreDetails(req: Request, res: Response) {
       store: {
         _id: store._id,
         storeName: store.storeName,
-        storeDescription: store.storeDescription,
+        description: store.description,
         storeImages: store.storeImages,
         address: store.address,
         mapLink: store.mapLink,
@@ -177,14 +381,14 @@ async function deleteStoreDetails(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can delete store details"
       });
     }
     
-    const store = await StoreModel.findOneAndDelete({ userId: user._id });
+    const store = await StoreModel.findOneAndDelete({ merchantId: user._id });
     
     if (!store) {
       return res.status(404).json({
@@ -213,4 +417,4 @@ async function deleteStoreDetails(req: Request, res: Response) {
   }
 }
 
-export { createOrUpdateStore, getStoreDetails, deleteStoreDetails };
+export { createStore, updateStore, getStoreDetails, deleteStoreDetails };

@@ -110,7 +110,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       const uploadResponse = await apiClient.post('/api/v1/upload/url', {
         fileType,
         fileName,
-        role: 'merchant',
+        role: 'Merchant',
         isPermanent: true,
       });
 
@@ -205,7 +205,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       // Get upload URLs from backend
       const uploadResponse = await apiClient.post('/api/v1/upload/urls', {
         files,
-        role: 'merchant',
+        role: 'Merchant',
       });
 
       if (!uploadResponse.data.success) {

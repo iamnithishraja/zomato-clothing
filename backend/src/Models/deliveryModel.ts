@@ -12,23 +12,19 @@ const deliveryPersonSchema = new mongoose.Schema({
     },
     workingAreas: [String], // Array of area names where they deliver
     currentLocation: {
-      address: String,
-      mapLink: String,
-      required: true
+      address: { type: String, required: true },
+      mapLink: { type: String, required: true }
     },
     availability: {
-      isAvailable: { type: Boolean, default: true },
-      required: true
+      isAvailable: { type: Boolean, default: true, required: true }
     },
     rating: {
-      average: { type: Number, default: 0 },
-      totalReviews: { type: Number, default: 0 },
-      required: true
+      average: { type: Number, default: 0, required: true },
+      totalReviews: { type: Number, default: 0, required: true }
     },
     earnings: {
-      totalEarned: { type: Number, default: 0 },
-      pendingPayment: { type: Number, default: 0 },
-      required: true
+      totalEarned: { type: Number, default: 0, required: true },
+      pendingPayment: { type: Number, default: 0, required: true }
     },
     completedDeliveries: {
       type: Number,

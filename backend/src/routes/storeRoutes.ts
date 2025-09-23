@@ -1,13 +1,14 @@
 import express from 'express';
-import { createOrUpdateStore, getStoreDetails, deleteStoreDetails } from '../controllers/storeController';
+import { createStore, updateStore, getStoreDetails, deleteStoreDetails } from '../controllers/storeController';
 import { isAuthenticated } from '../middleware/auth';
+import { requireMerchant } from '../middleware/roleAuth';
 
 const storeRoute = express.Router();
 
-// All store routes require authentication
-storeRoute.post('/create', isAuthenticated, createOrUpdateStore);
-storeRoute.put('/update', isAuthenticated, createOrUpdateStore);
-storeRoute.get('/details', isAuthenticated, getStoreDetails);
-storeRoute.delete('/delete', isAuthenticated, deleteStoreDetails);
+// All store routes require merchant authentication
+storeRoute.post('/create', isAuthenticated, requireMerchant, createStore);
+storeRoute.put('/update', isAuthenticated, requireMerchant, updateStore);
+storeRoute.get('/details', isAuthenticated, requireMerchant, getStoreDetails);
+storeRoute.delete('/delete', isAuthenticated, requireMerchant, deleteStoreDetails);
 
 export default storeRoute;

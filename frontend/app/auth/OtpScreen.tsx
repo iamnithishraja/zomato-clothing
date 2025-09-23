@@ -95,10 +95,10 @@ const OtpScreen = () => {
         await login(user, token);
         
         // Check if profile is complete and navigate based on role
-        if (isProfileComplete) {
-          if (user.role === 'merchant') {
+        if (isProfileComplete || user.isProfileComplete) {
+          if (user.role === 'Merchant') {
             router.replace('/(merchantTabs)/' as any);
-          } else if (user.role === 'delivery') {
+          } else if (user.role === 'Delivery') {
             router.replace('/(deliveryTabs)/' as any);
           } else {
             router.replace('/(tabs)');

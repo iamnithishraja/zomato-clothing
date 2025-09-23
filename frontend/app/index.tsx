@@ -10,21 +10,34 @@ export default function IndexScreen() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
+        console.log('🔍 Navigation Debug:', {
+          isAuthenticated,
+          user: user ? {
+            _id: user._id,
+            name: user.name,
+            role: user.role,
+            isProfileComplete: user.isProfileComplete
+          } : null
+        });
+        
         // Check if user needs to complete profile
         if (user && !user.isProfileComplete) {
+          console.log('📝 User needs to complete profile, navigating to ProfileCompletion');
           // All users (including merchants) go to ProfileCompletion first
           router.replace('/auth/ProfileCompletion');
         } else {
+          console.log('✅ User profile is complete, navigating to role-based tabs');
           // Navigate to appropriate tabs based on user role
-          if (user?.role === 'merchant') {
+          if (user?.role === 'Merchant') {
             router.replace('/(merchantTabs)/' as any);
-          } else if (user?.role === 'delivery') {
+          } else if (user?.role === 'Delivery') {
             router.replace('/(deliveryTabs)/' as any);
           } else {
             router.replace('/(tabs)');
           }
         }
       } else {
+        console.log('🔐 User not authenticated, navigating to Auth');
         router.replace('/auth/Auth');
       }
     }

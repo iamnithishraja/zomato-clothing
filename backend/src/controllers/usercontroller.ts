@@ -110,7 +110,7 @@
                 phone: cleanPhone,
                 otp,
                 otpExpiry,
-                role: 'user',
+                role: 'User',
                 isProfileComplete: false // Always false for new users
             });
             
@@ -269,6 +269,7 @@
                 phone: user.phone,
                 email: user.email,
                 gender: user.gender,
+                avatar: user.avatar,
                 isPhoneVerified: user.isPhoneVerified,
                 isEmailVerified: user.isEmailVerified,
                 isProfileComplete: user.isProfileComplete,
@@ -329,7 +330,7 @@
             const userData = { 
                 email: normalizedEmail,
                 password: hashedPassword,
-                role: 'user',
+                role: 'User',
                 isEmailVerified: true,
                 isProfileComplete: false // Always false for new users
             };
@@ -581,7 +582,7 @@ async function completeProfile(req: Request, res: Response) {
         const user = (req as any).user;
         
         // Validate request body
-        const { name, gender, role } = profileCompletionSchema.parse(req.body);
+        const { name, gender, role, avatar } = profileCompletionSchema.parse(req.body);
         
         // Check if user already has a complete profile
         if (user.isProfileComplete) {
@@ -593,12 +594,13 @@ async function completeProfile(req: Request, res: Response) {
         
         // Prepare update data
         // For merchants, profile is not complete until store details are filled
-        const isProfileComplete = role === 'merchant' ? false : true;
+        const isProfileComplete = role === 'Merchant' ? false : true;
         
         const updateData = {
             name: name.trim(),
             gender,
             role,
+            avatar: avatar || null,
             isProfileComplete,
             updatedAt: new Date()
         };
@@ -626,6 +628,7 @@ async function completeProfile(req: Request, res: Response) {
                 phone: updatedUser.phone,
                 email: updatedUser.email,
                 gender: updatedUser.gender,
+                avatar: updatedUser.avatar,
                 isPhoneVerified: updatedUser.isPhoneVerified,
                 isEmailVerified: updatedUser.isEmailVerified,
                 isProfileComplete: updatedUser.isProfileComplete,
@@ -686,10 +689,10 @@ async function updateProfile(req: Request, res: Response) {
         }
         
         if (gender !== undefined) {
-            if (gender && !['male', 'female', 'other'].includes(gender)) {
+            if (gender && !['Male', 'Female', 'Other'].includes(gender)) {
                 return res.status(400).json({
                     success: false,
-                    message: "Gender must be one of: male, female, other"
+                    message: "Gender must be one of: Male, Female, Other"
                 });
             }
             updateData.gender = gender;
@@ -773,7 +776,7 @@ async function getUserStats(req: Request, res: Response) {
         let stats = {};
         
         switch (user.role) {
-            case 'user':
+            case 'User':
                 // Customer stats - orders, wishlist, rating
                 stats = {
                     totalOrders: 0, // This would come from Order model
@@ -782,14 +785,14 @@ async function getUserStats(req: Request, res: Response) {
                 };
                 break;
                 
-            case 'merchant':
+            case 'Merchant':
                 // Merchant stats - products, orders, earnings
                 const ProductModel = (await import('../Models/productModel')).default;
                 const StoreModel = (await import('../Models/storeModel')).default;
                 
                 const [productCount, store] = await Promise.all([
                     ProductModel.countDocuments({ merchantId: user._id }),
-                    StoreModel.findOne({ userId: user._id })
+                    StoreModel.findOne({ merchantId: user._id })
                 ]);
                 
                 stats = {
@@ -801,7 +804,7 @@ async function getUserStats(req: Request, res: Response) {
                 };
                 break;
                 
-            case 'delivery':
+            case 'Delivery':
                 // Delivery stats - deliveries, rating, earnings
                 stats = {
                     totalDeliveries: 0, // This would come from Delivery model

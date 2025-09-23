@@ -51,7 +51,7 @@ export async function isAuthenticated(
     if (!user.isPhoneVerified && !user.isEmailVerified) {
        res.status(401).json({
         success: false,
-        message: "Account not verified",
+        message: "Account not verified. Please verify your phone or email.",
       });
       return;
     }

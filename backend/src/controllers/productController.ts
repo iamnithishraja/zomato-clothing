@@ -10,7 +10,7 @@ async function createProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can create products"
@@ -22,10 +22,15 @@ async function createProduct(req: Request, res: Response) {
       name,
       description,
       category,
+      subcategory,
       images,
       price,
-      sizes,
-      quantity
+      size,
+      availableQuantity,
+      specifications,
+      season,
+      isNewArrival,
+      isBestSeller
     } = req.body;
 
     // Basic validation
@@ -43,6 +48,15 @@ async function createProduct(req: Request, res: Response) {
       });
     }
 
+    // Validate category enum
+    const validCategories = ["Men", "Women", "Kids", "Unisex"];
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: `Category must be one of: ${validCategories.join(', ')}`
+      });
+    }
+
     if (!price || price <= 0) {
       return res.status(400).json({
         success: false,
@@ -50,10 +64,10 @@ async function createProduct(req: Request, res: Response) {
       });
     }
 
-    if (!quantity || quantity < 0) {
+    if (availableQuantity === undefined || availableQuantity < 0) {
       return res.status(400).json({
         success: false,
-        message: "Valid quantity is required"
+        message: "Valid available quantity is required"
       });
     }
 
@@ -65,7 +79,7 @@ async function createProduct(req: Request, res: Response) {
     }
 
     // Check if merchant has a store
-    const store = await StoreModel.findOne({ userId: user._id });
+    const store = await StoreModel.findOne({ merchantId: user._id });
     if (!store) {
       return res.status(400).json({
         success: false,
@@ -80,10 +94,15 @@ async function createProduct(req: Request, res: Response) {
       name: name.trim(),
       description: description ? description.trim() : '',
       category,
+      subcategory: subcategory || undefined,
       images,
       price,
-      sizes: sizes || [],
-      quantity
+      size: size || undefined,
+      availableQuantity,
+      specifications: specifications || undefined,
+      season: season || undefined,
+      isNewArrival: isNewArrival || false,
+      isBestSeller: isBestSeller || false
     });
 
     return res.status(201).json({
@@ -94,10 +113,16 @@ async function createProduct(req: Request, res: Response) {
         name: product.name,
         description: product.description,
         category: product.category,
+        subcategory: product.subcategory,
         images: product.images,
         price: product.price,
-        sizes: product.sizes,
-        quantity: product.quantity,
+        size: product.size,
+        availableQuantity: product.availableQuantity,
+        specifications: product.specifications,
+        season: product.season,
+        isNewArrival: product.isNewArrival,
+        isBestSeller: product.isBestSeller,
+        isActive: product.isActive,
         createdAt: product.createdAt,
         updatedAt: product.updatedAt
       }
@@ -119,7 +144,7 @@ async function getMerchantProducts(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can access their products"
@@ -130,11 +155,17 @@ async function getMerchantProducts(req: Request, res: Response) {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const category = req.query.category as string;
+    const subcategory = req.query.subcategory as string;
+    const season = req.query.season as string;
+    const isActive = req.query.isActive as string;
 
     // Build filter object
     const filter: any = { merchantId: user._id };
     
     if (category) filter.category = category;
+    if (subcategory) filter.subcategory = subcategory;
+    if (season) filter.season = season;
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     // Calculate skip value for pagination
     const skip = (page - 1) * limit;
@@ -194,7 +225,7 @@ async function getProductById(req: Request, res: Response) {
     // For merchants, allow viewing their own products
     // For customers and delivery partners, allow viewing all products
     // This can be modified based on business requirements
-    if (user.role === 'merchant' && product.merchantId.toString() !== user._id.toString()) {
+    if (user.role === 'Merchant' && product.merchantId.toString() !== user._id.toString()) {
       // For now, allow merchants to view all products
       // You can change this to restrict access if needed
     }
@@ -221,7 +252,7 @@ async function updateProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can update products"
@@ -259,10 +290,10 @@ async function updateProduct(req: Request, res: Response) {
       });
     }
 
-    if (updateData.quantity && updateData.quantity < 0) {
+    if (updateData.availableQuantity && updateData.availableQuantity < 0) {
       return res.status(400).json({
         success: false,
-        message: "Quantity cannot be negative"
+        message: "Available quantity cannot be negative"
       });
     }
 
@@ -295,7 +326,7 @@ async function deleteProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'merchant') {
+    if (user.role !== 'Merchant') {
       return res.status(403).json({
         success: false,
         message: "Only merchants can delete products"

@@ -7,11 +7,14 @@ interface User {
   name?: string;
   phone?: string;
   email?: string;
-  gender?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  avatar?: string;
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
   isProfileComplete: boolean;
-  role: string;
+  role: 'User' | 'Merchant' | 'Delivery';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AuthContextType {
@@ -51,19 +54,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (storedToken && storedUser) {
         try {
-          // Validate token with backend
-          const isValid = await validateToken(storedToken);
+          // Validate token with backend and get latest user data
+          const validationResult = await validateToken(storedToken);
           
-          if (isValid) {
+          if (validationResult.isValid && validationResult.userData) {
+            console.log('🔄 Token validation successful, updating user data:', {
+              storedUser: JSON.parse(storedUser),
+              latestUser: validationResult.userData,
+              isProfileCompleteChanged: JSON.parse(storedUser).isProfileComplete !== validationResult.userData.isProfileComplete
+            });
             setToken(storedToken);
-            setUser(JSON.parse(storedUser));
+            // Use the latest user data from backend instead of stored data
+            setUser(validationResult.userData);
+            // Update stored user data with latest information
+            await AsyncStorage.setItem('userData', JSON.stringify(validationResult.userData));
           } else {
+            console.log('❌ Token validation failed, clearing auth data');
             // Token is invalid, clear storage
             await clearAuthData();
           }
         } catch (validationError) {
           // If validation fails due to network issues, still allow login
           // This provides better UX when backend is temporarily unavailable
+          console.log('⚠️ Token validation failed due to network error, using stored data:', validationError);
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
         }
@@ -80,17 +93,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loadStoredAuth();
   }, [loadStoredAuth]);
 
-  const validateToken = async (tokenToValidate: string): Promise<boolean> => {
+  const validateToken = async (tokenToValidate: string): Promise<{ isValid: boolean; userData?: User }> => {
     try {
-      // Make a test request to validate the token
+      // Make a test request to validate the token and get latest user data
       const response = await apiClient.get('/api/v1/user/profile', {
         headers: {
           Authorization: `Bearer ${tokenToValidate}`
         }
       });
-      return response.status === 200;
+      
+      if (response.status === 200 && response.data.success) {
+        return {
+          isValid: true,
+          userData: response.data.user
+        };
+      }
+      return { isValid: false };
     } catch (error) {
-      return false;
+      console.log('Token validation error:', error);
+      return { isValid: false };
     }
   };
 

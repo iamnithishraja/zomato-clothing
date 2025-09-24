@@ -8,10 +8,12 @@ import {
   ScrollView,
   StatusBar,
   Platform,
+  SafeAreaView,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { PRODUCT_SUBCATEGORIES } from '@/types/product';
 
 // Removed unused screenHeight since we're using full screen now
 
@@ -59,27 +61,30 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     ...initialData
   });
 
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
   // Removed unused fadeAnim
 
-  // Category-based subcategories
-  const getSubcategories = useCallback((cat: string) => {
-    const subcategoryMap: { [key: string]: string[] } = {
-      'Men': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Suits', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Underwear', 'Activewear', 'Ethnic Wear'],
-      'Women': ['Dresses', 'Tops', 'Sarees', 'Kurtas', 'Skirts', 'Leggings', 'Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Underwear', 'Sleepwear', 'Activewear', 'Swimwear', 'Ethnic Wear'],
-      'Kids': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Dresses', 'Tops', 'Skirts', 'Leggings', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Jackets', 'Coats', 'Activewear', 'Swimwear', 'Ethnic Wear'],
-      'Unisex': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Activewear', 'Ethnic Wear']
-    };
-    return subcategoryMap[cat] || [];
-  }, []);
+  // Category-based subcategories using the comprehensive list from types
+  const subcategories = useMemo(() => {
+    return [...(PRODUCT_SUBCATEGORIES[category as keyof typeof PRODUCT_SUBCATEGORIES] || [])];
+  }, [category]);
 
-  const subcategories = useMemo(() => getSubcategories(category), [category, getSubcategories]);
-
-  const materials = ['Cotton', 'Polyester', 'Silk', 'Wool', 'Linen', 'Denim', 'Leather', 'Synthetic'];
+  const materials = ['Cotton', 'Polyester', 'Silk', 'Linen', 'Leather'];
   const fits = ['Slim Fit', 'Regular Fit', 'Loose Fit', 'Oversized'];
-  const patterns = ['Solid', 'Striped', 'Printed', 'Checkered', 'Floral'];
+  const patterns = ['Solid', 'Striped', 'Printed', 'Checkered'];
   const seasons = ['Summer', 'Winter', 'Monsoon', 'All Season'];
 
   const handleSelect = useCallback((field: string, value: string) => {
+    // Clear error for this field when user makes a selection
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+
     if (field.startsWith('specifications.')) {
       const specField = field.split('.')[1];
       setDetails(prev => ({
@@ -95,7 +100,7 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
         [field]: value
       }));
     }
-  }, []);
+  }, [errors]);
 
   const handleToggle = useCallback((field: keyof ProductDetails) => {
     setDetails(prev => ({
@@ -104,10 +109,23 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     }));
   }, []);
 
+  const validateForm = useCallback(() => {
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!details.subcategory) {
+      newErrors.subcategory = `Please select a subcategory for ${category}`;
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [details.subcategory, category]);
+
   const handleSave = useCallback(() => {
-    onSave(details);
-    onClose();
-  }, [details, onSave, onClose]);
+    if (validateForm()) {
+      onSave(details);
+      onClose();
+    }
+  }, [details, onSave, onClose, validateForm]);
 
   const handleClose = useCallback(() => {
     // Check if user has made any changes
@@ -131,7 +149,7 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     }
   }, [details, onClose]);
 
-  const renderSelectionGrid = (items: string[], selectedValue: string, onSelect: (value: string) => void, label: string) => (
+  const renderSelectionGrid = (items: string[], selectedValue: string, onSelect: (value: string) => void, label: string, fieldName?: string) => (
     <View style={styles.selectionContainer}>
       <Text style={styles.selectionLabel}>{label}</Text>
       <View style={styles.selectionGrid}>
@@ -140,19 +158,24 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
             key={item}
             style={[
               styles.selectionOption,
-              selectedValue === item && styles.selectionOptionSelected
+              selectedValue === item && styles.selectionOptionSelected,
+              fieldName && errors[fieldName] && styles.selectionOptionError
             ]}
             onPress={() => onSelect(item)}
           >
             <Text style={[
               styles.selectionOptionText,
-              selectedValue === item && styles.selectionOptionTextSelected
+              selectedValue === item && styles.selectionOptionTextSelected,
+              fieldName && errors[fieldName] && styles.selectionOptionTextError
             ]}>
               {item}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+      {fieldName && errors[fieldName] && (
+        <Text style={styles.errorText}>{errors[fieldName]}</Text>
+      )}
     </View>
   );
 
@@ -177,13 +200,14 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={onClose}
+      statusBarTranslucent={false}
     >
-      <View style={styles.modalContainer}>
-        <StatusBar 
-          barStyle="light-content" 
-          backgroundColor={Colors.primary} 
-          translucent={false}
-        />
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor={Colors.primary} 
+        translucent={false}
+      />
+      <SafeAreaView style={styles.modalContainer}>
         
         {/* Header */}
         <LinearGradient
@@ -194,7 +218,10 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Product Details</Text>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Product Details</Text>
+              <Text style={styles.headerCategory}>{category}</Text>
+            </View>
             <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
@@ -218,7 +245,8 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
               subcategories,
               details.subcategory || '',
               (value) => handleSelect('subcategory', value),
-              'Subcategory'
+              'Subcategory',
+              'subcategory'
             )}
 
             {/* Material */}
@@ -279,7 +307,7 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
               )}
              </View>
            </ScrollView>
-       </View>
+       </SafeAreaView>
     </Modal>
   );
 };
@@ -290,9 +318,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 30 : 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   headerContent: {
     flexDirection: 'row',
@@ -304,10 +337,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
+  headerTitleContainer: {
+    alignItems: 'center',
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
+  },
+  headerCategory: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
   },
   saveButton: {
     paddingHorizontal: 16,
@@ -326,6 +369,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
+    backgroundColor: Colors.background,
   },
   helpContainer: {
     flexDirection: 'row',
@@ -354,27 +398,43 @@ const styles = StyleSheet.create({
   selectionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   selectionOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     backgroundColor: Colors.background,
+    minWidth: '12%',
+    alignItems: 'center',
   },
   selectionOptionSelected: {
     borderColor: Colors.primary,
     backgroundColor: Colors.primary,
   },
   selectionOptionText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: Colors.textPrimary,
+    textAlign: 'center',
   },
   selectionOptionTextSelected: {
     color: Colors.textPrimary,
+  },
+  selectionOptionError: {
+    borderColor: '#FF4444',
+    backgroundColor: '#FFE6E6',
+  },
+  selectionOptionTextError: {
+    color: '#FF4444',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#FF4444',
+    marginTop: 8,
+    fontWeight: '500',
   },
   togglesContainer: {
     marginTop: 8,

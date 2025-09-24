@@ -41,17 +41,18 @@ export interface FormErrors {
 export const PRODUCT_CATEGORIES = ['Men', 'Women', 'Kids', 'Unisex'] as const;
 
 export const PRODUCT_SUBCATEGORIES = {
-  'Men': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Suits', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Underwear', 'Activewear', 'Ethnic Wear'],
-  'Women': ['Dresses', 'Tops', 'Sarees', 'Kurtas', 'Skirts', 'Leggings', 'Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Underwear', 'Sleepwear', 'Activewear', 'Swimwear', 'Ethnic Wear'],
-  'Kids': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Dresses', 'Tops', 'Skirts', 'Leggings', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Jackets', 'Coats', 'Activewear', 'Swimwear', 'Ethnic Wear'],
-  'Unisex': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Hoodies', 'Sweatshirts', 'Sweaters', 'Cardigans', 'Blazers', 'Coats', 'Activewear', 'Ethnic Wear']
+ 'Men': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Suits', 'Coats'],
+      'Women': ['Dresses', 'Tops', 'Sarees', 'Kurtas', 'Skirts', 'Leggings', 'Shirts', 'T-Shirts', 'Pants', 'Jeans', 
+      'Shorts',  ],
+      'Kids': ['Shirts', 'T-Shirts', 'Dresses', 'Tops', 'Skirts', 'Leggings', 'Jackets'],
+      'Unisex': ['Jackets', 'Hoodies', 'Sweatshirts','Blazers']
 } as const;
 
-export const PRODUCT_MATERIALS = ['Cotton', 'Polyester', 'Silk', 'Wool', 'Linen', 'Denim', 'Leather', 'Synthetic'] as const;
+export const PRODUCT_MATERIALS = ['Cotton', 'Polyester', 'Silk', 'Wool', 'Linen','Leather'] as const;
 
 export const PRODUCT_FITS = ['Slim Fit', 'Regular Fit', 'Loose Fit', 'Oversized'] as const;
 
-export const PRODUCT_PATTERNS = ['Solid', 'Striped', 'Printed', 'Checkered', 'Floral'] as const;
+export const PRODUCT_PATTERNS = ['Solid', 'Striped', 'Printed', 'Checkered'] as const;
 
 export const PRODUCT_SEASONS = ['Summer', 'Winter', 'Monsoon', 'All Season'] as const;
 

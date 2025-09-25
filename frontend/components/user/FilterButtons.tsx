@@ -1,0 +1,160 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/constants/colors';
+
+interface FilterOption {
+  id: string;
+  name: string;
+  icon?: string;
+  count?: number;
+}
+
+interface FilterButtonsProps {
+  selectedFilter: string | null;
+  onFilterSelect: (filterId: string) => void;
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  { id: 'all', name: 'All', icon: 'grid-outline' },
+  { id: 'men', name: 'Men', icon: 'man-outline' },
+  { id: 'women', name: 'Women', icon: 'woman-outline' },
+  { id: 'kids', name: 'Kids', icon: 'people-outline' },
+  { id: 'new', name: 'New Arrivals', icon: 'sparkles-outline' },
+  { id: 'sale', name: 'On Sale', icon: 'pricetag-outline' },
+  { id: 'trending', name: 'Trending', icon: 'trending-up-outline' },
+];
+
+const FilterButtons: React.FC<FilterButtonsProps> = ({
+  selectedFilter,
+  onFilterSelect,
+}) => {
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+      >
+        {FILTER_OPTIONS.map((option) => (
+          <TouchableOpacity
+            key={option.id}
+            style={[
+              styles.filterButton,
+              selectedFilter === option.id && styles.selectedFilterButton
+            ]}
+            onPress={() => onFilterSelect(option.id)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.buttonContent}>
+              {option.icon && (
+                <Ionicons
+                  name={option.icon as any}
+                  size={16}
+                  color={selectedFilter === option.id ? Colors.background : Colors.textPrimary}
+                  style={styles.buttonIcon}
+                />
+              )}
+              <Text
+                style={[
+                  styles.buttonText,
+                  selectedFilter === option.id && styles.selectedButtonText
+                ]}
+              >
+                {option.name}
+              </Text>
+              {option.count && (
+                <View style={[
+                  styles.countBadge,
+                  selectedFilter === option.id && styles.selectedCountBadge
+                ]}>
+                  <Text style={[
+                    styles.countText,
+                    selectedFilter === option.id && styles.selectedCountText
+                  ]}>
+                    {option.count}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+  },
+  scrollView: {
+    flexGrow: 0,
+  },
+  scrollContent: {
+    paddingRight: 16,
+  },
+  filterButton: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedFilterButton: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  buttonIcon: {
+    marginRight: 2,
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  selectedButtonText: {
+    color: Colors.background,
+  },
+  countBadge: {
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  selectedCountBadge: {
+    backgroundColor: Colors.background,
+  },
+  countText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  selectedCountText: {
+    color: Colors.primary,
+  },
+});
+
+export default FilterButtons;

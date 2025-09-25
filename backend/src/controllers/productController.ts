@@ -387,10 +387,135 @@ async function deleteProduct(req: Request, res: Response) {
 }
 
 
+// Get all products for customers (public endpoint)
+async function getAllProducts(req: Request, res: Response) {
+  try {
+    // Get query parameters for pagination and filtering
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const category = req.query.category as string;
+    const subcategory = req.query.subcategory as string;
+    const search = req.query.search as string;
+    const minPrice = parseFloat(req.query.minPrice as string);
+    const maxPrice = parseFloat(req.query.maxPrice as string);
+    const isBestSeller = req.query.isBestSeller === 'true';
+    const isNewArrival = req.query.isNewArrival === 'true';
+
+    // Build filter object
+    const filter: any = { isActive: true };
+    
+    if (category) filter.category = category;
+    if (subcategory) filter.subcategory = subcategory;
+    if (isBestSeller) filter.isBestSeller = true;
+    if (isNewArrival) filter.isNewArrival = true;
+    
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { subcategory: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      filter.price = {};
+      if (minPrice !== undefined) filter.price.$gte = minPrice;
+      if (maxPrice !== undefined) filter.price.$lte = maxPrice;
+    }
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Get products with pagination
+    const products = await ProductModel.find(filter)
+      .populate('merchantId', 'name email')
+      .populate('storeId', 'storeName address storeImages')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get total count for pagination
+    const totalProducts = await ProductModel.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      message: "Products retrieved successfully",
+      products,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalProducts / limit),
+        totalProducts,
+        hasNextPage: page < Math.ceil(totalProducts / limit),
+        hasPrevPage: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting all products:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+// Get products by store ID
+async function getProductsByStore(req: Request, res: Response) {
+  try {
+    const { storeId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const category = req.query.category as string;
+    const subcategory = req.query.subcategory as string;
+
+    // Build filter object
+    const filter: any = { storeId, isActive: true };
+    
+    if (category) filter.category = category;
+    if (subcategory) filter.subcategory = subcategory;
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Get products with pagination
+    const products = await ProductModel.find(filter)
+      .populate('merchantId', 'name email')
+      .populate('storeId', 'storeName address storeImages')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get total count for pagination
+    const totalProducts = await ProductModel.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      message: "Store products retrieved successfully",
+      products,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalProducts / limit),
+        totalProducts,
+        hasNextPage: page < Math.ceil(totalProducts / limit),
+        hasPrevPage: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting store products:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
 export { 
   createProduct, 
   getMerchantProducts, 
   getProductById, 
   updateProduct, 
-  deleteProduct
+  deleteProduct,
+  getAllProducts,
+  getProductsByStore
 };

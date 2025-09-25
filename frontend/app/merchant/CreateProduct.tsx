@@ -98,11 +98,6 @@ const CreateProduct = () => {
     return newErrors;
   }, [productData]);
 
-  // Check if form is valid
-  const isFormValid = useMemo(() => {
-    const validationErrors = validateForm();
-    return Object.keys(validationErrors).length === 0;
-  }, [validateForm]);
 
   const handleInputChange = useCallback((field: keyof ProductData, value: string | string[] | boolean) => {
     setProductData(prev => ({
@@ -568,16 +563,12 @@ const CreateProduct = () => {
             {/* Submit Button */}
             <Animated.View style={{ opacity: fadeAnim }}>
               <TouchableOpacity 
-                style={[
-                  styles.submitButton,
-                  (!isFormValid || isLoading) && styles.submitButtonDisabled
-                ]} 
+                style={styles.submitButton} 
                 onPress={handleSubmit}
-                disabled={!isFormValid || isLoading}
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={isFormValid ? Colors.gradients.primary as [string, string] : [Colors.border, Colors.border] as [string, string]}
+                  colors={Colors.gradients.primary as [string, string]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.buttonGradient}
@@ -586,13 +577,10 @@ const CreateProduct = () => {
                     <Ionicons 
                       name={isLoading ? "hourglass-outline" : "checkmark-circle-outline"} 
                       size={24} 
-                      color={isFormValid ? Colors.textPrimary : Colors.textMuted}
+                      color={Colors.textPrimary}
                       style={styles.buttonIcon}
                     />
-                    <Text style={[
-                      styles.submitButtonText,
-                      !isFormValid && styles.submitButtonTextDisabled
-                    ]}>
+                    <Text style={styles.submitButtonText}>
                       {isLoading ? "Creating Product..." : "Create Product"}
                     </Text>
                   </View>
@@ -825,11 +813,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
-    elevation: 2,
-    shadowOpacity: 0.1,
-  },
   buttonGradient: {
     paddingVertical: 20,
     paddingHorizontal: 24,
@@ -849,10 +832,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
     letterSpacing: 1.0,
-  },
-  submitButtonTextDisabled: {
-    color: Colors.textPrimary,
-    opacity: 0.7,
   },
 });
 

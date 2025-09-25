@@ -58,3 +58,66 @@ export const PRODUCT_PATTERNS = ['Solid', 'Striped', 'Printed', 'Checkered'] as 
 export const PRODUCT_SEASONS = ['Summer', 'Winter', 'Monsoon', 'All Season'] as const;
 
 export const PRODUCT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', 'Free Size'] as const;
+
+// Full Product interface for API responses
+export interface Product {
+  _id: string;
+  name: string;
+  description: string;
+  category: string;
+  subcategory: string;
+  images: string[];
+  price: number;
+  sizes: string[];
+  availableQuantity: number;
+  specifications?: ProductSpecifications;
+  season?: string;
+  isActive: boolean;
+  isNewArrival: boolean;
+  isBestSeller: boolean;
+  merchantId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  storeId: {
+    _id: string;
+    storeName: string;
+    address: string;
+    storeImages: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductsResponse {
+  success: boolean;
+  message: string;
+  products: Product[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalProducts: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+// Category and subcategory types for UI
+export interface CategoryItem {
+  id: string;
+  name: string;
+  icon: string;
+  subcategories: string[];
+}
+
+export interface FilterState {
+  category: string | null;
+  subcategory: string | null;
+  priceRange: {
+    min: number;
+    max: number;
+  };
+  isBestSeller: boolean;
+  isNewArrival: boolean;
+}

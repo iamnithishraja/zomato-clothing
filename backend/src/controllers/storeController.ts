@@ -417,4 +417,89 @@ async function deleteStoreDetails(req: Request, res: Response) {
   }
 }
 
-export { createStore, updateStore, getStoreDetails, deleteStoreDetails };
+// Get all stores for customers (public endpoint)
+async function getAllStores(req: Request, res: Response) {
+  try {
+    // Get query parameters for pagination and filtering
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = req.query.search as string;
+    const location = req.query.location as string;
+
+    // Build filter object
+    const filter: any = { isActive: true };
+    
+    if (search) {
+      filter.$or = [
+        { storeName: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { address: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (location) {
+      filter.address = { $regex: location, $options: 'i' };
+    }
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Get stores with pagination
+    const stores = await StoreModel.find(filter)
+      .populate('merchantId', 'name email')
+      .sort({ 'rating.average': -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get total count for pagination
+    const totalStores = await StoreModel.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      message: "Stores retrieved successfully",
+      stores,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalStores / limit),
+        totalStores,
+        hasNextPage: page < Math.ceil(totalStores / limit),
+        hasPrevPage: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting all stores:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+// Get best seller stores (top rated stores)
+async function getBestSellerStores(req: Request, res: Response) {
+  try {
+    const limit = parseInt(req.query.limit as string) || 4;
+
+    // Get top rated stores
+    const stores = await StoreModel.find({ isActive: true })
+      .populate('merchantId', 'name email')
+      .sort({ 'rating.average': -1, 'rating.totalReviews': -1 })
+      .limit(limit);
+
+    return res.status(200).json({
+      success: true,
+      message: "Best seller stores retrieved successfully",
+      stores
+    });
+
+  } catch (error) {
+    console.error("Error getting best seller stores:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+export { createStore, updateStore, getStoreDetails, deleteStoreDetails, getAllStores, getBestSellerStores };

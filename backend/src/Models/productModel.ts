@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema({
   },
   subcategory: {
     type: String,
+    required: true,
     enum: [
       "Shirts", "T-Shirts", "Pants", "Jeans", "Shorts", "Jackets", "Suits",
       "Dresses", "Tops", "Sarees", "Kurtas", "Skirts", "Leggings",

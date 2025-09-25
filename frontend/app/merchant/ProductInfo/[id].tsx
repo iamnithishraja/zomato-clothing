@@ -24,6 +24,7 @@ import {
   FormErrors, 
   ProductDetails,
   PRODUCT_CATEGORIES,
+  PRODUCT_SUBCATEGORIES,
   PRODUCT_SIZES
 } from '../../../types/product';
 
@@ -37,6 +38,7 @@ const ProductInfo = () => {
     name: '',
     description: '',
     category: '',
+    subcategory: '',
     images: [],
     price: '',
     sizes: [],
@@ -54,6 +56,12 @@ const ProductInfo = () => {
 
   const categories = PRODUCT_CATEGORIES;
   const availableSizes = PRODUCT_SIZES;
+  
+  // Get available subcategories based on selected category
+  const availableSubcategories = useMemo(() => {
+    if (!productData.category) return [];
+    return PRODUCT_SUBCATEGORIES[productData.category as keyof typeof PRODUCT_SUBCATEGORIES] || [];
+  }, [productData.category]);
 
   // Fetch product data on component mount
   useEffect(() => {
@@ -109,6 +117,10 @@ const ProductInfo = () => {
       newErrors.category = 'Please select a category';
     }
 
+    if (!productData.subcategory) {
+      newErrors.subcategory = 'Please select a subcategory';
+    }
+
     if (!productData.price.trim()) {
       newErrors.price = 'Price is required';
     } else if (isNaN(Number(productData.price)) || Number(productData.price) <= 0) {
@@ -152,13 +164,28 @@ const ProductInfo = () => {
   const handleCategorySelect = useCallback((category: string) => {
     setProductData(prev => ({
       ...prev,
-      category
+      category,
+      subcategory: '' // Reset subcategory when category changes
     }));
 
     if (errors.category) {
       setErrors(prev => ({ ...prev, category: undefined }));
     }
-  }, [errors.category]);
+    if (errors.subcategory) {
+      setErrors(prev => ({ ...prev, subcategory: undefined }));
+    }
+  }, [errors.category, errors.subcategory]);
+
+  const handleSubcategorySelect = useCallback((subcategory: string) => {
+    setProductData(prev => ({
+      ...prev,
+      subcategory
+    }));
+
+    if (errors.subcategory) {
+      setErrors(prev => ({ ...prev, subcategory: undefined }));
+    }
+  }, [errors.subcategory]);
 
   const handleSizeToggle = useCallback((size: string) => {
     setProductData(prev => ({
@@ -182,7 +209,6 @@ const ProductInfo = () => {
   const handleDetailsSave = useCallback((details: ProductDetails) => {
     setProductData(prev => ({
       ...prev,
-      subcategory: details.subcategory,
       specifications: details.specifications,
       season: details.season,
       isActive: details.isActive,
@@ -193,7 +219,6 @@ const ProductInfo = () => {
 
   const hasDetailsData = useCallback(() => {
     return !!(
-      productData.subcategory ||
       productData.specifications?.material ||
       productData.specifications?.fit ||
       productData.specifications?.pattern ||
@@ -206,7 +231,6 @@ const ProductInfo = () => {
 
   const getDetailsSummary = useCallback(() => {
     const details = [];
-    if (productData.subcategory) details.push(productData.subcategory);
     if (productData.specifications?.material) details.push(productData.specifications.material);
     if (productData.season) details.push(productData.season);
     if (productData.isNewArrival) details.push("New Arrival");
@@ -466,6 +490,39 @@ const ProductInfo = () => {
               )}
             </View>
 
+            {/* Subcategory Selection */}
+            {productData.category && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Subcategory *</Text>
+                <View style={[
+                  styles.selectionContainer,
+                  errors.subcategory && styles.selectionContainerError
+                ]}>
+                  {availableSubcategories.map((subcategory) => (
+                    <TouchableOpacity
+                      key={subcategory}
+                      style={[
+                        styles.selectionOption,
+                        productData.subcategory === subcategory && styles.selectionOptionSelected,
+                        errors.subcategory && styles.selectionOptionError
+                      ]}
+                      onPress={() => handleSubcategorySelect(subcategory)}
+                    >
+                      <Text style={[
+                        styles.selectionOptionText,
+                        productData.subcategory === subcategory && styles.selectionOptionTextSelected
+                      ]}>
+                        {subcategory}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {errors.subcategory && (
+                  <Text style={styles.errorText}>{errors.subcategory}</Text>
+                )}
+              </View>
+            )}
+
 
             {/* Price and Quantity Row */}
             <View style={styles.rowContainer}>
@@ -689,7 +746,6 @@ const ProductInfo = () => {
         onClose={() => setShowDetailsModal(false)}
         onSave={handleDetailsSave}
         initialData={{
-          subcategory: productData.subcategory,
           specifications: productData.specifications,
           season: productData.season,
           isActive: productData.isActive,

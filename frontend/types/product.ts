@@ -17,7 +17,7 @@ export interface ProductData {
   name: string;
   description: string;
   category: string;
-  subcategory?: string;
+  subcategory: string;
   images: string[];
   price: string;
   sizes: string[]; // Multiple sizes selection
@@ -32,6 +32,7 @@ export interface ProductData {
 export interface FormErrors {
   name?: string;
   category?: string;
+  subcategory?: string;
   price?: string;
   availableQuantity?: string;
   images?: string;

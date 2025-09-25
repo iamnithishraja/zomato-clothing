@@ -57,6 +57,27 @@ async function createProduct(req: Request, res: Response) {
       });
     }
 
+    if (!subcategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Subcategory is required"
+      });
+    }
+
+    // Validate subcategory enum
+    const validSubcategories = [
+      "Shirts", "T-Shirts", "Pants", "Jeans", "Shorts", "Jackets", "Suits",
+      "Dresses", "Tops", "Sarees", "Kurtas", "Skirts", "Leggings",
+      "Hoodies", "Sweatshirts", "Sweaters", "Cardigans", "Blazers", "Coats",
+      "Underwear", "Sleepwear", "Activewear", "Swimwear", "Ethnic Wear"
+    ];
+    if (!validSubcategories.includes(subcategory)) {
+      return res.status(400).json({
+        success: false,
+        message: `Subcategory must be one of: ${validSubcategories.join(', ')}`
+      });
+    }
+
     if (!price || price <= 0) {
       return res.status(400).json({
         success: false,
@@ -94,7 +115,7 @@ async function createProduct(req: Request, res: Response) {
       name: name.trim(),
       description: description ? description.trim() : '',
       category,
-      subcategory: subcategory || undefined,
+      subcategory,
       images,
       price,
       sizes: sizes || [],

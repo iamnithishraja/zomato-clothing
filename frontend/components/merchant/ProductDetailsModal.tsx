@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { PRODUCT_SUBCATEGORIES } from '@/types/product';
+// Removed PRODUCT_SUBCATEGORIES import since subcategory is now handled on main screen
 
 // Removed unused screenHeight since we're using full screen now
 
@@ -24,7 +24,6 @@ interface ProductSpecifications {
 }
 
 interface ProductDetails {
-  subcategory?: string;
   specifications?: ProductSpecifications;
   season?: string;
   isActive: boolean;
@@ -48,7 +47,6 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   category = 'Men'
 }) => {
   const [details, setDetails] = useState<ProductDetails>({
-    subcategory: '',
     specifications: {
       material: '',
       fit: '',
@@ -65,10 +63,7 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
   // Removed unused fadeAnim
 
-  // Category-based subcategories using the comprehensive list from types
-  const subcategories = useMemo(() => {
-    return [...(PRODUCT_SUBCATEGORIES[category as keyof typeof PRODUCT_SUBCATEGORIES] || [])];
-  }, [category]);
+  // Removed subcategories since they're now handled on the main screen
 
   const materials = ['Cotton', 'Polyester', 'Silk', 'Linen', 'Leather'];
   const fits = ['Slim Fit', 'Regular Fit', 'Loose Fit', 'Oversized'];
@@ -112,13 +107,11 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   const validateForm = useCallback(() => {
     const newErrors: { [key: string]: string } = {};
     
-    if (!details.subcategory) {
-      newErrors.subcategory = `Please select a subcategory for ${category}`;
-    }
+    // No validation needed since subcategory is handled on main screen
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [details.subcategory, category]);
+  }, []);
 
   const handleSave = useCallback(() => {
     if (validateForm()) {
@@ -130,7 +123,6 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   const handleClose = useCallback(() => {
     // Check if user has made any changes
     const hasChanges = !!(
-      details.subcategory ||
       details.specifications?.material ||
       details.specifications?.fit ||
       details.specifications?.pattern ||
@@ -240,14 +232,6 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                 Add detailed information about your product to help customers make better decisions. All fields are optional.
               </Text>
             </View>
-            {/* Subcategory */}
-            {renderSelectionGrid(
-              subcategories,
-              details.subcategory || '',
-              (value) => handleSelect('subcategory', value),
-              'Subcategory',
-              'subcategory'
-            )}
 
             {/* Material */}
             {renderSelectionGrid(

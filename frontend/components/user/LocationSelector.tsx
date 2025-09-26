@@ -156,15 +156,7 @@ const styles = StyleSheet.create({
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: Colors.background,   
   },
   locationIcon: {
     marginRight: 12,

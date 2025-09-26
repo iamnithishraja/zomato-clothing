@@ -42,7 +42,7 @@ export interface FormErrors {
 export const PRODUCT_CATEGORIES = ['Men', 'Women', 'Kids', 'Unisex'] as const;
 
 export const PRODUCT_SUBCATEGORIES = {
- 'Men': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Suits', 'Coats'],
+      'Men': ['Shirts', 'T-Shirts', 'Pants', 'Jeans', 'Shorts', 'Jackets', 'Suits', 'Coats'],
       'Women': ['Dresses', 'Tops', 'Sarees', 'Kurtas', 'Skirts', 'Leggings', 'Shirts', 'T-Shirts', 'Pants', 'Jeans', 
       'Shorts',  ],
       'Kids': ['Shirts', 'T-Shirts', 'Dresses', 'Tops', 'Skirts', 'Leggings', 'Jackets'],

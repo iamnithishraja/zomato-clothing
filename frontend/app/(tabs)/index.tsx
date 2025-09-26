@@ -16,9 +16,9 @@ import { Colors } from '@/constants/colors';
 import LocationSelector from '@/components/user/LocationSelector';
 import SearchBar from '@/components/user/SearchBar';
 import CategoryIcons from '@/components/user/CategoryIcons';
-import StoreCarousel from '@/components/user/StoreCarousel';
+import SwipeCarousel from '@/components/user/SwipeCarousel';
 import FilterButtons from '@/components/user/FilterButtons';
-import StoreCard from '@/components/user/StoreCard';
+import ModernStoreCard from '@/components/user/ModernStoreCard';
 
 // Import types and API
 import type { Store, Location } from '@/types/store';
@@ -135,7 +135,7 @@ export default function HomeScreen() {
   }, [loadData]);
 
   const renderStoreCard = ({ item }: { item: Store }) => (
-    <StoreCard store={item} onPress={handleStorePress} />
+    <ModernStoreCard store={item} onPress={handleStorePress} />
   );
 
   const renderStoresList = () => (
@@ -212,7 +212,7 @@ export default function HomeScreen() {
         <CategoryIcons onCategoryPress={handleCategoryPress} />
 
         {/* Best Seller Carousel */}
-        <StoreCarousel
+        <SwipeCarousel
           stores={bestSellerStores}
           onStorePress={handleStorePress}
         />
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   storesSection: {
-    marginTop: 24,
+    marginTop: 14,
     paddingHorizontal: 16,
   },
   sectionHeader: {

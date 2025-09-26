@@ -90,7 +90,6 @@ const FilterButtons: React.FC<FilterButtonsProps> = ({
     </View>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     marginTop: 10,
@@ -134,7 +133,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   selectedButtonText: {
-    color: Colors.background,
+    color: Colors.textPrimary,
   },
   countBadge: {
     backgroundColor: Colors.background,
@@ -153,7 +152,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   selectedCountText: {
-    color: Colors.primary,
+    color: Colors.textPrimary,
   },
 });
 

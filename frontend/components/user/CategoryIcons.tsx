@@ -6,8 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { PRODUCT_SUBCATEGORIES } from '@/types/product';
 
@@ -30,35 +30,36 @@ const getAllSubcategories = () => {
 
 const SUBCATEGORIES = getAllSubcategories();
 
-// Icon mapping for subcategories with valid Ionicons related to fashion and clothing
-const getIconForSubcategory = (subcategory: string): string => {
-  const iconMap: { [key: string]: string } = {
-    'Shirts': 'shirt-outline',
-    'T-Shirts': 'shirt-outline',
-    'Pants': 'body-outline',
-    'Jeans': 'body-outline',
-    'Shorts': 'body-outline',
-    'Jackets': 'jacket-outline',
-    'Suits': 'business-outline',
-    'Dresses': 'woman-outline',
-    'Tops': 'shirt-outline',
-    'Sarees': 'sparkles-outline',
-    'Kurtas': 'shirt-outline',
-    'Skirts': 'woman-outline',
-    'Leggings': 'body-outline',
-    'Hoodies': 'shirt-outline',
-    'Sweatshirts': 'shirt-outline',
-    'Sweaters': 'shirt-outline',
-    'Cardigans': 'shirt-outline',
-    'Blazers': 'business-outline',
-    'Coats': 'jacket-outline',
-    'Underwear': 'body-outline',
-    'Sleepwear': 'bed-outline',
-    'Activewear': 'barbell-outline',
-    'Swimwear': 'water-outline',
-    'Ethnic Wear': 'sparkles-outline',
+// Image mapping for subcategories with fashion category images
+const getImageForSubcategory = (subcategory: string): string => {
+  const imageMap: { [key: string]: string } = {
+    // Tops & Shirts
+    'Shirts': 'https://cdn-icons-png.flaticon.com/128/17071/17071121.png',
+    'T-Shirts': 'https://cdn-icons-png.flaticon.com/128/3746/3746120.png',
+    'Tops': 'https://cdn-icons-png.flaticon.com/128/2093/2093836.png',
+    'Hoodies': 'https://cdn-icons-png.flaticon.com/128/2390/2390076.png',
+    'Sweatshirts': 'https://cdn-icons-png.flaticon.com/128/5257/5257953.png',
+    
+    // Bottoms
+    'Pants': 'https://cdn-icons-png.flaticon.com/128/2806/2806131.png',
+    'Jeans': 'https://cdn-icons-png.flaticon.com/128/5258/5258257.png',
+    'Shorts': 'https://cdn-icons-png.flaticon.com/128/2236/2236900.png',
+    'Leggings': 'https://cdn-icons-png.flaticon.com/128/10805/10805477.png',
+    'Skirts': 'https://cdn-icons-png.flaticon.com/128/7443/7443405.png',
+    
+    // Outerwear
+    'Jackets': 'https://cdn-icons-png.flaticon.com/128/5170/5170753.png',
+    'Blazers': 'https://cdn-icons-png.flaticon.com/128/2806/2806149.png',
+    'Coats': 'https://cdn-icons-png.flaticon.com/128/5756/5756849.png',
+    'Suits': 'https://cdn-icons-png.flaticon.com/128/8518/8518506.png',
+    
+    // Dresses & Ethnic
+    'Dresses': 'https://cdn-icons-png.flaticon.com/128/9292/9292065.png',
+    'Sarees': 'https://cdn-icons-png.flaticon.com/128/16432/16432966.png',
+    'Kurtas': 'https://cdn-icons-png.flaticon.com/128/9989/9989821.png',
   };
-  return iconMap[subcategory] || 'shirt-outline';
+  
+  return imageMap[subcategory] || 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png';
 };
 
 const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
@@ -90,10 +91,10 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
               activeOpacity={0.8}
             >
               <View style={styles.iconContainer}>
-                <Ionicons 
-                  name={getIconForSubcategory(subcategory) as any} 
-                  size={28} 
-                  color={Colors.primary} 
+                <Image
+                  source={{ uri: getImageForSubcategory(subcategory) }}
+                  style={styles.categoryImage}
+                  resizeMode="contain"
                 />
               </View>
               <Text style={styles.categoryName} numberOfLines={2}>
@@ -109,7 +110,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 24,
+    marginTop: 14,
   },
   header: {
     flexDirection: 'row',
@@ -126,7 +127,7 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.textPrimary,
   },
   scrollView: {
     paddingLeft: 16,
@@ -158,6 +159,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    padding: 8,
+  },
+  categoryImage: {
+    width: '100%',
+    height: '100%',
+    tintColor: Colors.primary, // This will apply your brand color to the images
   },
   categoryName: {
     fontSize: 11,

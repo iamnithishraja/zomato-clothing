@@ -45,10 +45,27 @@ const productSchema = new mongoose.Schema({
   price: {
     type: Number,
     required: true,
+    min: 0,
+    validate: {
+      validator: function(v: number) {
+        return !isNaN(v) && isFinite(v) && v >= 0;
+      },
+      message: 'Price must be a valid positive number'
+    }
   },
 
   sizes: [{ type: String, enum: ["XS", "S", "M", "L", "XL", "XXL", "28", "30", "32", "Free Size"] }],
-  availableQuantity: { type: Number, default: 0 },
+  availableQuantity: { 
+    type: Number, 
+    default: 0,
+    min: 0,
+    validate: {
+      validator: function(v: number) {
+        return !isNaN(v) && isFinite(v) && v >= 0;
+      },
+      message: 'Available quantity must be a valid non-negative number'
+    }
+  },
 
   specifications: {
     material: { type: String, enum: ["Cotton", "Polyester", "Silk", "Wool", "Linen", "Denim", "Leather","Synthetic"] },

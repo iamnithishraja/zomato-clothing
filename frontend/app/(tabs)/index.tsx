@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   FlatList,
   RefreshControl,
   SafeAreaView,
@@ -138,24 +137,71 @@ export default function HomeScreen() {
     <ModernStoreCard store={item} onPress={handleStorePress} />
   );
 
-  const renderStoresList = () => (
-    <View style={styles.storesSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          {searchQuery ? 'Search Results' : 'Nearby Stores'}
-        </Text>
-        <Text style={styles.sectionSubtitle}>
-          {stores.length} stores found
-          {products.length > 0 && ` • ${products.length} products found`}
-        </Text>
+  const renderHeader = () => (
+    <>
+      {/* Location Selector and Filter */}
+      <View style={styles.topRow}>
+        <View style={styles.locationContainer}>
+          <LocationSelector
+            selectedLocation={selectedLocation}
+            onLocationSelect={setSelectedLocation}
+          />
+        </View>
+        {/* Filter button - commented for now */}
+        {/* <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => console.log('Filter pressed')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="options-outline" size={24} color={Colors.primary} />
+        </TouchableOpacity> */}
       </View>
+
+      {/* Search Bar */}
+      <SearchBar
+        onSearch={handleSearch}
+      />
+
+      {/* Category Icons */}
+      <CategoryIcons onCategoryPress={handleCategoryPress} />
+
+      {/* Best Seller Carousel */}
+      <SwipeCarousel
+        stores={bestSellerStores}
+        onStorePress={handleStorePress}
+      />
+
+      {/* Filter Buttons */}
+      <FilterButtons
+        selectedFilter={selectedFilter}
+        onFilterSelect={handleFilterChange}
+      />
+
+      {/* Stores Section Header */}
+      <View style={styles.storesSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            {searchQuery ? 'Search Results' : 'Nearby Stores'}
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            {stores.length} stores found
+            {products.length > 0 && ` • ${products.length} products found`}
+          </Text>
+        </View>
+      </View>
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       
       <FlatList
         data={stores}
         renderItem={renderStoreCard}
         keyExtractor={(item) => item._id}
-        numColumns={1}
-        contentContainerStyle={styles.storesList}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={styles.flatListContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -166,66 +212,6 @@ export default function HomeScreen() {
           />
         }
       />
-    </View>
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-      >
-        {/* Location Selector and Filter */}
-        <View style={styles.topRow}>
-          <View style={styles.locationContainer}>
-            <LocationSelector
-              selectedLocation={selectedLocation}
-              onLocationSelect={setSelectedLocation}
-            />
-          </View>
-          {/* Filter button - commented for now */}
-          {/* <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => console.log('Filter pressed')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="options-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity> */}
-        </View>
-
-        {/* Search Bar */}
-        <SearchBar
-          onSearch={handleSearch}
-        />
-
-        {/* Category Icons */}
-        <CategoryIcons onCategoryPress={handleCategoryPress} />
-
-        {/* Best Seller Carousel */}
-        <SwipeCarousel
-          stores={bestSellerStores}
-          onStorePress={handleStorePress}
-        />
-
-        {/* Filter Buttons */}
-        <FilterButtons
-          selectedFilter={selectedFilter}
-          onFilterSelect={handleFilterChange}
-        />
-
-        {/* Stores List */}
-        {renderStoresList()}
-      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -235,8 +221,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  scrollView: {
-    flex: 1,
+  flatListContent: {
+    paddingBottom: 100, // Extra padding for tab bar
   },
   topRow: {
     flexDirection: 'row',
@@ -279,9 +265,6 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-  },
-  storesList: {
-    paddingBottom: 100, // Extra padding for tab bar
   },
 });
 

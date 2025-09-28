@@ -11,13 +11,11 @@ import {
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 
-// Import components
-import LocationSelector from '@/components/user/LocationSelector';
-import SearchBar from '@/components/user/SearchBar';
 import CategoryIcons from '@/components/user/CategoryIcons';
 import SwipeCarousel from '@/components/user/SwipeCarousel';
 import FilterButtons from '@/components/user/FilterButtons';
 import ModernStoreCard from '@/components/user/ModernStoreCard';
+import PromotionalBanner from '@/components/user/PromotionalBanner';
 
 // Import types and API
 import type { Store, Location } from '@/types/store';
@@ -139,26 +137,11 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <>
-      {/* Location Selector and Filter */}
-      <View style={styles.topRow}>
-        <View style={styles.locationContainer}>
-          <LocationSelector
-            selectedLocation={selectedLocation}
-            onLocationSelect={setSelectedLocation}
-          />
-        </View>
-        {/* Filter button - commented for now */}
-        {/* <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => console.log('Filter pressed')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="options-outline" size={24} color={Colors.primary} />
-        </TouchableOpacity> */}
-      </View>
-
-      {/* Search Bar */}
-      <SearchBar
+      {/* Promotional Banner with Location and Search */}
+      <PromotionalBanner 
+        onOrderPress={() => console.log('Order now pressed')}
+        selectedLocation={selectedLocation}
+        onLocationSelect={setSelectedLocation}
         onSearch={handleSearch}
       />
 
@@ -223,16 +206,6 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingBottom: 100, // Extra padding for tab bar
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 8,
-  },
-  locationContainer: {
-    flex: 1,
   },
   filterButton: {
     width: 48,

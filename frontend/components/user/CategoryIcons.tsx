@@ -34,29 +34,29 @@ const SUBCATEGORIES = getAllSubcategories();
 const getImageForSubcategory = (subcategory: string): string => {
   const imageMap: { [key: string]: string } = {
     // Tops & Shirts
-    'Shirts': 'https://cdn-icons-png.flaticon.com/128/17071/17071121.png',
-    'T-Shirts': 'https://cdn-icons-png.flaticon.com/128/3746/3746120.png',
-    'Tops': 'https://cdn-icons-png.flaticon.com/128/2093/2093836.png',
-    'Hoodies': 'https://cdn-icons-png.flaticon.com/128/2390/2390076.png',
-    'Sweatshirts': 'https://cdn-icons-png.flaticon.com/128/5257/5257953.png',
+    'Shirts': 'https://cdn-icons-png.flaticon.com/128/3046/3046982.png',
+    'T-Shirts': 'https://cdn-icons-png.flaticon.com/128/1867/1867565.png',
+    'Tops': 'https://cdn-icons-png.flaticon.com/128/1983/1983486.png',
+    'Hoodies': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
+    'Sweatshirts': 'https://cdn-icons-png.flaticon.com/128/5980/5980981.png',
     
     // Bottoms
-    'Pants': 'https://cdn-icons-png.flaticon.com/128/2806/2806131.png',
-    'Jeans': 'https://cdn-icons-png.flaticon.com/128/5258/5258257.png',
-    'Shorts': 'https://cdn-icons-png.flaticon.com/128/2236/2236900.png',
-    'Leggings': 'https://cdn-icons-png.flaticon.com/128/10805/10805477.png',
-    'Skirts': 'https://cdn-icons-png.flaticon.com/128/7443/7443405.png',
+    'Pants': 'https://cdn-icons-png.flaticon.com/128/776/776623.png',
+    'Jeans': 'https://cdn-icons-png.flaticon.com/128/2122/2122621.png',
+    'Shorts': 'https://cdn-icons-png.flaticon.com/128/3345/3345385.png',
+    'Leggings': 'https://cdn-icons-png.flaticon.com/128/10805/10805502.png',
+    'Skirts': 'https://cdn-icons-png.flaticon.com/128/2161/2161241.png',
     
     // Outerwear
-    'Jackets': 'https://cdn-icons-png.flaticon.com/128/5170/5170753.png',
-    'Blazers': 'https://cdn-icons-png.flaticon.com/128/2806/2806149.png',
-    'Coats': 'https://cdn-icons-png.flaticon.com/128/5756/5756849.png',
-    'Suits': 'https://cdn-icons-png.flaticon.com/128/8518/8518506.png',
+    'Jackets': 'https://cdn-icons-png.flaticon.com/128/2806/2806051.png',
+    'Blazers': 'https://cdn-icons-png.flaticon.com/128/2589/2589797.png',
+    'Coats': 'https://cdn-icons-png.flaticon.com/128/2390/2390061.png',
+    'Suits': 'https://cdn-icons-png.flaticon.com/128/3074/3074252.png',
     
     // Dresses & Ethnic
-    'Dresses': 'https://cdn-icons-png.flaticon.com/128/9292/9292065.png',
-    'Sarees': 'https://cdn-icons-png.flaticon.com/128/16432/16432966.png',
-    'Kurtas': 'https://cdn-icons-png.flaticon.com/128/9989/9989821.png',
+    'Dresses': 'https://cdn-icons-png.flaticon.com/128/2682/2682178.png',
+    'Sarees': 'https://cdn-icons-png.flaticon.com/128/17981/17981822.png',
+    'Kurtas': 'https://cdn-icons-png.flaticon.com/128/9992/9992462.png',
   };
   
   return imageMap[subcategory] || 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png';
@@ -164,7 +164,6 @@ const styles = StyleSheet.create({
   categoryImage: {
     width: '100%',
     height: '100%',
-    tintColor: Colors.primary, // This will apply your brand color to the images
   },
   categoryName: {
     fontSize: 11,

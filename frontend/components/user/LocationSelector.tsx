@@ -66,7 +66,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         activeOpacity={0.7}
       >
         <View style={styles.locationIcon}>
-          <Ionicons name="location-outline" size={20} color={Colors.primary} />
+          <Ionicons name="location-outline" size={20} color={Colors.textSecondary} />
         </View>
         <View style={styles.locationInfo}>
           <Text style={styles.locationLabel}>Deliver to</Text>
@@ -156,8 +156,7 @@ const styles = StyleSheet.create({
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,   
-  },
+    backgroundColor: 'transparent',    },
   locationIcon: {
     marginRight: 12,
   },

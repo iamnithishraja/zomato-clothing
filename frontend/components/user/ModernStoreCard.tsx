@@ -77,13 +77,13 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
               colors={['#f8f9fa', '#e9ecef']}
               style={styles.placeholderImage}
             >
-              <Ionicons name="storefront-outline" size={36} color="#6c757d" />
+              <Ionicons name="storefront-outline" size={40} color="#6c757d" />
             </LinearGradient>
           )}
           
           {/* Gradient Overlay */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.3)']}
+            colors={['transparent', 'rgba(0,0,0,0.4)']}
             style={styles.imageGradient}
           />
           
@@ -117,6 +117,16 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
               {store.storeName}
             </Text>
           </View>
+
+          {/* Rating Overlay */}
+          <View style={styles.ratingOverlay}>
+            <View style={styles.starsContainer}>
+              {renderStars(store.rating.average)}
+            </View>
+            <Text style={styles.ratingOverlayText}>
+              {store.rating.average.toFixed(1)} ({store.rating.totalReviews})
+            </Text>
+          </View>
         </View>
 
         {/* Content Section */}
@@ -126,19 +136,8 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
               {store.description || 'Premium fashion & lifestyle collection'}
             </Text>
             
-            <View style={styles.detailsRow}>
-              <View style={styles.ratingContainer}>
-                <View style={styles.starsContainer}>
-                  {renderStars(store.rating.average)}
-                </View>
-                <Text style={styles.ratingText}>
-                  {store.rating.average.toFixed(1)} ({store.rating.totalReviews})
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={14} color="#6B7280" />
+              <Ionicons name="location-outline" size={16} color="#6B7280" />
               <Text style={styles.locationText} numberOfLines={1}>
                 {formatAddress(store.address)}
               </Text>
@@ -147,12 +146,12 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
 
           <View style={styles.actionSection}>
             <TouchableOpacity style={styles.favoriteButton} activeOpacity={0.7}>
-              <Ionicons name="heart-outline" size={22} color="#6B7280" />
+              <Ionicons name="heart-outline" size={24} color="#6B7280" />
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.visitButton} activeOpacity={0.8}>
-              <Text style={styles.visitButtonText}>Visit</Text>
-              <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
+              <Text style={styles.visitButtonText}>Visit Store</Text>
+              <Ionicons name="arrow-forward" size={18} color={Colors.background} />
             </TouchableOpacity>
           </View>
         </View>
@@ -178,7 +177,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   imageSection: {
-    height: 120,
+    height: 160,
     position: 'relative',
   },
   storeImage: {
@@ -196,7 +195,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 60,
+    height: 80,
   },
   topBadges: {
     position: 'absolute',
@@ -258,51 +257,60 @@ const styles = StyleSheet.create({
     right: 12,
   },
   storeNameText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
     letterSpacing: -0.5,
+    lineHeight: 26,
   },
-  contentSection: {
-    padding: 12,
-  },
-  mainContent: {
-    marginBottom: 12,
-  },
-  storeDescription: {
-    fontSize: 13,
-    color: '#374151',
-    lineHeight: 18,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  detailsRow: {
-    marginBottom: 6,
-  },
-  ratingContainer: {
+  ratingOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backdropFilter: 'blur(10px)',
+    gap: 4,
+  },
+  ratingOverlayText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  contentSection: {
+    padding: 16,
+  },
+  mainContent: {
+    marginBottom: 16,
+  },
+  storeDescription: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 12,
+    fontWeight: '500',
   },
   starsContainer: {
     flexDirection: 'row',
     gap: 2,
   },
-  ratingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   locationText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#6B7280',
     flex: 1,
     fontWeight: '500',
@@ -311,36 +319,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
   favoriteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   visitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    gap: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 20,
+    gap: 8,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 6,
   },
   visitButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.background,
   },

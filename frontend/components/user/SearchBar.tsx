@@ -130,19 +130,21 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingBottom: -5,
+    zIndex: 1,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: 'white',
     borderRadius: 16,
     paddingHorizontal: 4,
     paddingVertical: 4,
     borderWidth: 1.5,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 6,
     minHeight: 52,
   },
   searchIconContainer: {

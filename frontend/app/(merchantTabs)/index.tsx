@@ -1,10 +1,50 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import apiClient from '@/api/client';
 
 export default function MerchantHome() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    totalOrders: 0,
+    totalEarnings: 0,
+    storeRating: 0,
+    isStoreActive: false
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadMerchantStats = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get('/api/v1/user/stats');
+      if (response.data.success) {
+        setStats(response.data.stats);
+      }
+    } catch (error) {
+      console.error('Error loading merchant stats:', error);
+      Alert.alert('Error', 'Failed to load dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMerchantStats();
+  }, [loadMerchantStats]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning!';
+    if (hour < 18) return 'Good Afternoon!';
+    return 'Good Evening!';
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
@@ -16,8 +56,8 @@ export default function MerchantHome() {
         >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Good Morning!</Text>
-            <Text style={styles.userName}>Store Owner</Text>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>{user?.name || 'Store Owner'}</Text>
           </View>
           <View style={styles.notificationIcon}>
             <Ionicons name="notifications" size={24} color={Colors.textPrimary} />
@@ -29,25 +69,25 @@ export default function MerchantHome() {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <Ionicons name="receipt" size={24} color={Colors.primary} />
+            <Ionicons name="shirt" size={24} color={Colors.primary} />
           </View>
-          <Text style={styles.statNumber}>24</Text>
-          <Text style={styles.statLabel}>Today&apos;s Orders</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.totalProducts}</Text>
+          <Text style={styles.statLabel}>Total Products</Text>
         </View>
         
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <Ionicons name="cash" size={24} color={Colors.success} />
+            <Ionicons name="receipt" size={24} color={Colors.success} />
           </View>
-          <Text style={styles.statNumber}>₹12,450</Text>
-          <Text style={styles.statLabel}>Today&apos;s Revenue</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.totalOrders}</Text>
+          <Text style={styles.statLabel}>Total Orders</Text>
         </View>
         
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
             <Ionicons name="star" size={24} color={Colors.warning} />
           </View>
-          <Text style={styles.statNumber}>4.8</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.storeRating.toFixed(1)}</Text>
           <Text style={styles.statLabel}>Store Rating</Text>
         </View>
       </View>
@@ -56,7 +96,10 @@ export default function MerchantHome() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsContainer}>
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/merchant/CreateProduct')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="add-circle" size={28} color={Colors.primary} />
             </View>
@@ -64,15 +107,21 @@ export default function MerchantHome() {
             <Text style={styles.actionSubtitle}>Add new items to your store</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/(merchantTabs)/products')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="list" size={28} color={Colors.primary} />
             </View>
-            <Text style={styles.actionTitle}>Manage Orders</Text>
-            <Text style={styles.actionSubtitle}>View and process orders</Text>
+            <Text style={styles.actionTitle}>Manage Products</Text>
+            <Text style={styles.actionSubtitle}>View and edit your products</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => Alert.alert('Coming Soon', 'Analytics feature will be available soon!')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="analytics" size={28} color={Colors.primary} />
             </View>
@@ -80,7 +129,10 @@ export default function MerchantHome() {
             <Text style={styles.actionSubtitle}>View sales and performance</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => Alert.alert('Coming Soon', 'Store settings will be available soon!')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="storefront" size={28} color={Colors.primary} />
             </View>

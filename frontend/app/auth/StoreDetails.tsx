@@ -207,7 +207,6 @@ const StoreDetails = () => {
         }),
       ]).start();
 
-      console.log('Creating store with data:', storeData);
 
       // Transform data to match backend expectations
       const backendData = {

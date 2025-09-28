@@ -1,10 +1,47 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/contexts/AuthContext';
+import apiClient from '@/api/client';
 
 export default function DeliveryHome() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    totalDeliveries: 0,
+    averageRating: 0,
+    totalEarnings: 0,
+    isOnline: false
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadDeliveryStats = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get('/api/v1/user/stats');
+      if (response.data.success) {
+        setStats(response.data.stats);
+      }
+    } catch (error) {
+      console.error('Error loading delivery stats:', error);
+      Alert.alert('Error', 'Failed to load dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDeliveryStats();
+  }, [loadDeliveryStats]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning!';
+    if (hour < 18) return 'Good Afternoon!';
+    return 'Good Evening!';
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -14,8 +51,8 @@ export default function DeliveryHome() {
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Good Morning!</Text>
-            <Text style={styles.userName}>Delivery Partner</Text>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
           </View>
           <View style={styles.notificationIcon}>
             <Ionicons name="notifications" size={24} color={Colors.textPrimary} />
@@ -29,23 +66,23 @@ export default function DeliveryHome() {
           <View style={styles.statIcon}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
           </View>
-          <Text style={styles.statNumber}>12</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.totalDeliveries}</Text>
           <Text style={styles.statLabel}>Completed</Text>
         </View>
         
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <Ionicons name="time" size={24} color={Colors.warning} />
+            <Ionicons name="star" size={24} color={Colors.warning} />
           </View>
-          <Text style={styles.statNumber}>3</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.averageRating.toFixed(1)}</Text>
+          <Text style={styles.statLabel}>Rating</Text>
         </View>
         
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
             <Ionicons name="cash" size={24} color={Colors.primary} />
           </View>
-          <Text style={styles.statNumber}>₹450</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : `₹${stats.totalEarnings}`}</Text>
           <Text style={styles.statLabel}>Earnings</Text>
         </View>
       </View>
@@ -54,15 +91,21 @@ export default function DeliveryHome() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsContainer}>
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => Alert.alert('Coming Soon', 'Delivery toggle feature will be available soon!')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="bicycle" size={28} color={Colors.primary} />
             </View>
-            <Text style={styles.actionTitle}>Start Delivery</Text>
-            <Text style={styles.actionSubtitle}>Begin accepting orders</Text>
+            <Text style={styles.actionTitle}>Toggle Online</Text>
+            <Text style={styles.actionSubtitle}>Start/stop accepting orders</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => Alert.alert('Coming Soon', 'Order management will be available soon!')}
+          >
             <View style={styles.actionIcon}>
               <Ionicons name="list" size={28} color={Colors.primary} />
             </View>

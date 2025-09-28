@@ -17,11 +17,10 @@ import FilterButtons from '@/components/user/FilterButtons';
 import ModernStoreCard from '@/components/user/ModernStoreCard';
 import PromotionalBanner from '@/components/user/PromotionalBanner';
 
-// Import types and API
+// Import types and API client
 import type { Store, Location } from '@/types/store';
 import type { Product } from '@/types/product';
-import { getAllStores, getBestSellerStores } from '@/api/stores';
-import { getAllProducts } from '@/api/products';
+import apiClient from '@/api/client';
 
 export default function HomeScreen() {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
@@ -36,20 +35,24 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     try {
       // Load best seller stores
-      const bestSellerResponse = await getBestSellerStores(4);
-      if (bestSellerResponse.success) {
-        setBestSellerStores(bestSellerResponse.stores);
+      const bestSellerResponse = await apiClient.get('/api/v1/store/bestsellers', {
+        params: { limit: 4 }
+      });
+      if (bestSellerResponse.data.success) {
+        setBestSellerStores(bestSellerResponse.data.stores);
       }
 
       // Load all stores
-      const storesResponse = await getAllStores({
-        page: 1,
-        limit: 20,
-        location: selectedLocation?.name,
+      const storesResponse = await apiClient.get('/api/v1/store/all', {
+        params: {
+          page: 1,
+          limit: 20,
+          location: selectedLocation?.name,
+        }
       });
       
-      if (storesResponse.success) {
-        setStores(storesResponse.stores);
+      if (storesResponse.data.success) {
+        setStores(storesResponse.data.stores);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -70,25 +73,29 @@ export default function HomeScreen() {
     try {
       // Search both stores and products
       const [storesResponse, productsResponse] = await Promise.all([
-        getAllStores({
-          page: 1,
-          limit: 20,
-          search: query,
-          location: selectedLocation?.name,
+        apiClient.get('/api/v1/store/all', {
+          params: {
+            page: 1,
+            limit: 20,
+            search: query,
+            location: selectedLocation?.name,
+          }
         }),
-        getAllProducts({
-          page: 1,
-          limit: 20,
-          search: query,
+        apiClient.get('/api/v1/product/all', {
+          params: {
+            page: 1,
+            limit: 20,
+            search: query,
+          }
         })
       ]);
       
-      if (storesResponse.success) {
-        setStores(storesResponse.stores);
+      if (storesResponse.data.success) {
+        setStores(storesResponse.data.stores);
       }
       
-      if (productsResponse.success) {
-        setProducts(productsResponse.products);
+      if (productsResponse.data.success) {
+        setProducts(productsResponse.data.products);
       }
     } catch (error) {
       console.error('Error searching:', error);
@@ -99,15 +106,17 @@ export default function HomeScreen() {
   const handleFilterChange = useCallback(async (filterId: string) => {
     setSelectedFilter(filterId);
     try {
-      const response = await getAllStores({
-        page: 1,
-        limit: 20,
-        search: searchQuery,
-        location: selectedLocation?.name,
+      const response = await apiClient.get('/api/v1/store/all', {
+        params: {
+          page: 1,
+          limit: 20,
+          search: searchQuery,
+          location: selectedLocation?.name,
+        }
       });
       
-      if (response.success) {
-        setStores(response.stores);
+      if (response.data.success) {
+        setStores(response.data.stores);
       }
     } catch (error) {
       console.error('Error filtering:', error);

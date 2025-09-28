@@ -6,13 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
-  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import type { Store } from '@/types/store';
-import StoreCarouselCard from './StoreCarouselCard';
+import StoreCard from './StoreCard';
 
 interface BestSellerCarouselProps {
   stores: Store[];
@@ -89,7 +87,7 @@ const BestSellerCarousel: React.FC<BestSellerCarouselProps> = ({
       >
         {stores.map((store, index) => (
           <View key={store._id} style={[styles.storeCard, { width: cardWidth }]}>
-            <StoreCarouselCard store={store} onPress={onStorePress} />
+            <StoreCard store={store} onPress={onStorePress} />
           </View>
         ))}
       </ScrollView>

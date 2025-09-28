@@ -1,15 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Image,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '@/constants/colors';
 import type { Store } from '@/types/store';
 
 interface ModernStoreCardProps {
@@ -17,10 +15,19 @@ interface ModernStoreCardProps {
   onPress: (store: Store) => void;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = screenWidth - 32; // Full width with margins (16px padding on each side)
+// Removed unused screenWidth variable
 
 const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => {
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  // Debug: Log store data to see what's available
+  console.log('Store data:', {
+    storeName: store.storeName,
+    description: store.description,
+    merchantName: store.merchantId?.name,
+    address: store.address
+  });
+
   const renderStars = (rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
@@ -28,20 +35,20 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
 
     for (let i = 0; i < fullStars; i++) {
       stars.push(
-        <Ionicons key={i} name="star" size={14} color="#FFD700" />
+        <Ionicons key={i} name="star" size={18} color="#FFD700" />
       );
     }
 
     if (hasHalfStar) {
       stars.push(
-        <Ionicons key="half" name="star-half" size={14} color="#FFD700" />
+        <Ionicons key="half" name="star-half" size={18} color="#FFD700" />
       );
     }
 
     const emptyStars = 5 - Math.ceil(rating);
     for (let i = 0; i < emptyStars; i++) {
       stars.push(
-        <Ionicons key={`empty-${i}`} name="star-outline" size={14} color="#E0E0E0" />
+        <Ionicons key={`empty-${i}`} name="star-outline" size={18} color="#E0E0E0" />
       );
     }
 
@@ -50,21 +57,25 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
 
   const formatAddress = (address: string) => {
     const words = address.split(' ');
-    if (words.length > 4) {
-      return words.slice(0, 4).join(' ') + '...';
+    if (words.length > 3) {
+      return words.slice(0, 3).join(' ') + '...';
     }
     return address;
   };
 
+  const handleFavoritePress = () => {
+    setIsFavorite(!isFavorite);
+  };
+
   return (
     <TouchableOpacity
-      style={[styles.container, { width: cardWidth }]}
+      style={styles.container}
       onPress={() => onPress(store)}
-      activeOpacity={0.95}
+      activeOpacity={0.9}
     >
       {/* Main Card Content */}
       <View style={styles.cardContent}>
-        {/* Image Section */}
+        {/* Image Section - 70% of card height */}
         <View style={styles.imageSection}>
           {store.storeImages && store.storeImages.length > 0 ? (
             <Image
@@ -77,81 +88,61 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
               colors={['#f8f9fa', '#e9ecef']}
               style={styles.placeholderImage}
             >
-              <Ionicons name="storefront-outline" size={40} color="#6c757d" />
+              <Ionicons name="storefront-outline" size={50} color="#6c757d" />
             </LinearGradient>
           )}
           
-          {/* Gradient Overlay */}
+          {/* Dark Overlay for text readability */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)']}
+            colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.imageGradient}
           />
           
-          {/* Top Badges */}
-          <View style={styles.topBadges}>
-            {/* Status Badge */}
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: store.isActive ? '#10B981' : '#EF4444' }
-            ]}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>
-                {store.isActive ? 'OPEN' : 'CLOSED'}
+          {/* Store Name and Description Overlay */}
+          <View style={styles.storeInfoOverlay}>
+            <View style={styles.storeNameContainer}>
+              <Text style={styles.storeNameText} numberOfLines={1}>
+                {store.storeName}
               </Text>
             </View>
-
-            {/* Rating Badge */}
-            {store.rating.average >= 4.0 && (
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.ratingBadgeText}>
-                  {store.rating.average.toFixed(1)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Store Name Overlay */}
-          <View style={styles.storeNameOverlay}>
-            <Text style={styles.storeNameText} numberOfLines={2}>
-              {store.storeName}
-            </Text>
-          </View>
-
-          {/* Rating Overlay */}
-          <View style={styles.ratingOverlay}>
-            <View style={styles.starsContainer}>
-              {renderStars(store.rating.average)}
-            </View>
-            <Text style={styles.ratingOverlayText}>
-              {store.rating.average.toFixed(1)} ({store.rating.totalReviews})
+            <Text style={styles.storeSubtitleText} numberOfLines={1}>
+              {store.description && store.description.trim() ? store.description : ''}
             </Text>
           </View>
         </View>
 
-        {/* Content Section */}
-        <View style={styles.contentSection}>
-          <View style={styles.mainContent}>
-            <Text style={styles.storeDescription} numberOfLines={2}>
-              {store.description || 'Premium fashion & lifestyle collection'}
-            </Text>
-            
-            <View style={styles.locationRow}>
+        {/* Bottom White Section - 30% of card height */}
+        <View style={styles.bottomSection}>
+          <View style={styles.infoRow}>
+            {/* Rating */}
+            <View style={styles.infoItem}>
+              <View style={styles.starsContainer}>
+                {renderStars(store.rating.average)}
+              </View>
+              <Text style={styles.ratingText}>
+                {store.rating.average.toFixed(1)}
+              </Text>
+            </View>
+
+            {/* Distance */}
+            <View style={styles.infoItem}>
               <Ionicons name="location-outline" size={16} color="#6B7280" />
-              <Text style={styles.locationText} numberOfLines={1}>
+              <Text style={styles.distanceText}>
                 {formatAddress(store.address)}
               </Text>
             </View>
-          </View>
 
-          <View style={styles.actionSection}>
-            <TouchableOpacity style={styles.favoriteButton} activeOpacity={0.7}>
-              <Ionicons name="heart-outline" size={24} color="#6B7280" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.visitButton} activeOpacity={0.8}>
-              <Text style={styles.visitButtonText}>Visit Store</Text>
-              <Ionicons name="arrow-forward" size={18} color={Colors.background} />
+            {/* Favorite */}
+            <TouchableOpacity 
+              style={styles.favoriteButton} 
+              activeOpacity={0.7}
+              onPress={handleFavoritePress}
+            >
+              <Ionicons 
+                name={isFavorite ? "heart" : "heart-outline"} 
+                size={24} 
+                color={isFavorite ? "#EF4444" : "#6B7280"} 
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -162,200 +153,118 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 16,
+    marginHorizontal: 16, // Use margins instead of padding
   },
   cardContent: {
-    backgroundColor: Colors.background,
-    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    flex: 1,
   },
   imageSection: {
-    height: 160,
+    height: 160, // Reduced from 200 to 160
     position: 'relative',
   },
   storeImage: {
     width: '100%',
     height: '100%',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   placeholderImage: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   imageGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
+    height: 80, // Reduced from 100 to 80
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  topBadges: {
+  storeInfoOverlay: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    bottom: 16,
+    left: 16,
+    right: 16,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+  storeNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    marginBottom: 4,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFFFFF',
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  ratingBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  ratingBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  storeNameOverlay: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    right: 12,
+  storeIcon: {
+    marginRight: 8,
   },
   storeNameText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    textShadowRadius: 4,
     letterSpacing: -0.5,
-    lineHeight: 26,
   },
-  ratingOverlay: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backdropFilter: 'blur(10px)',
-    gap: 4,
-  },
-  ratingOverlayText: {
-    fontSize: 12,
+  storeSubtitleText: {
+    fontSize: 14,
+    fontWeight: '500',
     color: '#FFFFFF',
-    fontWeight: '600',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    opacity: 0.9,
   },
-  contentSection: {
-    padding: 16,
+  bottomSection: {
+    height: 50, // Reduced from 80 to 60
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10, // Reduced from 12 to 10
+    justifyContent: 'center',
   },
-  mainContent: {
-    marginBottom: 16,
-  },
-  storeDescription: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-    marginBottom: 12,
-    fontWeight: '500',
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  locationText: {
-    fontSize: 14,
-    color: '#6B7280',
-    flex: 1,
-    fontWeight: '500',
-  },
-  actionSection: {
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginRight: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  distanceText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginLeft: 4,
   },
   favoriteButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  visitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 20,
-    gap: 8,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  visitButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.background,
   },
 });
 

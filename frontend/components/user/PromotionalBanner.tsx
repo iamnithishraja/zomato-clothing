@@ -42,18 +42,18 @@ interface PromotionalBannerProps {
 
 // Banner slides data
 const bannerSlides: BannerSlide[] = [
-//   {
-//     id: 1,
-//     title: "50% FLAT",
-//     subtitle: "OFF",
-//     buttonText: "Shop now",
-//     gradient: ['#FFD700', '#FF8C00'],
-//     images: [
-//       "https://cdn-icons-png.flaticon.com/128/1867/1867565.png", // T-Shirt
-//       "https://cdn-icons-png.flaticon.com/128/3046/3046982.png", // Shirt
-//       "https://cdn-icons-png.flaticon.com/128/2122/2122621.png"  // Top
-//     ]
-//   },
+  {
+    id: 1,
+    title: "50% FLAT",
+    subtitle: "OFF",
+    buttonText: "Shop now",
+    gradient: ['#FFD700', '#FF8C00'],
+    images: [
+      "https://cdn-icons-png.flaticon.com/128/1867/1867565.png", // T-Shirt
+      "https://cdn-icons-png.flaticon.com/128/3046/3046982.png", // Shirt
+      "https://cdn-icons-png.flaticon.com/128/2122/2122621.png"  // Top
+    ]
+  },
   {
     id: 2,
     title: "NEW",
@@ -66,18 +66,18 @@ const bannerSlides: BannerSlide[] = [
       "https://cdn-icons-png.flaticon.com/128/17981/17981822.png" // Saree
     ]
   },
-//   {
-//     id: 3,
-//     title: "FREE",
-//     subtitle: "DELIVERY",
-//     buttonText: "Order now",
-//     gradient: ['#A8E6CF', '#FFD93D'],
-//     images: [
-//       "https://cdn-icons-png.flaticon.com/128/3601/3601647.png", // Bicycle
-//       "https://cdn-icons-png.flaticon.com/128/2806/2806051.png", // Jacket
-//       "https://cdn-icons-png.flaticon.com/128/776/776623.png"    // Pants
-//     ]
-//   }
+  {
+    id: 3,
+    title: "FREE",
+    subtitle: "DELIVERY",
+    buttonText: "Order now",
+    gradient: ['#A8E6CF', '#FFD93D'],
+    images: [
+      "https://cdn-icons-png.flaticon.com/128/3601/3601647.png", // Bicycle
+      "https://cdn-icons-png.flaticon.com/128/2806/2806051.png", // Jacket
+      "https://cdn-icons-png.flaticon.com/128/776/776623.png"    // Pants
+    ]
+  }
 ];
 
 const PromotionalBanner: React.FC<PromotionalBannerProps> = ({ 

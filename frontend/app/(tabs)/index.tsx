@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stores, setStores] = useState<Store[]>([]);
   const [bestSellerStores, setBestSellerStores] = useState<Store[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [, setProducts] = useState<Product[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Load initial data
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100, // Extra padding for tab bar
   },
   storeCardContainer: {
-    paddingHorizontal: 16, // Add padding only to store cards
+    // Remove padding - let the card handle its own margins
   },
   filterButton: {
     width: 48,

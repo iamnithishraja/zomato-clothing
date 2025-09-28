@@ -88,7 +88,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
                 index === SUBCATEGORIES.length - 1 && styles.lastItem
               ]}
               onPress={() => onCategoryPress(subcategory)}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
                 <Image
@@ -138,40 +138,40 @@ const styles = StyleSheet.create({
   categoryItem: {
     alignItems: 'center',
     marginRight: 16,
-    paddingVertical: 12,
     paddingHorizontal: 8,
   },
   lastItem: {
     marginRight: 0,
   },
   iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    marginBottom: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 8,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    padding: 8,
   },
   categoryImage: {
-    width: '100%',
-    height: '100%',
+    width: 40,
+    height: 40,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   categoryName: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.textPrimary,
     textAlign: 'center',
     lineHeight: 14,
-    marginTop: 4,
+    marginTop: 0,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

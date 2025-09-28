@@ -141,7 +141,9 @@ export default function HomeScreen() {
   }, [loadData]);
 
   const renderStoreCard = ({ item }: { item: Store }) => (
-    <ModernStoreCard store={item} onPress={handleStorePress} />
+    <View style={styles.storeCardContainer}>
+      <ModernStoreCard store={item} onPress={handleStorePress} />
+    </View>
   );
 
   const renderHeader = () => (
@@ -175,10 +177,10 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>
             {searchQuery ? 'Search Results' : 'Nearby Stores'}
           </Text>
-          <Text style={styles.sectionSubtitle}>
+          {/* <Text style={styles.sectionSubtitle}>
             {stores.length} stores found
             {products.length > 0 && ` • ${products.length} products found`}
-          </Text>
+          </Text> */}
         </View>
       </View>
     </>
@@ -215,6 +217,9 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingBottom: 100, // Extra padding for tab bar
+  },
+  storeCardContainer: {
+    paddingHorizontal: 16, // Add padding only to store cards
   },
   filterButton: {
     width: 48,

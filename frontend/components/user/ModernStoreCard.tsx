@@ -18,7 +18,7 @@ interface ModernStoreCardProps {
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = screenWidth - 32; // Full width with margins
+const cardWidth = screenWidth - 32; // Full width with margins (16px padding on each side)
 
 const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => {
   const renderStars = (rating: number) => {

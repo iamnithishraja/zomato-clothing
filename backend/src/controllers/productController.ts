@@ -196,7 +196,7 @@ async function getMerchantProducts(req: Request, res: Response) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('storeId', 'storeName');
+      .populate('storeId', 'storeName storeImages');
 
     // Get total count for pagination
     const totalProducts = await ProductModel.countDocuments(filter);
@@ -234,7 +234,7 @@ async function getProductById(req: Request, res: Response) {
     // Get product
     const product = await ProductModel.findById(productId)
       .populate('merchantId', 'name email')
-      .populate('storeId', 'storeName address');
+      .populate('storeId', 'storeName address storeImages');
 
     if (!product) {
       return res.status(404).json({
@@ -323,7 +323,7 @@ async function updateProduct(req: Request, res: Response) {
       productId,
       { ...updateData, updatedAt: new Date() },
       { new: true }
-    ).populate('storeId', 'storeName');
+    ).populate('storeId', 'storeName storeImages');
 
     return res.status(200).json({
       success: true,
@@ -525,7 +525,8 @@ async function getProductsBySubcategory(req: Request, res: Response) {
     const products = await ProductModel.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .populate('storeId', 'storeName storeImages');
 
     // Get total count for pagination
     const totalProducts = await ProductModel.countDocuments(filter);
@@ -578,7 +579,8 @@ async function getProductsByStore(req: Request, res: Response) {
     const products = await ProductModel.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .populate('storeId', 'storeName storeImages');
 
     // Get total count for pagination
     const totalProducts = await ProductModel.countDocuments(filter);

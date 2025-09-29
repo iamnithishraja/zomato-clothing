@@ -17,6 +17,8 @@ interface ProductCardProps {
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardWidth = screenWidth - 40; // Full width minus margins
+const imageWidth = 120;
+const detailsWidth = cardWidth - imageWidth;
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   const [isFavorite, setIsFavorite] = React.useState(false);
@@ -26,8 +28,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   };
 
   const formatSizes = (sizes: string[]) => {
-    if (!sizes || sizes.length === 0) return 'No sizes';
-    return sizes.join(', '); // Show all sizes without truncation
+    if (!sizes || sizes.length === 0) return [];
+    return sizes;
   };
 
   const handleFavoritePress = () => {
@@ -60,42 +62,46 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
               <Ionicons name="shirt-outline" size={32} color="#9CA3AF" />
             </View>
           )}
-          
-          {/* Favorite Button */}
-          <TouchableOpacity 
-            style={styles.favoriteButton} 
-            onPress={handleFavoritePress}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name={isFavorite ? "heart" : "heart-outline"} 
-              size={24} 
-              color="#EF4444" 
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Product Details */}
         <View style={styles.detailsContainer}>
-          {/* Top Row: Product Name and Sizes */}
+          {/* Top Row: Product Name and Favorite Button */}
           <View style={styles.topRow}>
             <View style={styles.nameContainer}>
               <Text style={styles.productName} numberOfLines={2}>
                 {product.name}
               </Text>
             </View>
-            <View style={styles.sizesContainer}>
-              <Text style={styles.sizesLabel}>Sizes</Text>
-              <Text style={styles.sizesText} numberOfLines={2}>
-                {formatSizes(product.sizes)}
-              </Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.favoriteButton} 
+              onPress={handleFavoritePress}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={isFavorite ? "heart" : "heart-outline"} 
+                size={24} 
+                color="#EF4444" 
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Product Description */}
           <Text style={styles.productDescription} numberOfLines={2}>
             {product.description || 'Premium quality product'}
           </Text>
+
+          {/* Sizes Row */}
+          <View style={styles.sizesContainer}>
+            {/* <Text style={styles.sizesLabel}>Sizes</Text> */}
+            <View style={styles.sizesRow}>
+              {formatSizes(product.sizes).map((size, index) => (
+                <View key={index} style={styles.sizeChip}>
+                  <Text style={styles.sizeText}>{size}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           {/* Price with Rupee Symbol */}
           <View style={styles.priceContainer}>
@@ -145,11 +151,12 @@ const styles = StyleSheet.create({
   },
   horizontalLayout: {
     flexDirection: 'row',
-    height: 150,
+    height: 160,
+    overflow: 'hidden',
   },
   imageContainer: {
-    width: 120,
-    height: 150,
+    width: imageWidth,
+    height: 160,
     position: 'relative',
   },
   productImage: {
@@ -168,49 +175,47 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16,
   },
   favoriteButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
     width: 32,
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
   detailsContainer: {
-    flex: 1,
-    padding: 16,
+    width: detailsWidth,
+    padding: 12,
     paddingBottom: 12,
     justifyContent: 'space-between',
+    height: 150,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 2,
   },
   nameContainer: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
+    maxWidth: detailsWidth - 40,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#000000',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   productDescription: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
-    lineHeight: 18,
-    marginBottom: 8,
+    lineHeight: 16,
+    marginBottom: 6,
+    height: 32,
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
   },
   rupeeSymbol: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#EF4444',
     marginRight: 2,
@@ -221,9 +226,10 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   sizesContainer: {
-    alignItems: 'flex-end',
-    minWidth: 60,
-    justifyContent: 'center',
+    alignItems: 'flex-start',
+    width: detailsWidth,
+    marginBottom: 6,
+    justifyContent: 'flex-start',
   },
   sizesLabel: {
     fontSize: 10,
@@ -231,24 +237,42 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 2,
   },
-  sizesText: {
-    fontSize: 11,
+  sizesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+    width: '100%',
+  },
+  sizeChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: '#D1D5DB',
+    marginBottom: 2,
+  },
+  sizeText: {
+    fontSize: 10,
     color: '#374151',
     fontWeight: '500',
-    textAlign: 'right',
-    lineHeight: 14,
+    lineHeight: 12,
   },
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
+    height: 28,
   },
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     flex: 1,
+    maxWidth: detailsWidth * 0.65,
+    paddingBottom:5
+
   },
   quantityText: {
     fontSize: 11,
@@ -262,13 +286,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    gap: 4,
-    marginLeft: 8,
+    gap: 3,
+    marginLeft: 4,
     minHeight: 28,
+    maxHeight: 32,
     justifyContent: 'center',
+    marginBottom: 20,
   },
   addToCartText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#000000FF',
   },

@@ -95,9 +95,8 @@ export default function CategoryScreen() {
 
   // Handle product press
   const handleProductPress = useCallback((product: Product) => {
-    // TODO: Navigate to product detail screen
-    console.log('Product pressed:', product);
-  }, []);
+    router.push(`/product/${product._id}`);
+  }, [router]);
 
   // Handle filter press
   const handleFilterPress = useCallback(() => {

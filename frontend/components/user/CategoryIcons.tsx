@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { PRODUCT_SUBCATEGORIES } from '@/types/product';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CategoryIconsProps {
   onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
@@ -19,17 +20,36 @@ interface CategoryIconsProps {
 const { width: screenWidth } = Dimensions.get('window');
 const itemWidth = (screenWidth - 32 - 32) / 5; // 5 items per row with gaps
 
-// Get all subcategories from PRODUCT_SUBCATEGORIES
-const getAllSubcategories = () => {
+// Get all subcategories from PRODUCT_SUBCATEGORIES with gender-based ordering
+const getAllSubcategories = (userGender?: 'Male' | 'Female' | 'Other') => {
   const allSubcategories: string[] = [];
   Object.values(PRODUCT_SUBCATEGORIES).forEach(subcategories => {
     allSubcategories.push(...subcategories);
   });
-  // Remove duplicates and sort
-  return [...new Set(allSubcategories)].sort();
+  // Remove duplicates
+  const uniqueSubcategories = [...new Set(allSubcategories)];
+  
+  // If user has gender preference, prioritize gender-based categories first
+  if (userGender && userGender !== 'Other') {
+    // Map user gender to product category
+    const genderToCategory: { [key: string]: keyof typeof PRODUCT_SUBCATEGORIES } = {
+      'Male': 'Men',
+      'Female': 'Women'
+    };
+    
+    const categoryKey = genderToCategory[userGender];
+    if (categoryKey) {
+      const genderCategories = PRODUCT_SUBCATEGORIES[categoryKey] || [];
+      const otherCategories = uniqueSubcategories.filter(cat => !(genderCategories as readonly string[]).includes(cat));
+      
+      // Return gender categories first, then others in alphabetical order
+      return [...genderCategories, ...otherCategories.sort()];
+    }
+  }
+  
+  // If no gender preference, return all in alphabetical order
+  return uniqueSubcategories.sort();
 };
-
-const SUBCATEGORIES = getAllSubcategories();
 
 // Image mapping for subcategories with fashion category images
 const getImageForSubcategory = (subcategory: string): string => {
@@ -74,6 +94,10 @@ const getImageForSubcategory = (subcategory: string): string => {
 
 const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
   const router = useRouter();
+  const { user } = useAuth();
+  
+  // Get subcategories based on user gender
+  const SUBCATEGORIES = getAllSubcategories(user?.gender);
 
   const handleCategoryPress = (subcategory: string) => {
     console.log(`Category button pressed: ${subcategory}`);

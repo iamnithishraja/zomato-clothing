@@ -7,6 +7,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 
@@ -19,6 +20,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
   placeholder = "Search fashion, brands, styles...",
 }) => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -30,6 +32,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
       duration: 200,
       useNativeDriver: false,
     }).start();
+    // Navigate to search screen when search bar is focused
+    router.push('/search');
   };
 
   const handleBlur = () => {

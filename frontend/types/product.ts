@@ -57,7 +57,7 @@ export const PRODUCT_PATTERNS = ['Solid', 'Striped', 'Printed', 'Checkered'] as 
 
 export const PRODUCT_SEASONS = ['Summer', 'Winter', 'Monsoon', 'All Season'] as const;
 
-export const PRODUCT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', 'Free Size'] as const;
+export const PRODUCT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] as const;
 
 // Full Product interface for API responses
 export interface Product {

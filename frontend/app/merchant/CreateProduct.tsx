@@ -497,14 +497,13 @@ const CreateProduct = () => {
             {/* Images */}
             <View style={styles.inputContainer}>
               <ImageUploader
-                images={productData.images}
-                onImagesChange={handleImagesChange}
-                maxImages={5}
-                title="Product Images"
-                subtitle="Upload high-quality photos of your product"
-                required={true}
-                error={errors.images}
-                style={styles.imageUploader}
+                label="Product Images"
+                multiple={true}
+                existingUrls={productData.images}
+                onUploaded={handleImagesChange}
+                fullWidth={false}
+                squareSize={90}
+                maxImages={10}
               />
             </View>
 

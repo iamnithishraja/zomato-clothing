@@ -1,62 +1,75 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  Platform,
+import React, { useState, useCallback, useEffect } from "react";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Image, 
+  Alert, 
   ActivityIndicator,
-  Image,
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+  Platform
+} from "react-native";
+import { VideoView, useVideoPlayer } from "expo-video";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/colors';
-import apiClient from '../../api/client';
-
-interface ImageUploaderProps {
-  images: string[];
-  onImagesChange: (images: string[]) => void;
+import { Colors } from "@/constants/colors";
+import apiClient from "../../api/client";
+  
+type Props = {
+  label: string;
+  multiple?: boolean;
+  existingUrls?: string[];
+  onUploaded: (urls: string[]) => void;
+  fullWidth?: boolean;
+  squareSize?: number;
+  aspectRatio?: number;
+  mediaTypes?: ImagePicker.MediaTypeOptions;
+  fileNamePrefix?: string;
   maxImages?: number;
-  title?: string;
-  subtitle?: string;
   required?: boolean;
   error?: string;
   disabled?: boolean;
-  style?: any;
-}
-
-
-// Utility function to map file extension to MIME type
-const getMimeType = (filename: string): string => {
-  const extension = filename.split('.').pop()?.toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'mp4': 'video/mp4',
-    'mov': 'video/quicktime',
-    'm4v': 'video/x-m4v',
-    'webm': 'video/webm',
-  };
-  return mimeTypes[extension || ''] || 'image/jpeg';
 };
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({
-  images,
-  onImagesChange,
-  maxImages = 5,
-  title = "Images",
-  subtitle,
+type Item = { 
+  key: string; 
+  uri: string; 
+  uploading?: boolean; 
+  remote?: boolean;
+  error?: boolean;
+  deleting?: boolean;
+};
+
+// const { width: screenWidth } = Dimensions.get('window');
+
+const ImageUploader = ({ 
+  label, 
+  multiple = false, 
+  existingUrls = [], 
+  onUploaded, 
+  fullWidth = false, 
+  squareSize = 100, 
+  aspectRatio = 16 / 9, 
+  mediaTypes = ImagePicker.MediaTypeOptions.Images, 
+  fileNamePrefix,
+  maxImages = 10,
   required = false,
   error,
-  disabled = false,
-  style,
-}) => {
+  disabled = false
+}: Props) => {
+  const [items, setItems] = useState<Item[]>(
+    existingUrls.map((u, i) => ({ key: `${i}-${u}`, uri: u, uploading: false, remote: true }))
+  );
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [pendingUrlsUpdate, setPendingUrlsUpdate] = useState<string[] | null>(null);
+
+  // Handle pending URLs update
+  useEffect(() => {
+    if (pendingUrlsUpdate !== null) {
+      onUploaded(pendingUrlsUpdate);
+      setPendingUrlsUpdate(null);
+    }
+  }, [pendingUrlsUpdate, onUploaded]);
 
   // Request permissions
   const requestPermissions = useCallback(async () => {
@@ -74,37 +87,16 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     return true;
   }, []);
 
-  // Test authentication
-  const testAuth = useCallback(async () => {
-    try {
-      console.log('Testing authentication...');
-      const response = await apiClient.get('/api/v1/user/profile');
-      console.log('Auth test response:', response.data);
-      return true;
-    } catch (error: any) {
-      console.error('Auth test failed:', error.response?.data || error.message);
-      return false;
-    }
-  }, []);
-
   // Upload single image
-  const uploadImage = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
-    setIsUploading(true);
-    setUploadingIndex(images.length);
-
+  const uploadImage = useCallback(async (asset: ImagePicker.ImagePickerAsset, optimisticKey: string) => {
     try {
-      // Test authentication first
-      const isAuthValid = await testAuth();
-      if (!isAuthValid) {
-        Alert.alert('Authentication Error', 'Please log in again to upload images.');
-        return;
+      let fileName = deriveFileName(asset.fileName ?? undefined, asset.uri ?? undefined, asset.mimeType ?? undefined);
+      if (fileNamePrefix && !fileName.toLowerCase().includes(fileNamePrefix.toLowerCase())) {
+        fileName = `${fileNamePrefix}${fileName}`;
       }
-
-      // Prepare file data
-      const fileName = asset.fileName || `image_${Date.now()}.jpg`;
-      const fileType = getMimeType(fileName);
+      const fileType = asset.mimeType || guessMimeTypeFromName(fileName);
       
-      console.log('Uploading image:', { fileType, fileName, assetUri: asset.uri, originalType: asset.type });
+      console.log('Uploading image:', { fileType, fileName, assetUri: asset.uri });
       
       // Get upload URL from backend
       const uploadResponse = await apiClient.post('/api/v1/upload/url', {
@@ -141,16 +133,35 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         throw new Error('Failed to upload file to storage');
       }
 
-      // Add to images array
-      onImagesChange([...images, publicUrl]);
+      // Update item with successful upload
+      setItems((prev) => {
+        const newItems = prev.map((it) => 
+          it.key === optimisticKey 
+            ? { key: optimisticKey, uri: publicUrl, uploading: false, remote: true, error: false }
+            : it
+        );
+        
+        // Update parent with new URLs
+        const remoteUrls = newItems.filter(item => item.remote && !item.error).map(item => item.uri);
+        const updatedRemoteUrls = multiple ? [...remoteUrls, publicUrl] : [publicUrl];
+        setPendingUrlsUpdate(updatedRemoteUrls);
+        
+        return newItems;
+      });
       
     } catch (error: any) {
       console.error('Error uploading image:', error);
       
+      // Mark item as error
+      setItems((prev) => prev.map((it) => 
+        it.key === optimisticKey 
+          ? { ...it, uploading: false, error: true }
+          : it
+      ));
+      
       let errorMessage = 'Failed to upload image. Please try again.';
       
       if (error.response) {
-        // Server responded with error status
         const status = error.response.status;
         const data = error.response.data;
         
@@ -163,308 +174,272 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         } else if (status === 500) {
           errorMessage = 'Server error. Please try again later.';
         }
-        
-        console.error('Server error response:', { status, data });
       } else if (error.request) {
-        // Request was made but no response received
         errorMessage = 'Network error. Please check your internet connection.';
-        console.error('Network error:', error.request);
-      } else {
-        // Something else happened
-        console.error('Other error:', error.message);
       }
       
       Alert.alert('Upload Error', errorMessage);
-    } finally {
-      setIsUploading(false);
-      setUploadingIndex(null);
     }
-  }, [images, onImagesChange, testAuth]);
+  }, [multiple, fileNamePrefix]);
 
-  // Upload multiple images
-  const uploadMultipleImages = useCallback(async (assets: ImagePicker.ImagePickerAsset[]) => {
-    setIsUploading(true);
+  const handlePick = useCallback(async () => {
+    if (disabled || isUploading) return;
+    
+    if (items.length >= maxImages) {
+      Alert.alert(
+        'Maximum Images Reached',
+        `You can only upload up to ${maxImages} images.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
 
     try {
-      // Test authentication first
-      const isAuthValid = await testAuth();
-      if (!isAuthValid) {
-        Alert.alert('Authentication Error', 'Please log in again to upload images.');
-        return;
-      }
-
-      // Prepare files for batch upload
-      const files = assets.map(asset => {
-        const fileName = asset.fileName || `image_${Date.now()}_${Math.random()}.jpg`;
-        return {
-          fileType: getMimeType(fileName),
-          fileName,
-        };
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes,
+        allowsMultipleSelection: multiple,
+        quality: 0.8,
+        selectionLimit: multiple ? Math.min(maxImages - items.length, 10) : 1,
+        base64: false,
       });
 
-      // Get upload URLs from backend
-      const uploadResponse = await apiClient.post('/api/v1/upload/urls', {
-        files,
-        role: 'Merchant',
-      });
+      if (result.canceled) return;
 
-      if (!uploadResponse.data.success) {
-        throw new Error(uploadResponse.data.message || 'Failed to get upload URLs');
-      }
+      const assets = multiple ? result.assets : [result.assets[0]];
 
-      const { results } = uploadResponse.data;
-      const newImageUrls: string[] = [];
-
-      // Upload each file
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result.error) {
-          console.error(`Upload failed for ${result.fileName}:`, result.error);
-          continue;
-        }
-
-        setUploadingIndex(images.length + newImageUrls.length);
-
-        try {
-          // Convert asset to blob for upload
-          const response = await fetch(assets[i].uri);
-          const blob = await response.blob();
-          
-          const uploadResult = await fetch(result.uploadUrl, {
-            method: 'PUT',
-            body: blob,
-            headers: {
-              'Content-Type': result.fileType,
-            },
-          });
-
-          if (uploadResult.ok) {
-            newImageUrls.push(result.publicUrl);
-          } else {
-            console.error(`Failed to upload ${result.fileName}`);
-          }
-        } catch (error) {
-          console.error(`Error uploading ${result.fileName}:`, error);
-        }
-      }
-
-      // Add all successful uploads to images array
-      if (newImageUrls.length > 0) {
-        onImagesChange([...images, ...newImageUrls]);
-      }
-
-      if (newImageUrls.length < assets.length) {
-        Alert.alert(
-          'Partial Upload',
-          `Successfully uploaded ${newImageUrls.length} of ${assets.length} images.`
-        );
-      }
-
-    } catch (error: any) {
-      console.error('Error uploading images:', error);
+      // Optimistically add placeholders
+      const optimisticItems: Item[] = assets.map((a) => ({ 
+        key: `${a.assetId || a.uri}-${Date.now()}-${Math.random()}`, 
+        uri: a.uri, 
+        uploading: true,
+        error: false
+      }));
       
-      let errorMessage = 'Failed to upload images. Please try again.';
+      setItems((prev) => (multiple ? [...prev, ...optimisticItems] : [...optimisticItems]));
+      setIsUploading(true);
+
+      // Upload all images
+      await Promise.all(
+        assets.map(async (asset, idx) => {
+          await uploadImage(asset, optimisticItems[idx].key);
+        })
+      );
+
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [disabled, isUploading, items.length, maxImages, requestPermissions, uploadImage, multiple, mediaTypes]);
+
+  // Delete file from R2 storage
+  const deleteFileFromR2 = useCallback(async (fileUrl: string) => {
+    try {
+      console.log('Deleting file from R2:', fileUrl);
+      
+      const response = await apiClient.delete('/api/v1/upload/file', {
+        data: { fileUrl }
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to delete file');
+      }
+
+      console.log('File deleted successfully from R2');
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting file from R2:', error);
+      
+      let errorMessage = 'Failed to delete file from storage.';
       
       if (error.response) {
         const status = error.response.status;
         const data = error.response.data;
         
         if (status === 400) {
-          errorMessage = data?.message || 'Invalid request. Please check your image formats.';
+          errorMessage = data?.message || 'Invalid request.';
         } else if (status === 401) {
           errorMessage = 'Authentication failed. Please log in again.';
         } else if (status === 403) {
-          errorMessage = 'You do not have permission to upload images.';
+          errorMessage = 'You do not have permission to delete this file.';
+        } else if (status === 404) {
+          errorMessage = 'File not found.';
         } else if (status === 500) {
           errorMessage = 'Server error. Please try again later.';
         }
-        
-        console.error('Server error response:', { status, data });
       } else if (error.request) {
         errorMessage = 'Network error. Please check your internet connection.';
-        console.error('Network error:', error.request);
-      } else {
-        console.error('Other error:', error.message);
       }
       
-      Alert.alert('Upload Error', errorMessage);
-    } finally {
-      setIsUploading(false);
-      setUploadingIndex(null);
+      Alert.alert('Delete Error', errorMessage);
+      return false;
     }
-  }, [images, onImagesChange, testAuth]);
+  }, []);
 
-  // Pick single image
-  const pickImage = useCallback(async () => {
+  const handleRemove = useCallback(async (idx: number) => {
     if (disabled || isUploading) return;
     
-    if (images.length >= maxImages) {
-      Alert.alert(
-        'Maximum Images Reached',
-        `You can only upload up to ${maxImages} images.`,
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
+    const item = items[idx];
+    if (!item) return;
 
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: false,
-      });
+      // Mark item as deleting immediately for visual feedback
+      setItems((prev) => prev.map((it, i) => 
+        i === idx ? { ...it, deleting: true } : it
+      ));
 
-      if (!result.canceled && result.assets[0]) {
-        await uploadImage(result.assets[0]);
+      // If it's a remote file, delete from R2 first
+      if (item.remote && !item.error) {
+        const deleted = await deleteFileFromR2(item.uri);
+        if (!deleted) {
+          // Reset deleting state if deletion failed
+          setItems((prev) => prev.map((it, i) => 
+            i === idx ? { ...it, deleting: false } : it
+          ));
+          return; // Don't remove from UI if deletion failed
+        }
       }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
-    }
-  }, [images.length, maxImages, disabled, isUploading, requestPermissions, uploadImage]);
 
-  // Pick multiple images
-  const pickMultipleImages = useCallback(async () => {
-    if (disabled || isUploading) return;
-    
-    const remainingSlots = maxImages - images.length;
-    if (remainingSlots <= 0) {
-      Alert.alert(
-        'Maximum Images Reached',
-        `You can only upload up to ${maxImages} images.`,
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        selectionLimit: remainingSlots,
-        quality: 0.8,
-        base64: false,
+      // Remove from UI after successful deletion
+      setItems((prev) => {
+        const newItems = prev.filter((_, i) => i !== idx);
+        const remoteUrls = newItems.filter(item => item.remote && !item.error).map(item => item.uri);
+        setPendingUrlsUpdate(remoteUrls);
+        return newItems;
       });
-
-      if (!result.canceled && result.assets.length > 0) {
-        await uploadMultipleImages(result.assets);
-      }
     } catch (error) {
-      console.error('Error picking images:', error);
-      Alert.alert('Error', 'Failed to pick images. Please try again.');
+      console.error('Error removing item:', error);
+      // Reset deleting state on error
+      setItems((prev) => prev.map((it, i) => 
+        i === idx ? { ...it, deleting: false } : it
+      ));
+      Alert.alert('Error', 'Failed to remove image. Please try again.');
     }
-  }, [images.length, maxImages, disabled, isUploading, requestPermissions, uploadMultipleImages]);
+  }, [disabled, isUploading, items, deleteFileFromR2]);
 
-  // Remove image
-  const removeImage = useCallback((index: number) => {
-    if (disabled || isUploading) return;
-    
-    const newImages = images.filter((_, i) => i !== index);
-    onImagesChange(newImages);
-  }, [images, onImagesChange, disabled, isUploading]);
-
-  // Show image picker options
-  const showImagePickerOptions = useCallback(() => {
-    if (disabled || isUploading) return;
-
-    const remainingSlots = maxImages - images.length;
-    if (remainingSlots <= 0) {
-      Alert.alert(
-        'Maximum Images Reached',
-        `You can only upload up to ${maxImages} images.`,
-        [{ text: 'OK' }]
-      );
-      return;
+  const handleRetry = useCallback((idx: number) => {
+    const item = items[idx];
+    if (item && item.error) {
+      // Remove the error item and let user pick again
+      setItems((prev) => {
+        const newItems = prev.filter((_, i) => i !== idx);
+        const remoteUrls = newItems.filter(item => item.remote && !item.error).map(item => item.uri);
+        setPendingUrlsUpdate(remoteUrls);
+        return newItems;
+      });
     }
-
-    Alert.alert(
-      'Select Images',
-      'Choose how you want to add images',
-      [
-        { text: 'Single Image', onPress: pickImage },
-        { text: 'Multiple Images', onPress: pickMultipleImages },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  }, [disabled, isUploading, maxImages, images.length, pickImage, pickMultipleImages]);
+  }, [items]);
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={styles.wrapper}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>
-          {title}
+        <Text style={styles.label}>
+          {label}
           {required && <Text style={styles.required}> *</Text>}
         </Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={styles.countText}>
+          {items.filter(item => !item.error).length} / {maxImages}
+        </Text>
       </View>
 
-      {/* Images Container */}
-      <View style={styles.imagesContainer}>
-        {/* Existing Images Row */}
-        {images.length > 0 && (
-          <View style={styles.imagesRow}>
-            {images.map((imageUrl, index) => (
-              <View key={index} style={styles.imageItem}>
-                <Image source={{ uri: imageUrl }} style={styles.image} />
-                {uploadingIndex === index && (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="small" color={Colors.textPrimary} />
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => removeImage(index)}
-                  disabled={disabled || isUploading}
-                >
-                  <Ionicons name="close" size={16} color={Colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
-            ))}
+      {/* Images Grid */}
+      <View style={[fullWidth ? styles.list : styles.grid]}>
+        {items.map((item, i) => (
+          <View key={item.key} style={styles.imageContainer}>
+            <View 
+              style={[
+                fullWidth ? styles.fullWrapper : styles.thumbWrapper, 
+                fullWidth && { aspectRatio },
+                item.uploading && styles.uploadingWrapper,
+                item.error && styles.errorWrapper,
+                item.deleting && styles.deletingWrapper
+              ]}
+            > 
+              {isVideo(item.uri) ? (
+                <VideoPreview uri={item.uri} style={fullWidth ? styles.fullImage : styles.thumb} />
+              ) : (
+                <Image source={{ uri: item.uri }} style={fullWidth ? styles.fullImage : styles.thumb} />
+              )}
+              
+              {/* Uploading Overlay */}
+              {item.uploading && (
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator size="small" color={Colors.textPrimary} />
+                  <Text style={styles.uploadText}>Uploading...</Text>
+                </View>
+              )}
+              
+              {/* Deleting Overlay */}
+              {item.deleting && (
+                <View style={styles.deletingOverlay}>
+                  <ActivityIndicator size="small" color={Colors.textPrimary} />
+                  <Text style={styles.deletingText}>Deleting...</Text>
+                </View>
+              )}
+              
+              {/* Error Overlay */}
+              {item.error && (
+                <View style={styles.errorOverlay}>
+                  <Ionicons name="alert-circle" size={24} color={Colors.error} />
+                  <Text style={styles.errorText}>Failed</Text>
+                  <TouchableOpacity 
+                    style={styles.retryButton}
+                    onPress={() => handleRetry(i)}
+                  >
+                    <Text style={styles.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            
+            {/* Remove Button - Outside the image container */}
+            {!item.uploading && !item.deleting && (
+              <TouchableOpacity 
+                style={styles.removeBtn} 
+                onPress={() => handleRemove(i)}
+                disabled={disabled || isUploading || item.deleting}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={16} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-
-        {/* Add Image Button */}
-        {images.length < maxImages && (
-          <TouchableOpacity
+        ))}
+        
+        {/* Add Button */}
+        {(multiple || items.length === 0) && items.length < maxImages && (
+          <TouchableOpacity 
             style={[
-              styles.addButton,
+              fullWidth ? styles.fullAddWrapper : styles.addWrapper, 
+              fullWidth && { aspectRatio },
               (disabled || isUploading) && styles.addButtonDisabled
-            ]}
-            onPress={showImagePickerOptions}
+            ]} 
+            onPress={handlePick}
             disabled={disabled || isUploading}
           >
-            {isUploading && uploadingIndex === null ? (
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-            ) : (
-              <>
-                <Ionicons 
-                  name="add" 
-                  size={24} 
-                  color={disabled ? Colors.textMuted : Colors.textPrimary} 
-                />
-                <Text style={[
-                  styles.addButtonText,
-                  disabled && styles.addButtonTextDisabled
-                ]}>
-                  {images.length === 0 ? 'Add Images' : 'Add More'}
-                </Text>
-              </>
-            )}
+            <View style={[fullWidth ? styles.fullAddCard : styles.addCard]}>
+              {isUploading ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="add" size={24} color={Colors.primary} />
+                  <Text style={styles.addText}>
+                    {items.length === 0 ? 'Add Images' : 'Add More'}
+                  </Text>
+                </>
+              )}
+            </View>
           </TouchableOpacity>
         )}
       </View>
 
       {/* Error Message */}
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={styles.errorMessage}>{error}</Text>}
 
       {/* Upload Progress */}
       {isUploading && (
@@ -473,148 +448,311 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
           <Text style={styles.progressText}>Uploading images...</Text>
         </View>
       )}
-
-      {/* Image Count and Status */}
-      <View style={styles.statusContainer}>
-        <Text style={styles.countText}>
-          {images.length} / {maxImages} images
-        </Text>
-        {images.length > 0 && (
-          <Text style={styles.statusText}>
-            {images.length === 1 ? '1 image uploaded' : `${images.length} images uploaded`}
-          </Text>
-        )}
-      </View>
     </View>
   );
 };
 
+const deriveFileName = (fileName?: string, uri?: string, mimeType?: string) => {
+  // If original name provided (usually includes extension), use it
+  if (fileName) return fileName;
+
+  // Try to infer from URI (often contains extension)
+  if (uri) {
+    const parts = uri.split("/");
+    const last = parts[parts.length - 1] || "";
+    if (last && last.includes(".")) return last;
+  }
+
+  // Fallback: build a sensible name using mimeType to ensure correct extension
+  const timestamp = Date.now();
+  const ext = extensionFromMimeType(mimeType) || "jpg";
+  return `upload_${timestamp}.${ext}`;
+};
+
+const guessMimeTypeFromName = (name: string) => {
+  const ext = name.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "mp4":
+      return "video/mp4";
+    case "mov":
+      return "video/quicktime";
+    case "m4v":
+      return "video/x-m4v";
+    case "webm":
+      return "video/webm";
+    default:
+      return "application/octet-stream";
+  }
+};
+
+const extensionFromMimeType = (mime?: string) => {
+  if (!mime) return undefined;
+  switch (mime.toLowerCase()) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "video/mp4":
+      return "mp4";
+    case "video/quicktime":
+      return "mov";
+    case "video/x-m4v":
+      return "m4v";
+    case "video/webm":
+      return "webm";
+    default:
+      return undefined;
+  }
+};
+
+// const uriToBlob = async (uri: string): Promise<Blob> => {
+//   const res = await fetch(uri);
+//   const blob = await res.blob();
+//   return blob;
+// };
+
+const isVideo = (uri: string) => {
+  const lower = uri.toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.m4v') || lower.endsWith('.webm');
+};
+
+const VideoPreview = ({ uri, style }: { uri: string; style: any }) => {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
+  return <VideoView style={style} player={player} contentFit="cover" />;
+};
+
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
+  wrapper: {
+    marginBottom: 20,
   },
   header: {
-    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
+  label: {
+    fontSize: 16,
     color: Colors.textPrimary,
+    fontWeight: "600",
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   required: {
     color: Colors.error,
   },
-  subtitle: {
-    fontSize: 13,
+  countText: {
+    fontSize: 14,
     color: Colors.textSecondary,
-    marginTop: 2,
+    fontWeight: "500",
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  imagesContainer: {
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
   },
-  imagesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  list: {
     gap: 12,
+  },
+  imageContainer: {
+    position: "relative",
+    marginRight: 8,
     marginBottom: 8,
   },
-  imageItem: {
-    position: 'relative',
-  },
-  image: {
-    width: 90,
-    height: 90,
-    borderRadius: 12,
-    backgroundColor: Colors.backgroundSecondary,
+  thumbWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    overflow: "hidden",
+    position: "relative",
     borderWidth: 2,
     borderColor: Colors.border,
-  },
-  uploadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 3,
   },
-  addButton: {
-    width: 90,
-    height: 90,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  fullWrapper: {
+    width: "100%",
+    borderRadius: 16,
+    overflow: "hidden",
+    position: "relative",
     borderWidth: 2,
     borderColor: Colors.border,
+    backgroundColor: Colors.backgroundSecondary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  uploadingWrapper: {
+    opacity: 0.8,
+  },
+  errorWrapper: {
+    borderColor: Colors.error,
+    borderWidth: 2,
+  },
+  deletingWrapper: {
+    opacity: 0.6,
+  },
+  thumb: {
+    width: "100%",
+    height: "100%",
+  },
+  fullImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+  },
+  uploadText: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  deletingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+  },
+  deletingText: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,0,0,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+  },
+  errorText: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  retryButton: {
+    backgroundColor: Colors.textPrimary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  retryText: {
+    color: Colors.error,
+    fontSize: 10,
+    fontWeight: "600",
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  removeBtn: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    borderRadius: 12,
+    backgroundColor: Colors.error,
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.7,
+    shadowRadius: 4,
+    elevation: 10,
+    zIndex: 10,
+    borderWidth: 2,
+    borderColor: Colors.textPrimary,
+  },
+  addWrapper: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 16, 
+    overflow: "hidden" 
+  },
+  addCard: { 
+    flex: 1, 
+    alignItems: "center", 
+    justifyContent: "center", 
+    borderRadius: 16, 
+    borderWidth: 2,
+    borderColor: Colors.primary,
     borderStyle: 'dashed',
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  fullAddWrapper: { 
+    width: "100%", 
+    borderRadius: 16, 
+    overflow: "hidden" 
+  },
+  fullAddCard: { 
+    alignItems: "center", 
+    justifyContent: "center", 
+    height: 120, 
+    borderRadius: 16, 
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    backgroundColor: Colors.backgroundSecondary,
   },
   addButtonDisabled: {
     opacity: 0.5,
   },
-  addButtonText: {
+  addText: {
+    color: Colors.primary,
     fontSize: 12,
-    color: Colors.textPrimary,
+    fontWeight: "600",
     marginTop: 4,
-    fontWeight: '500',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
-  addButtonTextDisabled: {
-    color: Colors.textMuted,
-  },
-  errorText: {
+  errorMessage: {
     fontSize: 14,
     color: Colors.error,
-    marginTop: 6,
+    marginTop: 8,
     marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: "500",
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    paddingHorizontal: 4,
   },
   progressText: {
     fontSize: 14,
     color: Colors.textSecondary,
     marginLeft: 8,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-  },
-  statusContainer: {
-    marginTop: 8,
-    alignItems: 'flex-end',
-  },
-  countText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-  },
-  statusText: {
-    fontSize: 11,
-    color: Colors.success,
-    marginTop: 2,
-    fontWeight: '500',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
 });

@@ -421,12 +421,13 @@ const StoreDetails = () => {
               {/* Store Images */}
               <View style={styles.inputContainer}>
                 <ImageUploader
-                  images={storeData.storeImages}
-                  onImagesChange={handleImagesChange}
-                  maxImages={5}
-                  title="Store Images"
-                  subtitle="Upload photos of your store to showcase your business"
-                  style={styles.imageUploader}
+                  label="Store Images"
+                  multiple={true}
+                  existingUrls={storeData.storeImages}
+                  onUploaded={handleImagesChange}
+                  fullWidth={false}
+                  squareSize={90}
+                  maxImages={10}
                 />
               </View>
 

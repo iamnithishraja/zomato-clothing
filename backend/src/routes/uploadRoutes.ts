@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateUploadUrl, generateMultipleUploadUrls } from '../controllers/uploadController';
+import { getUploadUrl, deleteFile } from '../controllers/uploadController';
 import { isAuthenticated } from '../middleware/auth';
 
 const uploadRoute = express.Router();
@@ -7,10 +7,10 @@ const uploadRoute = express.Router();
 // All upload routes require authentication
 uploadRoute.use(isAuthenticated);
 
-// Generate upload URL for single file upload
-uploadRoute.post('/url', generateUploadUrl);
+// Unified upload endpoint that handles both single and multiple uploads
+uploadRoute.post('/url', getUploadUrl);
 
-// Generate multiple upload URLs for batch uploads
-uploadRoute.post('/urls', generateMultipleUploadUrls);
+// Delete file endpoint
+uploadRoute.delete('/file', deleteFile);
 
 export default uploadRoute;

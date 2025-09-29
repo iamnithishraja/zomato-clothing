@@ -6,8 +6,10 @@ import {
   StyleSheet,
   Image,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import type { Product } from '@/types/product';
 
 interface ProductCardProps {
@@ -22,6 +24,7 @@ const detailsWidth = cardWidth - imageWidth;
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   const [isFavorite, setIsFavorite] = React.useState(false);
+  const router = useRouter();
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN'); // Indian number format
@@ -37,8 +40,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   };
 
   const handleAddToCart = () => {
-    // Add to cart functionality
-    console.log('Add to cart:', product.name);
+    // Navigate to cart screen with product data
+    router.push({
+      pathname: '/(tabs)/cart',
+      params: {
+        productId: product._id,
+        productName: product.name,
+        productPrice: product.price.toString(),
+        productImage: product.images?.[0] || '',
+        storeId: product.store,
+        storeName: product.storeName || 'Store'
+      }
+    });
   };
 
   return (

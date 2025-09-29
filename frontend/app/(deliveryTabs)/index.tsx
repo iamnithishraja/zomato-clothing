@@ -19,7 +19,7 @@ export default function DeliveryHome() {
   const loadDeliveryStats = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await apiClient.get('/api/v1/user/stats');
+      const response = await apiClient.get('/api/v1/delivery/stats/overview');
       if (response.data.success) {
         setStats(response.data.stats);
       }
@@ -66,7 +66,7 @@ export default function DeliveryHome() {
           <View style={styles.statIcon}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
           </View>
-          <Text style={styles.statNumber}>{isLoading ? '...' : stats.totalDeliveries}</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : stats.deliveredDeliveries}</Text>
           <Text style={styles.statLabel}>Completed</Text>
         </View>
         

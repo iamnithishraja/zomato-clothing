@@ -6,6 +6,8 @@ import userRoute from "./routes/userRoutes";
 import storeRoute from "./routes/storeRoutes";
 import productRoute from "./routes/productRoutes";
 import uploadRoute from "./routes/uploadRoutes";
+import orderRoute from "./routes/orderRoutes";
+import deliveryRoute from "./routes/deliveryRoutes";
 
 
 dotenv.config();
@@ -31,6 +33,8 @@ app.use("/api/v1/user", userRoute);
 app.use("/api/v1/store", storeRoute);
 app.use("/api/v1/product", productRoute);
 app.use("/api/v1/upload", uploadRoute);
+app.use("/api/v1/order", orderRoute);
+app.use("/api/v1/delivery", deliveryRoute);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);

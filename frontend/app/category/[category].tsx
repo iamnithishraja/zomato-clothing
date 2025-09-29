@@ -61,6 +61,7 @@ export default function CategoryScreen() {
           page: 1,
           limit: 50,
           subcategory: subcategoryName,
+          _t: Date.now(), // Add timestamp to bypass cache
         }
       });
       
@@ -113,9 +114,7 @@ export default function CategoryScreen() {
   const formattedCategoryName = subcategoryName || 'Category';
 
   const renderProduct = useCallback(({ item }: { item: Product }) => (
-    <View style={styles.productContainer}>
-      <ProductCard product={item} onPress={handleProductPress} />
-    </View>
+    <ProductCard product={item} onPress={handleProductPress} />
   ), [handleProductPress]);
 
   const renderEmptyState = useCallback(() => (
@@ -188,7 +187,7 @@ export default function CategoryScreen() {
           data={products}
           renderItem={renderProduct}
           keyExtractor={(item) => item._id}
-          numColumns={2}
+          numColumns={1}
           contentContainerStyle={styles.flatListContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -201,7 +200,6 @@ export default function CategoryScreen() {
             />
           }
           ListEmptyComponent={isLoading ? renderLoadingState : renderEmptyState}
-          columnWrapperStyle={products.length > 0 ? styles.row : undefined}
         />
       </SafeAreaView>
     </View>
@@ -254,17 +252,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   flatListContent: {
-    padding: 20,
+    paddingTop: 20,
     paddingBottom: 120, // Extra padding for tab bar
-  },
-  row: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  productContainer: {
-    flex: 1,
-    marginHorizontal: 6,
-    marginBottom: 16,
   },
   emptyState: {
     flex: 1,

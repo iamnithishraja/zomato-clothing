@@ -10,6 +10,11 @@ console.log('API Base URL:', baseUrl);
 const apiClient = axios.create({
     baseURL: baseUrl,
     timeout: 10000, // 10 second timeout
+    headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    }
 });
 
 apiClient.interceptors.request.use(async (config) => {

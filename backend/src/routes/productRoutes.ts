@@ -6,6 +6,7 @@ import {
   updateProduct, 
   deleteProduct,
   getAllProducts,
+  getProductsBySubcategory,
   getProductsByStore
 } from '../controllers/productController';
 import { isAuthenticated } from '../middleware/auth';
@@ -15,6 +16,7 @@ const router = express.Router();
 
 // Public routes (no authentication required)
 router.get('/all', getAllProducts);
+router.get('/subcategory', getProductsBySubcategory);
 router.get('/store/:storeId', getProductsByStore);
 
 // Product CRUD operations - require merchant role for create/update/delete

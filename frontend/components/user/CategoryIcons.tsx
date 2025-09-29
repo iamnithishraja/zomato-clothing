@@ -8,11 +8,12 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { PRODUCT_SUBCATEGORIES } from '@/types/product';
 
 interface CategoryIconsProps {
-  onCategoryPress: (subcategory: string) => void;
+  onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -39,6 +40,8 @@ const getImageForSubcategory = (subcategory: string): string => {
     'Tops': 'https://cdn-icons-png.flaticon.com/128/1983/1983486.png',
     'Hoodies': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
     'Sweatshirts': 'https://cdn-icons-png.flaticon.com/128/5980/5980981.png',
+    'Sweaters': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
+    'Cardigans': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
     
     // Bottoms
     'Pants': 'https://cdn-icons-png.flaticon.com/128/776/776623.png',
@@ -57,12 +60,44 @@ const getImageForSubcategory = (subcategory: string): string => {
     'Dresses': 'https://cdn-icons-png.flaticon.com/128/2682/2682178.png',
     'Sarees': 'https://cdn-icons-png.flaticon.com/128/17981/17981822.png',
     'Kurtas': 'https://cdn-icons-png.flaticon.com/128/9992/9992462.png',
+    
+    // Additional categories
+    'Underwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
+    'Sleepwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
+    'Activewear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
+    'Swimwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
+    'Ethnic Wear': 'https://cdn-icons-png.flaticon.com/128/9992/9992462.png',
   };
   
   return imageMap[subcategory] || 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png';
 };
 
 const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
+  const router = useRouter();
+
+  const handleCategoryPress = (subcategory: string) => {
+    console.log(`Category button pressed: ${subcategory}`);
+    
+    try {
+      // Navigate to category screen immediately
+      let categorySlug = subcategory.toLowerCase().replace(/\s+/g, '-');
+      
+      // Handle special cases
+      if (subcategory === 'T-Shirts') {
+        categorySlug = 't-shirts';
+      }
+      
+      console.log(`Navigating to category: ${categorySlug} (from subcategory: ${subcategory})`);
+      router.push(`/category/${categorySlug}` as any);
+      
+      // Call the optional callback if provided (but don't wait for it)
+      if (onCategoryPress) {
+        onCategoryPress(subcategory);
+      }
+    } catch (error) {
+      console.error(`Error navigating to category ${subcategory}:`, error);
+    }
+  };
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -87,14 +122,19 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
                 { width: itemWidth },
                 index === SUBCATEGORIES.length - 1 && styles.lastItem
               ]}
-              onPress={() => onCategoryPress(subcategory)}
-              activeOpacity={0.7}
+              onPress={() => handleCategoryPress(subcategory)}
+              activeOpacity={0.6}
+              delayPressIn={0}
+              delayPressOut={0}
+              hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
             >
               <View style={styles.iconContainer}>
                 <Image
                   source={{ uri: getImageForSubcategory(subcategory) }}
                   style={styles.categoryImage}
                   resizeMode="contain"
+                  onError={() => console.log(`Failed to load image for ${subcategory}`)}
+                  defaultSource={{ uri: 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png' }}
                 />
               </View>
               <Text style={styles.categoryName} numberOfLines={2}>
@@ -111,6 +151,8 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
 const styles = StyleSheet.create({
   container: {
     marginTop: 14,
+    zIndex: 10, // Ensure category icons are above other elements
+    elevation: 10, // For Android
   },
   header: {
     flexDirection: 'row',
@@ -139,6 +181,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
     paddingHorizontal: 8,
+    paddingVertical: 8, // Add vertical padding for better touch area
+    minHeight: 100, // Ensure minimum touch area
   },
   lastItem: {
     marginRight: 0,

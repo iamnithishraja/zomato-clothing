@@ -19,7 +19,6 @@ import PromotionalBanner from '@/components/user/PromotionalBanner';
 
 // Import types and API client
 import type { Store, Location } from '@/types/store';
-import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
 
 export default function HomeScreen() {
@@ -28,12 +27,19 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stores, setStores] = useState<Store[]>([]);
   const [bestSellerStores, setBestSellerStores] = useState<Store[]>([]);
-  const [, setProducts] = useState<Product[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLoadedData, setHasLoadedData] = useState(false);
 
-  // Load initial data
+  // Load initial data - only load once on mount
   const loadData = useCallback(async () => {
+    if (hasLoadedData) {
+      console.log('Data already loaded, skipping...');
+      return;
+    }
+    
     try {
+      console.log('Loading initial store data...');
+      
       // Load best seller stores
       const bestSellerResponse = await apiClient.get('/api/v1/store/bestsellers', {
         params: { limit: 4 }
@@ -54,15 +60,18 @@ export default function HomeScreen() {
       if (storesResponse.data.success) {
         setStores(storesResponse.data.stores);
       }
+      
+      setHasLoadedData(true);
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load stores. Please try again.');
     }
-  }, [selectedLocation]);
+  }, [selectedLocation, hasLoadedData]);
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    setHasLoadedData(false); // Reset flag to allow reload
     await loadData();
     setIsRefreshing(false);
   }, [loadData]);
@@ -71,31 +80,18 @@ export default function HomeScreen() {
   const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
     try {
-      // Search both stores and products
-      const [storesResponse, productsResponse] = await Promise.all([
-        apiClient.get('/api/v1/store/all', {
-          params: {
-            page: 1,
-            limit: 20,
-            search: query,
-            location: selectedLocation?.name,
-          }
-        }),
-        apiClient.get('/api/v1/product/all', {
-          params: {
-            page: 1,
-            limit: 20,
-            search: query,
-          }
-        })
-      ]);
+      // Only search stores for now (products will be handled by category screens)
+      const storesResponse = await apiClient.get('/api/v1/store/all', {
+        params: {
+          page: 1,
+          limit: 20,
+          search: query,
+          location: selectedLocation?.name,
+        }
+      });
       
       if (storesResponse.data.success) {
         setStores(storesResponse.data.stores);
-      }
-      
-      if (productsResponse.data.success) {
-        setProducts(productsResponse.data.products);
       }
     } catch (error) {
       console.error('Error searching:', error);
@@ -123,11 +119,6 @@ export default function HomeScreen() {
     }
   }, [searchQuery, selectedLocation]);
 
-  // Handle category press
-  const handleCategoryPress = useCallback((subcategory: string) => {
-    // Search for products in this subcategory
-    handleSearch(subcategory);
-  }, [handleSearch]);
 
   // Handle store press
   const handleStorePress = useCallback((store: Store) => {
@@ -135,29 +126,35 @@ export default function HomeScreen() {
     console.log('Store pressed:', store);
   }, []);
 
-  // Load data on mount and when location changes
+  // Handle order press
+  const handleOrderPress = useCallback(() => {
+    console.log('Order now pressed');
+  }, []);
+
+  // Load data only once on mount
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - run only once
 
-  const renderStoreCard = ({ item }: { item: Store }) => (
+  const renderStoreCard = useCallback(({ item }: { item: Store }) => (
     <View style={styles.storeCardContainer}>
       <ModernStoreCard store={item} onPress={handleStorePress} />
     </View>
-  );
+  ), [handleStorePress]);
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <>
       {/* Promotional Banner with Location and Search */}
       <PromotionalBanner 
-        onOrderPress={() => console.log('Order now pressed')}
+        onOrderPress={handleOrderPress}
         selectedLocation={selectedLocation}
         onLocationSelect={setSelectedLocation}
         onSearch={handleSearch}
       />
 
       {/* Category Icons */}
-      <CategoryIcons onCategoryPress={handleCategoryPress} />
+      <CategoryIcons />
 
       {/* Best Seller Carousel */}
       <SwipeCarousel
@@ -184,7 +181,7 @@ export default function HomeScreen() {
         </View>
       </View>
     </>
-  );
+  ), [selectedLocation, handleSearch, bestSellerStores, handleStorePress, selectedFilter, handleFilterChange, searchQuery, handleOrderPress]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -254,4 +251,3 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 });
-

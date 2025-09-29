@@ -20,13 +20,7 @@ interface ModernStoreCardProps {
 const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => {
   const [isFavorite, setIsFavorite] = useState(false);
 
-  // Debug: Log store data to see what's available
-  console.log('Store data:', {
-    storeName: store.storeName,
-    description: store.description,
-    merchantName: store.merchantId?.name,
-    address: store.address
-  });
+  // Store data is available for rendering
 
   const renderStars = (rating: number) => {
     const stars = [];

@@ -390,6 +390,9 @@ async function deleteProduct(req: Request, res: Response) {
 // Get all products for customers (public endpoint)
 async function getAllProducts(req: Request, res: Response) {
   try {
+    console.log("🚀 GET /api/v1/product/all");
+    console.log("Query params:", req.query);
+    
     // Get query parameters for pagination and filtering
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -409,33 +412,37 @@ async function getAllProducts(req: Request, res: Response) {
     if (isBestSeller) filter.isBestSeller = true;
     if (isNewArrival) filter.isNewArrival = true;
     
+    // Search in name and description
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { subcategory: { $regex: search, $options: 'i' } }
+        { description: { $regex: search, $options: 'i' } }
       ];
     }
 
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.price = {};
-      if (minPrice !== undefined) filter.price.$gte = minPrice;
-      if (maxPrice !== undefined) filter.price.$lte = maxPrice;
+    // Price filtering
+    if (minPrice !== undefined && !isNaN(minPrice)) {
+      filter.price = { $gte: minPrice };
     }
+    if (maxPrice !== undefined && !isNaN(maxPrice)) {
+      filter.price = { ...filter.price, $lte: maxPrice };
+    }
+
+    console.log("Filter object:", filter);
 
     // Calculate skip value for pagination
     const skip = (page - 1) * limit;
 
     // Get products with pagination
     const products = await ProductModel.find(filter)
-      .populate('merchantId', 'name email')
-      .populate('storeId', 'storeName address storeImages')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
     // Get total count for pagination
     const totalProducts = await ProductModel.countDocuments(filter);
+
+    console.log(`Found ${products.length} products out of ${totalProducts} total`);
 
     return res.status(200).json({
       success: true,
@@ -450,8 +457,98 @@ async function getAllProducts(req: Request, res: Response) {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting all products:", error);
+    console.error("Error details:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+// Get products by subcategory
+async function getProductsBySubcategory(req: Request, res: Response) {
+  try {
+    console.log("🚀 GET /api/v1/product/subcategory");
+    console.log("Query params:", req.query);
+    
+    // Get query parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const subcategory = req.query.subcategory as string;
+    const search = req.query.search as string;
+    const minPrice = parseFloat(req.query.minPrice as string);
+    const maxPrice = parseFloat(req.query.maxPrice as string);
+    const isBestSeller = req.query.isBestSeller === 'true';
+    const isNewArrival = req.query.isNewArrival === 'true';
+
+    // Validate subcategory parameter
+    if (!subcategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Subcategory parameter is required"
+      });
+    }
+
+    // Build filter object
+    const filter: any = { 
+      isActive: true,
+      subcategory: subcategory 
+    };
+    
+    if (isBestSeller) filter.isBestSeller = true;
+    if (isNewArrival) filter.isNewArrival = true;
+    
+    // Search in name and description
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Price filtering
+    if (minPrice !== undefined && !isNaN(minPrice)) {
+      filter.price = { $gte: minPrice };
+    }
+    if (maxPrice !== undefined && !isNaN(maxPrice)) {
+      filter.price = { ...filter.price, $lte: maxPrice };
+    }
+
+    console.log("Filter object:", filter);
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Get products with pagination
+    const products = await ProductModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get total count for pagination
+    const totalProducts = await ProductModel.countDocuments(filter);
+
+    console.log(`Found ${products.length} products in subcategory '${subcategory}' out of ${totalProducts} total`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Products retrieved successfully for subcategory: ${subcategory}`,
+      products,
+      subcategory,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalProducts / limit),
+        totalProducts,
+        hasNextPage: page < Math.ceil(totalProducts / limit),
+        hasPrevPage: page > 1
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Error getting products by subcategory:", error);
+    console.error("Error details:", error.message);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -479,8 +576,6 @@ async function getProductsByStore(req: Request, res: Response) {
 
     // Get products with pagination
     const products = await ProductModel.find(filter)
-      .populate('merchantId', 'name email')
-      .populate('storeId', 'storeName address storeImages')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -517,5 +612,6 @@ export {
   updateProduct, 
   deleteProduct,
   getAllProducts,
+  getProductsBySubcategory,
   getProductsByStore
 };

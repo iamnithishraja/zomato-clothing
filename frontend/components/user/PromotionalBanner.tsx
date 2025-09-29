@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 10,
+    zIndex: 5, // Reduced z-index to prevent interference
     backgroundColor: 'transparent',
   },
   locationContainer: {
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 10,
+    zIndex: 5, // Reduced z-index to prevent interference
     backgroundColor: 'transparent',
   },
   sparkleContainer: {

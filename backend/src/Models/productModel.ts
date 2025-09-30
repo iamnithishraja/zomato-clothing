@@ -54,6 +54,24 @@ const productSchema = new mongoose.Schema({
     }
   },
 
+  // Discount fields
+  discountPercentage: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+    validate: {
+      validator: function(v: number) {
+        return !isNaN(v) && isFinite(v) && v >= 0 && v <= 100;
+      },
+      message: 'Discount percentage must be between 0 and 100'
+    }
+  },
+  isOnSale: {
+    type: Boolean,
+    default: false
+  },
+
   sizes: [{ type: String, enum: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] }],
   availableQuantity: { 
     type: Number, 
@@ -82,6 +100,9 @@ const productSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Note: Discount calculation is now handled in the controller
+// The price field stores the final price (after discount if applicable)
+
 productSchema.index({ merchantId: 1 });
 productSchema.index({ storeId: 1 });
 productSchema.index({ name: "text" });
@@ -89,6 +110,7 @@ productSchema.index({ category: 1 });
 productSchema.index({ subcategory: 1 });
 productSchema.index({ specifications: 1 });
 productSchema.index({ price: 1 });
+productSchema.index({ isOnSale: 1 });
 
 const Product = mongoose.model("Product", productSchema);
 export default Product;

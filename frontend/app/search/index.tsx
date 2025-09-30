@@ -7,11 +7,11 @@ import {
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
-  TextInput,
   Alert,
   Platform,
   RefreshControl,
   ListRenderItem,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,48 +19,33 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import ProductCard from '@/components/user/ProductCard';
 import ModernStoreCard from '@/components/user/ModernStoreCard';
-import FilterModal, { FilterOptions } from '@/components/user/FilterModal';
+import SearchBar from '@/components/user/SearchBar';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import type { Store } from '@/types/store';
 import apiClient from '@/api/client';
-
-type SearchMode = 'all' | 'stores' | 'products';
 
 export default function SearchScreen() {
   const router = useRouter();
   const { query } = useLocalSearchParams();
   const { checkMultipleFavorites } = useFavorites();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchMode>('all');
   const [searchResults, setSearchResults] = useState<{
     stores: Store[];
     products: Product[];
   }>({ stores: [], products: [] });
-  const [filteredResults, setFilteredResults] = useState<{
-    stores: Store[];
-    products: Product[];
-  }>({ stores: [], products: [] });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<FilterOptions>({
-    priceRange: { min: 0, max: 10000 },
-    categories: [],
-    sizes: [],
-    brands: [],
-    sortBy: 'newest',
-    inStock: false,
-  });
+  const [isLoading, setIsLoading] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fast regex-based search function
+  // Unified search function for both products and stores
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
       setSearchResults({ stores: [], products: [] });
-      setFilteredResults({ stores: [], products: [] });
       return;
     }
 
+    setIsLoading(true);
     try {
       const searchRegex = new RegExp(query.trim(), 'i');
       
@@ -103,7 +88,6 @@ export default function SearchScreen() {
       }
 
       setSearchResults({ stores, products });
-      setFilteredResults({ stores, products });
       
       // Check favorites for all products
       if (products.length > 0) {
@@ -114,6 +98,8 @@ export default function SearchScreen() {
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert('Error', 'Failed to search. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   }, [checkMultipleFavorites]);
 
@@ -139,7 +125,6 @@ export default function SearchScreen() {
       }, 300) as any; // 300ms debounce
     } else {
       setSearchResults({ stores: [], products: [] });
-      setFilteredResults({ stores: [], products: [] });
     }
   }, [performSearch]);
 
@@ -153,73 +138,6 @@ export default function SearchScreen() {
     router.push(`/store/${store._id}` as any);
   };
 
-  // Handle search submit
-  const handleSearchSubmit = useCallback(() => {
-    if (searchQuery.trim()) {
-      performSearch(searchQuery.trim());
-    }
-  }, [searchQuery, performSearch]);
-
-  // Handle filter press
-  const handleFilterPress = useCallback(() => {
-    setShowFilterModal(true);
-  }, []);
-
-  // Handle filter apply
-  const handleFilterApply = useCallback((filters: FilterOptions) => {
-    setActiveFilters(filters);
-    let filtered = [...searchResults.products];
-
-    // Apply price filter
-    filtered = filtered.filter(product => 
-      product.price >= filters.priceRange.min && 
-      product.price <= filters.priceRange.max
-    );
-
-    // Apply category filter
-    if (filters.categories.length > 0) {
-      filtered = filtered.filter(product => 
-        filters.categories.includes(product.category)
-      );
-    }
-
-    // Apply size filter
-    if (filters.sizes.length > 0) {
-      filtered = filtered.filter(product => 
-        product.sizes.some(size => filters.sizes.includes(size))
-      );
-    }
-
-    // Apply in stock filter
-    if (filters.inStock) {
-      filtered = filtered.filter(product => product.availableQuantity > 0);
-    }
-
-    // Apply sorting
-    switch (filters.sortBy) {
-      case 'price_low':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price_high':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'newest':
-        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case 'oldest':
-        filtered.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        break;
-      case 'rating':
-        filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        break;
-      case 'popularity':
-        filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
-        break;
-    }
-
-    setFilteredResults({ ...searchResults, products: filtered });
-  }, [searchResults]);
-
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -229,33 +147,17 @@ export default function SearchScreen() {
     setIsRefreshing(false);
   }, [searchQuery, performSearch]);
 
-  // Get current results based on search mode
-  const getCurrentResults = useCallback(() => {
-    if (searchMode === 'all') {
-      return [...filteredResults.stores, ...filteredResults.products];
-    } else if (searchMode === 'stores') {
-      return filteredResults.stores;
-    } else {
-      return filteredResults.products;
-    }
-  }, [searchMode, filteredResults]);
+  // Get combined results (stores first, then products)
+  const getCombinedResults = useCallback(() => {
+    return [...searchResults.stores, ...searchResults.products];
+  }, [searchResults]);
 
   // Get total count
   const getTotalCount = useCallback(() => {
-    return filteredResults.stores.length + filteredResults.products.length;
-  }, [filteredResults.stores.length, filteredResults.products.length]);
+    return searchResults.stores.length + searchResults.products.length;
+  }, [searchResults.stores.length, searchResults.products.length]);
 
-  // Render store item
-  const renderStoreItem: ListRenderItem<Store> = ({ item }) => (
-    <ModernStoreCard store={item} onPress={handleStorePress} />
-  );
-
-  // Render product item
-  const renderProductItem: ListRenderItem<Product> = ({ item }) => (
-    <ProductCard product={item} onPress={handleProductPress} />
-  );
-
-  // Render mixed item (for 'all' mode)
+  // Render mixed item (stores and products combined)
   const renderMixedItem: ListRenderItem<Store | Product> = ({ item }) => {
     if ('storeName' in item) {
       return <ModernStoreCard store={item as Store} onPress={handleStorePress} />;
@@ -273,14 +175,14 @@ export default function SearchScreen() {
       </Text>
       <Text style={styles.emptySubtitle}>
         {searchQuery.trim() 
-          ? `No ${searchMode === 'all' ? 'items' : searchMode} found for "${searchQuery}"`
+          ? `No items found for "${searchQuery}"`
           : 'Search for stores and products'
         }
       </Text>
     </View>
-  ), [searchQuery, searchMode]);
+  ), [searchQuery]);
 
-  const currentResults = getCurrentResults();
+  const combinedResults = getCombinedResults();
 
   return (
     <View style={styles.container}>
@@ -312,99 +214,43 @@ export default function SearchScreen() {
             )}
           </View>
           
-          <TouchableOpacity
-            style={styles.filterButton}
-            onPress={handleFilterPress}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="filter-outline" size={24} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.headerSpacer} />
         </LinearGradient>
 
-        {/* Search Input */}
+        {/* Search Bar */}
         <View style={styles.searchSection}>
-          <View style={styles.searchInputWrapper}>
-            <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search stores and products..."
-              placeholderTextColor={Colors.textSecondary}
-              value={searchQuery}
-              onChangeText={handleSearch}
-              onSubmitEditing={handleSearchSubmit}
-              autoFocus={!query}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery('');
-                  setSearchResults({ stores: [], products: [] });
-                  setFilteredResults({ stores: [], products: [] });
-                }}
-                style={styles.clearInputButton}
-              >
-                <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
+          <SearchBar
+            onSearch={handleSearch}
+            placeholder="Search stores and products..."
+            initialValue={searchQuery}
+            autoFocus={!query}
+            showNavigation={false}
+          />
         </View>
 
-        {/* Search Mode Toggle - Always visible */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity 
-            style={[styles.toggleButton, searchMode === 'all' && styles.toggleButtonActive]}
-            onPress={() => setSearchMode('all')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="grid-outline" 
-              size={18} 
-              color={searchMode === 'all' ? Colors.background : Colors.textSecondary} 
-            />
-            <Text style={[styles.toggleText, searchMode === 'all' && styles.toggleTextActive]}>
-              All ({filteredResults.stores.length + filteredResults.products.length})
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.toggleButton, searchMode === 'stores' && styles.toggleButtonActive]}
-            onPress={() => setSearchMode('stores')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="storefront" 
-              size={18} 
-              color={searchMode === 'stores' ? Colors.background : Colors.textSecondary} 
-            />
-            <Text style={[styles.toggleText, searchMode === 'stores' && styles.toggleTextActive]}>
-              Stores ({filteredResults.stores.length})
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.toggleButton, searchMode === 'products' && styles.toggleButtonActive]}
-            onPress={() => setSearchMode('products')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="shirt" 
-              size={18} 
-              color={searchMode === 'products' ? Colors.background : Colors.textSecondary} 
-            />
-            <Text style={[styles.toggleText, searchMode === 'products' && styles.toggleTextActive]}>
-              Products ({filteredResults.products.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Results Summary */}
+        {searchQuery.trim() && (
+          <View style={styles.resultsSummary}>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsText}>
+                {isLoading ? 'Searching...' : `${getTotalCount()} results for "${searchQuery}"`}
+              </Text>
+              {isLoading && (
+                <ActivityIndicator size="small" color={Colors.primary} style={styles.loadingIndicator} />
+              )}
+            </View>
+            {getTotalCount() > 0 && !isLoading && (
+              <Text style={styles.resultsBreakdown}>
+                {searchResults.stores.length} stores • {searchResults.products.length} products
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Results */}
         <FlatList
-          data={currentResults as any}
-          renderItem={searchMode === 'all' ? renderMixedItem as any : 
-                     searchMode === 'stores' ? renderStoreItem as any : renderProductItem as any}
+          data={combinedResults as any}
+          renderItem={renderMixedItem as any}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.flatListContent}
           showsVerticalScrollIndicator={false}
@@ -417,14 +263,6 @@ export default function SearchScreen() {
             />
           }
           ListEmptyComponent={renderEmptyState}
-        />
-
-        {/* Filter Modal */}
-        <FilterModal
-          visible={showFilterModal}
-          onClose={() => setShowFilterModal(false)}
-          onApply={handleFilterApply}
-          initialFilters={activeFilters}
         />
       </SafeAreaView>
     </View>
@@ -471,84 +309,39 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
-  filterButton: {
+  headerSpacer: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   searchSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: Colors.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  searchInputWrapper: {
+  resultsSummary: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  resultsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 4,
   },
-  searchInput: {
-    flex: 1,
+  resultsText: {
     fontSize: 16,
-    color: Colors.textPrimary,
-    paddingVertical: 0,
-  },
-  clearInputButton: {
-    padding: 4,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.backgroundSecondary,
-    marginHorizontal: 20,
-    marginVertical: 16,
-    borderRadius: 16,
-    padding: 6,
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  toggleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    gap: 6,
-  },
-  toggleButtonActive: {
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  toggleText: {
-    fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
-    textAlign: 'center',
+    color: Colors.textPrimary,
+    flex: 1,
   },
-  toggleTextActive: {
-    color: Colors.background,
+  loadingIndicator: {
+    marginLeft: 8,
+  },
+  resultsBreakdown: {
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
   flatListContent: {
     paddingBottom: 20,

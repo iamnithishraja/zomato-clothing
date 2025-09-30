@@ -75,6 +75,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
             color="#FFFFFF" 
           />
         </View>
+        
+        {/* Discount Indicator */}
+        {product.isOnSale && product.discountPercentage && (
+          <View style={styles.discountIndicator}>
+            <Ionicons name="pricetag" size={12} color="#EF4444" />
+            <Text style={styles.discountIndicatorText}>{product.discountPercentage}% OFF</Text>
+          </View>
+        )}
       </View>
       
       <View style={styles.mainLayout}>
@@ -86,10 +94,30 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
           </Text>
 
           {/* Price */}
-          <View style={styles.priceRow}>
-            <Text style={styles.currencySymbol}>₹</Text>
-            <Text style={styles.price}>{formatPrice(product.price)}</Text>
-          </View>
+        <View style={styles.priceRow}>
+          {product.isOnSale && product.discountPercentage ? (
+            <View style={styles.discountedPriceContainer}>
+              {/* Both prices in same row */}
+              <View style={styles.bothPricesRow}>
+                {/* Original Price (Strikethrough) */}
+                <View style={styles.originalPriceRow}>
+                  <Text style={styles.currencySymbol}>₹</Text>
+                  <Text style={styles.originalPrice}>{formatPrice(product.price / (1 - product.discountPercentage / 100))}</Text>
+                </View>
+                {/* Discounted Price (Blue) */}
+                <View style={styles.discountedPriceRow}>
+                  <Text style={styles.currencySymbolBlue}>₹</Text>
+                  <Text style={styles.discountedPrice}>{formatPrice(product.price)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.regularPriceRow}>
+              <Text style={styles.currencySymbol}>₹</Text>
+              <Text style={styles.price}>{formatPrice(product.price)}</Text>
+            </View>
+          )}
+        </View>
 
           {/* Description */}
           <Text style={styles.productDescription} numberOfLines={2}>
@@ -115,7 +143,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
           >
             <Ionicons 
               name={isFavorite(product._id) ? "heart" : "heart-outline"} 
-              size={18} 
+              size={20} 
               color={isFavorite(product._id) ? "#EF4444" : "#000000"} 
             />
           </TouchableOpacity>
@@ -151,7 +179,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
               <View style={styles.addToCartContent}>
                 <Text style={styles.addToCartText}>ADD</Text>
                 <View style={styles.addIconContainer}>
-                  <Ionicons name="add" size={14} color="#000000" />
+                  <Ionicons name="add" size={16} color="#000000" />
                 </View>
               </View>
             </TouchableOpacity>
@@ -179,6 +207,9 @@ const styles = StyleSheet.create({
     left: 8,
     zIndex: 10,
     marginLeft: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   availabilityIconContainer: {
     width: 16,
@@ -191,6 +222,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3,
     elevation: 3,
+  },
+  discountIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    gap: 2,
+  },
+  discountIndicatorText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   mainLayout: {
     flexDirection: 'row',
@@ -209,11 +256,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   productName: {
-    fontSize: 18, // Increased from 16
+    fontSize: 20, // Increased from 18
     fontWeight: '600',
     color: '#1F2937',
-    lineHeight: 22, // Increased line height
-    marginBottom: 4,
+    lineHeight: 24, // Increased line height
+    marginBottom: 6,
     marginTop: 15,
   },
   priceRow: {
@@ -222,36 +269,36 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   currencySymbol: {
-    fontSize: 16, // Increased from 14
+    fontSize: 14, // Increased from 16
     fontWeight: '600',
-    color: '#FFD700',
+    color: '#0000FF',
     marginRight: 2,
   },
   price: {
-    fontSize: 18, // Increased from 16
-    fontWeight: '700',
-    color: '#FFD700',
+    fontSize: 18, // Increased from 18
+    fontWeight: '600',
+    color: '#0000FF',
   },
   productDescription: {
-    fontSize: 14, // Increased from 12
+    fontSize: 16, // Increased from 14
     color: Colors.textPrimary,  
-    lineHeight: 18, // Increased line height
-    marginBottom: 6,
+    lineHeight: 20, // Increased line height
+    marginBottom: 8,
     fontWeight: '400',
   },
   sizesText: {
-    fontSize: 13, // Increased from 11
+    fontSize: 15, // Increased from 13
     color: Colors.textSecondary,
     fontWeight: '400',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   favoriteButton: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     alignSelf: 'flex-start',
@@ -305,20 +352,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addToCartText: {
-    fontSize: 14, // Increased from 12
+    fontSize: 16, // Increased from 14
     fontWeight: '700',
     color: '#000000',
     marginRight: 4,
     letterSpacing: 0.5,
   },
   addIconContainer: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 9,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 2,
+  },
+  // Discount styles
+  discountedPriceContainer: {
+    gap: 2,
+  },
+  bothPricesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  originalPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  originalPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+    textDecorationLine: 'line-through',
+  },
+  discountedPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  discountedPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2563EB', // Blue color
+  },
+  currencySymbolBlue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2563EB', // Blue color
+    marginRight: 2,
+  },
+  regularPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

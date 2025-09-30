@@ -17,6 +17,8 @@ interface Product {
   category: string;
   images: string[];
   price: number;
+  discountPercentage?: number;
+  isOnSale?: boolean;
   sizes: string[];
   quantity: number;
   createdAt: string;
@@ -70,8 +72,28 @@ const ProductCard: React.FC<ProductCardProps> = ({
             {product.name}
           </Text>
           <View style={styles.priceContainer}>
-            <Text style={styles.currencySymbol}>₹</Text>
-            <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
+            {product.isOnSale && product.discountPercentage ? (
+              <View style={styles.discountedPriceContainer}>
+                {/* Both prices in same row */}
+                <View style={styles.bothPricesRow}>
+                  {/* Original Price (Strikethrough) */}
+                  <View style={styles.originalPriceRow}>
+                    <Text style={styles.currencySymbol}>₹</Text>
+                    <Text style={styles.originalPrice}>{formatPrice(product.price / (1 - product.discountPercentage / 100))}</Text>
+                  </View>
+                  {/* Discounted Price (Blue) */}
+                  <View style={styles.discountedPriceRow}>
+                    <Text style={styles.currencySymbolBlue}>₹</Text>
+                    <Text style={styles.discountedPrice}>{formatPrice(product.price)}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.regularPriceContainer}>
+                <Text style={styles.currencySymbol}>₹</Text>
+                <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -294,6 +316,59 @@ const styles = StyleSheet.create({
   deleteButton: {
     backgroundColor: Colors.background,
     borderColor: Colors.background,
+  },
+  // Discount styles
+  discountedPriceContainer: {
+    gap: 2,
+  },
+  bothPricesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  originalPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  originalPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
+    textDecorationLine: 'line-through',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  discountedPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  discountedPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563EB', // Blue color
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  currencySymbolBlue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563EB', // Blue color
+    marginRight: 2,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  discountBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  discountText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  regularPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

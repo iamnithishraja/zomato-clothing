@@ -25,6 +25,8 @@ async function createProduct(req: Request, res: Response) {
       subcategory,
       images,
       price,
+      discountPercentage,
+      isOnSale,
       sizes,
       availableQuantity,
       specifications,
@@ -99,6 +101,14 @@ async function createProduct(req: Request, res: Response) {
       });
     }
 
+    // Validate discount fields
+    if (discountPercentage !== undefined && (discountPercentage < 0 || discountPercentage > 100)) {
+      return res.status(400).json({
+        success: false,
+        message: "Discount percentage must be between 0 and 100"
+      });
+    }
+
     // Check if merchant has a store
     const store = await StoreModel.findOne({ merchantId: user._id });
     if (!store) {
@@ -106,6 +116,19 @@ async function createProduct(req: Request, res: Response) {
         success: false,
         message: "You must create a store before adding products"
       });
+    }
+
+    // Calculate final price based on discount
+    let finalPrice = price;
+    let finalDiscountPercentage = discountPercentage || 0;
+    let finalIsOnSale = isOnSale || false;
+
+    // If either isOnSale is true OR discountPercentage is provided, calculate discount
+    if (isOnSale || (discountPercentage && discountPercentage > 0)) {
+      const discountAmount = (price * discountPercentage) / 100;
+      finalPrice = price - discountAmount;
+      finalDiscountPercentage = discountPercentage;
+      finalIsOnSale = true;
     }
 
     // Create product
@@ -117,7 +140,9 @@ async function createProduct(req: Request, res: Response) {
       category,
       subcategory,
       images,
-      price,
+      price: finalPrice,
+      discountPercentage: finalDiscountPercentage,
+      isOnSale: finalIsOnSale,
       sizes: sizes || [],
       availableQuantity,
       specifications: specifications || undefined,
@@ -316,6 +341,49 @@ async function updateProduct(req: Request, res: Response) {
         success: false,
         message: "Available quantity cannot be negative"
       });
+    }
+
+    // Validate discount fields
+    if (updateData.discountPercentage !== undefined && (updateData.discountPercentage < 0 || updateData.discountPercentage > 100)) {
+      return res.status(400).json({
+        success: false,
+        message: "Discount percentage must be between 0 and 100"
+      });
+    }
+
+    // Handle discount calculation if price or discount fields are being updated
+    if (updateData.price !== undefined || updateData.discountPercentage !== undefined || updateData.isOnSale !== undefined) {
+      // Get current product to use as base for calculation
+      const currentProduct = await ProductModel.findById(productId);
+      if (!currentProduct) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      // Use updated values or current values
+      const originalPrice = updateData.price !== undefined ? updateData.price : currentProduct.price;
+      const discountPercentage = updateData.discountPercentage !== undefined ? updateData.discountPercentage : currentProduct.discountPercentage;
+      const isOnSale = updateData.isOnSale !== undefined ? updateData.isOnSale : currentProduct.isOnSale;
+
+      // Calculate final price based on discount
+      let finalPrice = originalPrice;
+      let finalDiscountPercentage = discountPercentage || 0;
+      let finalIsOnSale = isOnSale || false;
+
+      // If either isOnSale is true OR discountPercentage is provided, calculate discount
+      if (isOnSale || (discountPercentage && discountPercentage > 0)) {
+        const discountAmount = (originalPrice * discountPercentage) / 100;
+        finalPrice = originalPrice - discountAmount;
+        finalDiscountPercentage = discountPercentage;
+        finalIsOnSale = true;
+      }
+
+      // Update the price and discount fields
+      updateData.price = finalPrice;
+      updateData.discountPercentage = finalDiscountPercentage;
+      updateData.isOnSale = finalIsOnSale;
     }
 
     // Update product

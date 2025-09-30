@@ -12,8 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { 
-  ProductFilters, 
-  DEFAULT_PRODUCT_FILTERS,
+  SearchFilters, 
+  DEFAULT_SEARCH_FILTERS,
   PRODUCT_CATEGORIES,
   PRODUCT_SUBCATEGORIES,
   getUniqueSubcategories,
@@ -26,16 +26,15 @@ import {
   PRICE_RANGES
 } from '@/types/filters';
 
-interface FilterModalProps {
+interface SearchFilterModalProps {
   visible: boolean;
   onClose: () => void;
-  onApply: (filters: ProductFilters) => void;
-  initialFilters?: ProductFilters;
-  filterType?: 'product' | 'search'; // To differentiate between product and search filters
+  onApply: (filters: SearchFilters) => void;
+  initialFilters?: SearchFilters;
 }
 
-export default function FilterModal({ visible, onClose, onApply, initialFilters, filterType = 'product' }: FilterModalProps) {
-  const [filters, setFilters] = useState<ProductFilters>(DEFAULT_PRODUCT_FILTERS);
+export default function SearchFilterModal({ visible, onClose, onApply, initialFilters }: SearchFilterModalProps) {
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_SEARCH_FILTERS);
 
   useEffect(() => {
     if (initialFilters) {
@@ -46,87 +45,123 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
   const handlePriceRangeSelect = (min: number, max: number) => {
     setFilters(prev => ({
       ...prev,
-      priceRange: { min, max }
+      productFilters: {
+        ...prev.productFilters,
+        priceRange: { min, max }
+      }
     }));
   };
 
   const handleCategoryToggle = (category: string) => {
     setFilters(prev => ({
       ...prev,
-      category: prev.category?.includes(category)
-        ? prev.category.filter(c => c !== category)
-        : [...(prev.category || []), category]
+      productFilters: {
+        ...prev.productFilters,
+        category: prev.productFilters.category?.includes(category)
+          ? prev.productFilters.category.filter(c => c !== category)
+          : [...(prev.productFilters.category || []), category]
+      }
     }));
   };
 
   const handleSubcategoryToggle = (subcategory: string) => {
     setFilters(prev => ({
       ...prev,
-      subcategory: prev.subcategory?.includes(subcategory)
-        ? prev.subcategory.filter(s => s !== subcategory)
-        : [...(prev.subcategory || []), subcategory]
+      productFilters: {
+        ...prev.productFilters,
+        subcategory: prev.productFilters.subcategory?.includes(subcategory)
+          ? prev.productFilters.subcategory.filter(s => s !== subcategory)
+          : [...(prev.productFilters.subcategory || []), subcategory]
+      }
     }));
   };
 
   const handleSizeToggle = (size: string) => {
     setFilters(prev => ({
       ...prev,
-      sizes: prev.sizes?.includes(size)
-        ? prev.sizes.filter(s => s !== size)
-        : [...(prev.sizes || []), size]
+      productFilters: {
+        ...prev.productFilters,
+        sizes: prev.productFilters.sizes?.includes(size)
+          ? prev.productFilters.sizes.filter(s => s !== size)
+          : [...(prev.productFilters.sizes || []), size]
+      }
     }));
   };
 
   const handleMaterialToggle = (material: string) => {
     setFilters(prev => ({
       ...prev,
-      materials: prev.materials?.includes(material)
-        ? prev.materials.filter(m => m !== material)
-        : [...(prev.materials || []), material]
+      productFilters: {
+        ...prev.productFilters,
+        materials: prev.productFilters.materials?.includes(material)
+          ? prev.productFilters.materials.filter(m => m !== material)
+          : [...(prev.productFilters.materials || []), material]
+      }
     }));
   };
 
-  const handleFitToggle = (fit: string) => {
+  const handleSortChange = (sortBy: SearchFilters['productFilters']['sortBy']) => {
     setFilters(prev => ({
       ...prev,
-      fits: prev.fits?.includes(fit)
-        ? prev.fits.filter(f => f !== fit)
-        : [...(prev.fits || []), fit]
+      productFilters: { ...prev.productFilters, sortBy }
     }));
-  };
-
-  const handlePatternToggle = (pattern: string) => {
-    setFilters(prev => ({
-      ...prev,
-      patterns: prev.patterns?.includes(pattern)
-        ? prev.patterns.filter(p => p !== pattern)
-        : [...(prev.patterns || []), pattern]
-    }));
-  };
-
-  const handleSeasonToggle = (season: string) => {
-    setFilters(prev => ({
-      ...prev,
-      seasons: prev.seasons?.includes(season)
-        ? prev.seasons.filter(s => s !== season)
-        : [...(prev.seasons || []), season]
-    }));
-  };
-
-  const handleSortChange = (sortBy: ProductFilters['sortBy']) => {
-    setFilters(prev => ({ ...prev, sortBy }));
   };
 
   const handleInStockToggle = () => {
-    setFilters(prev => ({ ...prev, inStock: !prev.inStock }));
+    setFilters(prev => ({
+      ...prev,
+      productFilters: { ...prev.productFilters, inStock: !prev.productFilters.inStock }
+    }));
   };
 
   const handleNewArrivalToggle = () => {
-    setFilters(prev => ({ ...prev, isNewArrival: !prev.isNewArrival }));
+    setFilters(prev => ({
+      ...prev,
+      productFilters: { ...prev.productFilters, isNewArrival: !prev.productFilters.isNewArrival }
+    }));
   };
 
   const handleBestSellerToggle = () => {
-    setFilters(prev => ({ ...prev, isBestSeller: !prev.isBestSeller }));
+    setFilters(prev => ({
+      ...prev,
+      productFilters: { ...prev.productFilters, isBestSeller: !prev.productFilters.isBestSeller }
+    }));
+  };
+
+  const handleFavoritesOnlyToggle = () => {
+    setFilters(prev => ({
+      ...prev,
+      userFilters: { ...prev.userFilters, favoritesOnly: !prev.userFilters.favoritesOnly }
+    }));
+  };
+
+  const handleRecentlyViewedToggle = () => {
+    setFilters(prev => ({
+      ...prev,
+      userFilters: { ...prev.userFilters, recentlyViewed: !prev.userFilters.recentlyViewed }
+    }));
+  };
+
+  const handleStoreRatingChange = (min: number, max: number) => {
+    setFilters(prev => ({
+      ...prev,
+      storeFilters: {
+        ...prev.storeFilters,
+        storeRating: { min, max }
+      }
+    }));
+  };
+
+  const handleSearchInToggle = (searchType: 'products' | 'stores' | 'both') => {
+    setFilters(prev => ({
+      ...prev,
+      searchFilters: {
+        ...prev.searchFilters,
+        searchIn: prev.searchFilters.searchIn.includes(searchType)
+          ? prev.searchFilters.searchIn.filter(s => s !== searchType)
+          : [...prev.searchFilters.searchIn, searchType]
+      }
+    }));
   };
 
   const handleApply = () => {
@@ -135,23 +170,37 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
   };
 
   const handleReset = () => {
-    setFilters(DEFAULT_PRODUCT_FILTERS);
+    setFilters(DEFAULT_SEARCH_FILTERS);
   };
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.priceRange.min > 0 || filters.priceRange.max < 10000) count++;
-    if (filters.category && filters.category.length > 0) count++;
-    if (filters.subcategory && filters.subcategory.length > 0) count++;
-    if (filters.sizes && filters.sizes.length > 0) count++;
-    if (filters.materials && filters.materials.length > 0) count++;
-    if (filters.fits && filters.fits.length > 0) count++;
-    if (filters.patterns && filters.patterns.length > 0) count++;
-    if (filters.seasons && filters.seasons.length > 0) count++;
-    if (filters.inStock) count++;
-    if (filters.isNewArrival) count++;
-    if (filters.isBestSeller) count++;
-    if (filters.sortBy !== 'newest') count++;
+    const { productFilters, storeFilters, userFilters, searchFilters } = filters;
+    
+    // Product filters
+    if (productFilters.priceRange.min > 0 || productFilters.priceRange.max < 10000) count++;
+    if (productFilters.category && productFilters.category.length > 0) count++;
+    if (productFilters.subcategory && productFilters.subcategory.length > 0) count++;
+    if (productFilters.sizes && productFilters.sizes.length > 0) count++;
+    if (productFilters.materials && productFilters.materials.length > 0) count++;
+    if (productFilters.inStock) count++;
+    if (productFilters.isNewArrival) count++;
+    if (productFilters.isBestSeller) count++;
+    if (productFilters.sortBy !== 'newest') count++;
+    
+    // Store filters
+    if (storeFilters.storeRating && (storeFilters.storeRating.min > 0 || storeFilters.storeRating.max < 5)) count++;
+    if (storeFilters.storeName) count++;
+    if (storeFilters.storeLocation) count++;
+    
+    // User filters
+    if (userFilters.favoritesOnly) count++;
+    if (userFilters.recentlyViewed) count++;
+    
+    // Search filters
+    if (searchFilters.searchIn.length !== 1 || !searchFilters.searchIn.includes('products')) count++;
+    if (searchFilters.includeInactive) count++;
+    
     return count;
   };
 
@@ -175,6 +224,21 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
     </TouchableOpacity>
   );
 
+  const renderCheckbox = (label: string, isSelected: boolean, onPress: () => void) => (
+    <TouchableOpacity
+      style={styles.checkboxRow}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        {isSelected && (
+          <Ionicons name="checkmark" size={16} color={Colors.background} />
+        )}
+      </View>
+      <Text style={styles.checkboxLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <Modal
       visible={visible}
@@ -190,13 +254,34 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Filters</Text>
+            <Text style={styles.headerTitle}>Search Filters</Text>
             <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
               <Text style={styles.resetButtonText}>Reset</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {/* Search Scope */}
+            {renderFilterSection('Search In', (
+              <View style={styles.chipContainer}>
+                {renderChip(
+                  'Products',
+                  filters.searchFilters.searchIn.includes('products'),
+                  () => handleSearchInToggle('products')
+                )}
+                {renderChip(
+                  'Stores',
+                  filters.searchFilters.searchIn.includes('stores'),
+                  () => handleSearchInToggle('stores')
+                )}
+                {renderChip(
+                  'Both',
+                  filters.searchFilters.searchIn.includes('both'),
+                  () => handleSearchInToggle('both')
+                )}
+              </View>
+            ))}
+
             {/* Sort By */}
             {renderFilterSection('Sort By', (
               <View style={styles.sortOptions}>
@@ -205,18 +290,18 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                     key={option.key}
                     style={[
                       styles.sortOption,
-                      filters.sortBy === option.key && styles.sortOptionSelected
+                      filters.productFilters.sortBy === option.key && styles.sortOptionSelected
                     ]}
-                    onPress={() => handleSortChange(option.key as ProductFilters['sortBy'])}
+                    onPress={() => handleSortChange(option.key as SearchFilters['productFilters']['sortBy'])}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.sortOptionText,
-                      filters.sortBy === option.key && styles.sortOptionTextSelected
+                      filters.productFilters.sortBy === option.key && styles.sortOptionTextSelected
                     ]}>
                       {option.label}
                     </Text>
-                    {filters.sortBy === option.key && (
+                    {filters.productFilters.sortBy === option.key && (
                       <Ionicons name="checkmark" size={16} color={Colors.primary} />
                     )}
                   </TouchableOpacity>
@@ -230,7 +315,7 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                 {PRICE_RANGES.map(range => (
                   renderChip(
                     range.label,
-                    filters.priceRange.min === range.min && filters.priceRange.max === range.max,
+                    filters.productFilters.priceRange.min === range.min && filters.productFilters.priceRange.max === range.max,
                     () => handlePriceRangeSelect(range.min, range.max)
                   )
                 ))}
@@ -243,7 +328,7 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                 {PRODUCT_CATEGORIES.map(category => (
                   renderChip(
                     category,
-                    filters.category?.includes(category) || false,
+                    filters.productFilters.category?.includes(category) || false,
                     () => handleCategoryToggle(category)
                   )
                 ))}
@@ -256,7 +341,7 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                 {getUniqueSubcategories().map(subcategory => (
                   renderChip(
                     subcategory,
-                    filters.subcategory?.includes(subcategory) || false,
+                    filters.productFilters.subcategory?.includes(subcategory) || false,
                     () => handleSubcategoryToggle(subcategory)
                   )
                 ))}
@@ -269,7 +354,7 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                 {PRODUCT_SIZES.map(size => (
                   renderChip(
                     size,
-                    filters.sizes?.includes(size) || false,
+                    filters.productFilters.sizes?.includes(size) || false,
                     () => handleSizeToggle(size)
                   )
                 ))}
@@ -282,47 +367,26 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
                 {PRODUCT_MATERIALS.map(material => (
                   renderChip(
                     material,
-                    filters.materials?.includes(material) || false,
+                    filters.productFilters.materials?.includes(material) || false,
                     () => handleMaterialToggle(material)
                   )
                 ))}
               </View>
             ))}
 
-            {/* Fits */}
-            {renderFilterSection('Fits', (
+            {/* Store Rating */}
+            {renderFilterSection('Store Rating', (
               <View style={styles.chipContainer}>
-                {PRODUCT_FITS.map(fit => (
+                {[
+                  { label: 'Any Rating', min: 0, max: 5 },
+                  { label: '4+ Stars', min: 4, max: 5 },
+                  { label: '3+ Stars', min: 3, max: 5 },
+                  { label: '2+ Stars', min: 2, max: 5 },
+                ].map(range => (
                   renderChip(
-                    fit,
-                    filters.fits?.includes(fit) || false,
-                    () => handleFitToggle(fit)
-                  )
-                ))}
-              </View>
-            ))}
-
-            {/* Patterns */}
-            {renderFilterSection('Patterns', (
-              <View style={styles.chipContainer}>
-                {PRODUCT_PATTERNS.map(pattern => (
-                  renderChip(
-                    pattern,
-                    filters.patterns?.includes(pattern) || false,
-                    () => handlePatternToggle(pattern)
-                  )
-                ))}
-              </View>
-            ))}
-
-            {/* Seasons */}
-            {renderFilterSection('Seasons', (
-              <View style={styles.chipContainer}>
-                {PRODUCT_SEASONS.map(season => (
-                  renderChip(
-                    season,
-                    filters.seasons?.includes(season) || false,
-                    () => handleSeasonToggle(season)
+                    range.label,
+                    filters.storeFilters.storeRating?.min === range.min && filters.storeFilters.storeRating?.max === range.max,
+                    () => handleStoreRatingChange(range.min, range.max)
                   )
                 ))}
               </View>
@@ -331,44 +395,17 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters,
             {/* Product Status */}
             {renderFilterSection('Product Status', (
               <View style={styles.checkboxContainer}>
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  onPress={handleInStockToggle}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, filters.inStock && styles.checkboxSelected]}>
-                    {filters.inStock && (
-                      <Ionicons name="checkmark" size={16} color={Colors.background} />
-                    )}
-                  </View>
-                  <Text style={styles.checkboxLabel}>In Stock Only</Text>
-                </TouchableOpacity>
+                {renderCheckbox('In Stock Only', filters.productFilters.inStock || false, handleInStockToggle)}
+                {renderCheckbox('New Arrivals', filters.productFilters.isNewArrival || false, handleNewArrivalToggle)}
+                {renderCheckbox('Best Sellers', filters.productFilters.isBestSeller || false, handleBestSellerToggle)}
+              </View>
+            ))}
 
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  onPress={handleNewArrivalToggle}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, filters.isNewArrival && styles.checkboxSelected]}>
-                    {filters.isNewArrival && (
-                      <Ionicons name="checkmark" size={16} color={Colors.background} />
-                    )}
-                  </View>
-                  <Text style={styles.checkboxLabel}>New Arrivals</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  onPress={handleBestSellerToggle}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, filters.isBestSeller && styles.checkboxSelected]}>
-                    {filters.isBestSeller && (
-                      <Ionicons name="checkmark" size={16} color={Colors.background} />
-                    )}
-                  </View>
-                  <Text style={styles.checkboxLabel}>Best Sellers</Text>
-                </TouchableOpacity>
+            {/* User Preferences */}
+            {renderFilterSection('Your Preferences', (
+              <View style={styles.checkboxContainer}>
+                {renderCheckbox('Favorites Only', filters.userFilters.favoritesOnly || false, handleFavoritesOnlyToggle)}
+                {renderCheckbox('Recently Viewed', filters.userFilters.recentlyViewed || false, handleRecentlyViewedToggle)}
               </View>
             ))}
           </ScrollView>

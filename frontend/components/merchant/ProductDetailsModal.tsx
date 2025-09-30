@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StatusBar,
   Platform,
   SafeAreaView,
+  TextInput,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,6 +30,8 @@ interface ProductDetails {
   isActive: boolean;
   isNewArrival: boolean;
   isBestSeller: boolean;
+  isOnSale: boolean;
+  discountPercentage?: string;
 }
 
 interface ProductDetailsModalProps {
@@ -37,6 +40,7 @@ interface ProductDetailsModalProps {
   onSave: (details: ProductDetails) => void;
   initialData?: ProductDetails;
   category?: string;
+  currentPrice?: string;
 }
 
 const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
@@ -44,7 +48,8 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   onClose,
   onSave,
   initialData,
-  category = 'Men'
+  category = 'Men',
+  currentPrice = '0'
 }) => {
   const [details, setDetails] = useState<ProductDetails>({
     specifications: {
@@ -56,10 +61,29 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     isActive: true,
     isNewArrival: false,
     isBestSeller: false,
+    isOnSale: false,
+    discountPercentage: '',
     ...initialData
   });
 
+  const [discountPreview, setDiscountPreview] = useState<string>('');
+
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Auto-calculate discount when price or discount percentage changes
+  useEffect(() => {
+    if (details.isOnSale && details.discountPercentage && currentPrice) {
+      const price = parseFloat(currentPrice);
+      const discount = parseFloat(details.discountPercentage);
+      if (price > 0 && discount >= 0 && discount <= 100) {
+        const discountAmount = (price * discount) / 100;
+        const finalPrice = price - discountAmount;
+        setDiscountPreview(`₹${finalPrice.toFixed(2)}`);
+      }
+    } else {
+      setDiscountPreview('');
+    }
+  }, [details.isOnSale, details.discountPercentage, currentPrice]);
 
   // Removed unused fadeAnim
 
@@ -104,14 +128,53 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     }));
   }, []);
 
+  const calculateDiscount = useCallback(() => {
+    const price = parseFloat(currentPrice);
+    const discount = parseFloat(details.discountPercentage || '0');
+    
+    if (price > 0 && discount > 0) {
+      const discountAmount = (price * discount) / 100;
+      const finalPrice = price - discountAmount;
+      setDiscountPreview(`₹${finalPrice.toFixed(2)}`);
+    } else {
+      setDiscountPreview('');
+    }
+  }, [currentPrice, details.discountPercentage]);
+
+  const handleDiscountChange = useCallback((value: string) => {
+    setDetails(prev => ({
+      ...prev,
+      discountPercentage: value
+    }));
+    
+    // Clear error when user starts typing
+    if (errors.discountPercentage) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.discountPercentage;
+        return newErrors;
+      });
+    }
+  }, [errors.discountPercentage]);
+
   const validateForm = useCallback(() => {
     const newErrors: { [key: string]: string } = {};
     
-    // No validation needed since subcategory is handled on main screen
+    // Validate discount percentage when on sale is enabled
+    if (details.isOnSale && (!details.discountPercentage || details.discountPercentage.trim() === '')) {
+      newErrors.discountPercentage = 'Discount percentage is required when on sale is enabled';
+    }
+    
+    if (details.isOnSale && details.discountPercentage) {
+      const discount = parseFloat(details.discountPercentage);
+      if (isNaN(discount) || discount < 0 || discount > 100) {
+        newErrors.discountPercentage = 'Discount percentage must be between 0 and 100';
+      }
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, []);
+  }, [details.isOnSale, details.discountPercentage]);
 
   const handleSave = useCallback(() => {
     if (validateForm()) {
@@ -264,6 +327,55 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
               (value) => handleSelect('season', value),
               'Season'
             )}
+
+            {/* Discount Section */}
+            <View style={styles.discountSection}>
+              <Text style={styles.sectionTitle}>Discount Settings</Text>
+              
+              {renderToggleSwitch(
+                'On Sale',
+                details.isOnSale,
+                () => handleToggle('isOnSale'),
+                'pricetag'
+              )}
+
+              {details.isOnSale && (
+                <View style={styles.discountInputContainer}>
+                  <Text style={styles.inputLabel}>Discount Percentage (%)</Text>
+                  <View style={styles.discountInputRow}>
+                    <TextInput
+                      style={[
+                        styles.discountInput,
+                        errors.discountPercentage && styles.discountInputError
+                      ]}
+                      value={details.discountPercentage}
+                      onChangeText={handleDiscountChange}
+                      placeholder="0"
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="numeric"
+                      maxLength={3}
+                    />
+                    <TouchableOpacity
+                      style={styles.calculateButton}
+                      onPress={calculateDiscount}
+                    >
+                      <Text style={styles.calculateButtonText}>Calculate</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {errors.discountPercentage && (
+                    <Text style={styles.discountErrorText}>{errors.discountPercentage}</Text>
+                  )}
+                  
+                  {discountPreview && (
+                    <View style={styles.previewContainer}>
+                      <Text style={styles.previewLabel}>Discounted Price:</Text>
+                      <Text style={styles.previewPrice}>{discountPreview}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
 
             {/* Toggle Switches */}
             <View style={styles.togglesContainer}>
@@ -472,6 +584,86 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     transform: [{ translateX: 20 }],
+  },
+  // Discount section styles
+  discountSection: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 16,
+  },
+  discountInputContainer: {
+    marginTop: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  discountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  discountInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.background,
+  },
+  calculateButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+  },
+  calculateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  previewContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  previewPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  discountInputError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  discountErrorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
 

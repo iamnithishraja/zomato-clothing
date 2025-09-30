@@ -41,6 +41,8 @@ const ProductInfo = () => {
     subcategory: '',
     images: [],
     price: '',
+    discountPercentage: '',
+    isOnSale: false,
     sizes: [],
     availableQuantity: '',
     isActive: true,
@@ -70,13 +72,22 @@ const ProductInfo = () => {
         const response = await apiClient.get(`/api/v1/product/${productId}`);
         if (response.data.success) {
           const product = response.data.product;
+          // Calculate original price for editing
+          let originalPrice = product.price;
+          if (product.isOnSale && product.discountPercentage && product.discountPercentage > 0) {
+            // If product is on sale, calculate original price from discounted price
+            originalPrice = product.price / (1 - product.discountPercentage / 100);
+          }
+
           setProductData({
             name: product.name || '',
             description: product.description || '',
             category: product.category || '',
             subcategory: product.subcategory || '',
             images: product.images || [],
-            price: product.price?.toString() || '',
+            price: originalPrice?.toString() || '',
+            discountPercentage: product.discountPercentage?.toString() || '',
+            isOnSale: product.isOnSale ?? false,
             sizes: product.sizes || [],
             availableQuantity: product.availableQuantity?.toString() || '',
             specifications: product.specifications || {},
@@ -209,6 +220,8 @@ const ProductInfo = () => {
       isActive: details.isActive,
       isNewArrival: details.isNewArrival,
       isBestSeller: details.isBestSeller,
+      isOnSale: details.isOnSale,
+      discountPercentage: details.discountPercentage,
     }));
   }, []);
 
@@ -269,6 +282,8 @@ const ProductInfo = () => {
         subcategory: productData.subcategory,
         images: productData.images,
         price: Number(productData.price),
+        discountPercentage: productData.discountPercentage ? Number(productData.discountPercentage) : 0,
+        isOnSale: productData.isOnSale,
         sizes: productData.sizes,
         availableQuantity: Number(productData.availableQuantity),
         specifications: productData.specifications,
@@ -738,8 +753,11 @@ const ProductInfo = () => {
           isActive: productData.isActive,
           isNewArrival: productData.isNewArrival,
           isBestSeller: productData.isBestSeller,
+          isOnSale: productData.isOnSale,
+          discountPercentage: productData.discountPercentage,
         }}
         category={productData.category}
+        currentPrice={productData.price}
       />
     </View>
   );

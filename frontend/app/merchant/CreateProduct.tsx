@@ -40,6 +40,8 @@ const CreateProduct = () => {
     subcategory: '',
     images: [],
     price: '',
+    discountPercentage: '',
+    isOnSale: false,
     sizes: [],
     availableQuantity: '',
     isActive: true,
@@ -168,6 +170,8 @@ const CreateProduct = () => {
       isActive: details.isActive,
       isNewArrival: details.isNewArrival,
       isBestSeller: details.isBestSeller,
+      isOnSale: details.isOnSale,
+      discountPercentage: details.discountPercentage,
     }));
   }, []);
 
@@ -228,6 +232,8 @@ const CreateProduct = () => {
         subcategory: productData.subcategory,
         images: productData.images,
         price: Number(productData.price),
+        discountPercentage: productData.discountPercentage ? Number(productData.discountPercentage) : 0,
+        isOnSale: productData.isOnSale,
         sizes: productData.sizes,
         availableQuantity: Number(productData.availableQuantity),
         specifications: productData.specifications,
@@ -601,8 +607,11 @@ const CreateProduct = () => {
           isActive: productData.isActive,
           isNewArrival: productData.isNewArrival,
           isBestSeller: productData.isBestSeller,
+          isOnSale: productData.isOnSale,
+          discountPercentage: productData.discountPercentage,
         }}
         category={productData.category}
+        currentPrice={productData.price}
       />
     </View>
   );

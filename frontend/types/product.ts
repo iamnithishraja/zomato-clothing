@@ -11,6 +11,8 @@ export interface ProductDetails {
   isActive: boolean;
   isNewArrival: boolean;
   isBestSeller: boolean;
+  isOnSale: boolean;
+  discountPercentage?: string;
 }
 
 export interface ProductData {
@@ -20,6 +22,8 @@ export interface ProductData {
   subcategory: string;
   images: string[];
   price: string;
+  discountPercentage?: string;
+  isOnSale: boolean;
   sizes: string[]; // Multiple sizes selection
   availableQuantity: string; // Changed from quantity to match backend
   specifications?: ProductSpecifications;
@@ -68,6 +72,8 @@ export interface Product {
   subcategory: string;
   images: string[];
   price: number;
+  discountPercentage?: number;
+  isOnSale?: boolean;
   sizes: string[];
   availableQuantity: number;
   specifications?: ProductSpecifications;
@@ -113,13 +119,4 @@ export interface CategoryItem {
   subcategories: string[];
 }
 
-export interface FilterState {
-  category: string | null;
-  subcategory: string | null;
-  priceRange: {
-    min: number;
-    max: number;
-  };
-  isBestSeller: boolean;
-  isNewArrival: boolean;
-}
+// FilterState moved to filters.ts for better organization

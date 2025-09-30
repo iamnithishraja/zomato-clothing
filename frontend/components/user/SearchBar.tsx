@@ -14,14 +14,20 @@ import { Colors } from '@/constants/colors';
 interface SearchBarProps {
   onSearch: (query: string) => void;
   placeholder?: string;
+  initialValue?: string;
+  autoFocus?: boolean;
+  showNavigation?: boolean;
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
   placeholder = "Search fashion, brands, styles...",
+  initialValue = '',
+  autoFocus = false,
+  showNavigation = true,
 }) => {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialValue);
   const [isFocused, setIsFocused] = useState(false);
   const animatedValue = useRef(new Animated.Value(0)).current;
 
@@ -32,8 +38,10 @@ const SearchBar: React.FC<SearchBarProps> = ({
       duration: 200,
       useNativeDriver: false,
     }).start();
-    // Navigate to search screen when search bar is focused
-    router.push('/search');
+    // Navigate to search screen when search bar is focused (only if showNavigation is true)
+    if (showNavigation) {
+      router.push('/search');
+    }
   };
 
   const handleBlur = () => {
@@ -100,6 +108,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           autoCapitalize="none"
           autoCorrect={false}
           selectionColor={Colors.primary}
+          autoFocus={autoFocus}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity

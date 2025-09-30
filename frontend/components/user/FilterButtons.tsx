@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+// Import removed as it's not used in this component
 
 interface FilterOption {
   id: string;
@@ -19,22 +20,37 @@ interface FilterOption {
 interface FilterButtonsProps {
   selectedFilter: string | null;
   onFilterSelect: (filterId: string) => void;
+  filterType?: 'product' | 'search';
 }
 
-const FILTER_OPTIONS: FilterOption[] = [
+const PRODUCT_FILTER_OPTIONS: FilterOption[] = [
   { id: 'all', name: 'All', icon: 'grid-outline' },
   { id: 'men', name: 'Men', icon: 'man-outline' },
   { id: 'women', name: 'Women', icon: 'woman-outline' },
   { id: 'kids', name: 'Kids', icon: 'people-outline' },
+  { id: 'unisex', name: 'Unisex', icon: 'people-outline' },
   { id: 'new', name: 'New Arrivals', icon: 'sparkles-outline' },
-  { id: 'sale', name: 'On Sale', icon: 'pricetag-outline' },
-  { id: 'trending', name: 'Trending', icon: 'trending-up-outline' },
+  { id: 'bestseller', name: 'Best Sellers', icon: 'star-outline' },
+  { id: 'instock', name: 'In Stock', icon: 'checkmark-circle-outline' },
+];
+
+const SEARCH_FILTER_OPTIONS: FilterOption[] = [
+  { id: 'all', name: 'All', icon: 'search-outline' },
+  { id: 'products', name: 'Products', icon: 'cube-outline' },
+  { id: 'stores', name: 'Stores', icon: 'storefront-outline' },
+  { id: 'favorites', name: 'Favorites', icon: 'heart-outline' },
+  { id: 'recent', name: 'Recent', icon: 'time-outline' },
+  { id: 'new', name: 'New Arrivals', icon: 'sparkles-outline' },
+  { id: 'bestseller', name: 'Best Sellers', icon: 'star-outline' },
 ];
 
 const FilterButtons: React.FC<FilterButtonsProps> = ({
   selectedFilter,
   onFilterSelect,
+  filterType = 'product',
 }) => {
+  const filterOptions = filterType === 'search' ? SEARCH_FILTER_OPTIONS : PRODUCT_FILTER_OPTIONS;
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -43,7 +59,7 @@ const FilterButtons: React.FC<FilterButtonsProps> = ({
         contentContainerStyle={styles.scrollContent}
         style={styles.scrollView}
       >
-        {FILTER_OPTIONS.map((option) => (
+        {filterOptions.map((option) => (
           <TouchableOpacity
             key={option.id}
             style={[

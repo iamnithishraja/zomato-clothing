@@ -19,9 +19,9 @@ interface ProductCardProps {
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = screenWidth - 45;
-const imageWidth = 120;
-const cardHeight = imageWidth + 60; // Compact height like in image
+const cardWidth = screenWidth - 20; // Reduced margins for wider card
+const imageWidth = 140; // Increased image size
+const cardHeight = imageWidth + 60; // Same height maintained
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   const router = useRouter();
@@ -209,10 +209,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   productName: {
-    fontSize: 16,
+    fontSize: 18, // Increased from 16
     fontWeight: '600',
     color: '#1F2937',
-    lineHeight: 20,
+    lineHeight: 22, // Increased line height
     marginBottom: 4,
     marginTop: 15,
   },
@@ -222,25 +222,25 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   currencySymbol: {
-    fontSize: 14,
+    fontSize: 16, // Increased from 14
     fontWeight: '600',
     color: '#FFD700',
     marginRight: 2,
   },
   price: {
-    fontSize: 16,
+    fontSize: 18, // Increased from 16
     fontWeight: '700',
     color: '#FFD700',
   },
   productDescription: {
-    fontSize: 12, 
+    fontSize: 14, // Increased from 12
     color: Colors.textPrimary,  
-    lineHeight: 16,
+    lineHeight: 18, // Increased line height
     marginBottom: 6,
     fontWeight: '400',
   },
   sizesText: {
-    fontSize: 11,
+    fontSize: 13, // Increased from 11
     color: Colors.textSecondary,
     fontWeight: '400',
     marginBottom: 8,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addToCartText: {
-    fontSize: 12,
+    fontSize: 14, // Increased from 12
     fontWeight: '700',
     color: '#000000',
     marginRight: 4,

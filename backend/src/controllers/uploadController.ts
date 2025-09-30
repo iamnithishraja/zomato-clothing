@@ -31,12 +31,21 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
             return;
         }
 
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/quicktime'];
-        if (!allowedTypes.includes(fileType)) {
+        // Validate file type - Accept all common image and video formats
+        const allowedTypes = [
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff', 'image/svg+xml',
+            'video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/avi', 'video/mov'
+        ];
+        
+        // Also accept generic image/* and video/* types
+        const isImageType = fileType.startsWith('image/');
+        const isVideoType = fileType.startsWith('video/');
+        const isAllowedType = allowedTypes.includes(fileType) || isImageType || isVideoType;
+        
+        if (!isAllowedType) {
             res.status(400).json({
                 success: false,
-                message: "File type not supported. Allowed types: " + allowedTypes.join(', ')
+                message: "File type not supported. Allowed types: images and videos"
             });
             return;
         }

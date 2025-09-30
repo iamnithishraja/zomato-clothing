@@ -141,11 +141,6 @@ const ImageUploader = ({
             : it
         );
         
-        // Update parent with new URLs
-        const remoteUrls = newItems.filter(item => item.remote && !item.error).map(item => item.uri);
-        const updatedRemoteUrls = multiple ? [...remoteUrls, publicUrl] : [publicUrl];
-        setPendingUrlsUpdate(updatedRemoteUrls);
-        
         return newItems;
       });
       
@@ -166,7 +161,7 @@ const ImageUploader = ({
         const data = error.response.data;
         
         if (status === 400) {
-          errorMessage = data?.message || 'Invalid request. Please check your image format.';
+          errorMessage = data?.message || 'Invalid image format. Please try a different image.';
         } else if (status === 401) {
           errorMessage = 'Authentication failed. Please log in again.';
         } else if (status === 403) {
@@ -176,11 +171,13 @@ const ImageUploader = ({
         }
       } else if (error.request) {
         errorMessage = 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage = 'Upload failed. Please try a different image or check your connection.';
       }
       
       Alert.alert('Upload Error', errorMessage);
     }
-  }, [multiple, fileNamePrefix]);
+  }, [fileNamePrefix]);
 
   const handlePick = useCallback(async () => {
     if (disabled || isUploading) return;
@@ -221,12 +218,17 @@ const ImageUploader = ({
       setItems((prev) => (multiple ? [...prev, ...optimisticItems] : [...optimisticItems]));
       setIsUploading(true);
 
-      // Upload all images
-      await Promise.all(
-        assets.map(async (asset, idx) => {
-          await uploadImage(asset, optimisticItems[idx].key);
-        })
-      );
+      // Upload all images sequentially to avoid race conditions
+      for (let i = 0; i < assets.length; i++) {
+        await uploadImage(assets[i], optimisticItems[i].key);
+      }
+
+      // Update parent with all remote URLs after all uploads are complete
+      setItems((prev) => {
+        const remoteUrls = prev.filter(item => item.remote && !item.error).map(item => item.uri);
+        setPendingUrlsUpdate(remoteUrls);
+        return prev;
+      });
 
     } catch (error) {
       console.error('Error picking image:', error);
@@ -479,6 +481,15 @@ const guessMimeTypeFromName = (name: string) => {
       return "image/png";
     case "webp":
       return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "bmp":
+      return "image/bmp";
+    case "tiff":
+    case "tif":
+      return "image/tiff";
+    case "svg":
+      return "image/svg+xml";
     case "mp4":
       return "video/mp4";
     case "mov":
@@ -487,8 +498,10 @@ const guessMimeTypeFromName = (name: string) => {
       return "video/x-m4v";
     case "webm":
       return "video/webm";
+    case "avi":
+      return "video/avi";
     default:
-      return "application/octet-stream";
+      return "image/jpeg"; // Default to JPEG for unknown extensions
   }
 };
 
@@ -496,11 +509,20 @@ const extensionFromMimeType = (mime?: string) => {
   if (!mime) return undefined;
   switch (mime.toLowerCase()) {
     case "image/jpeg":
+    case "image/jpg":
       return "jpg";
     case "image/png":
       return "png";
     case "image/webp":
       return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/bmp":
+      return "bmp";
+    case "image/tiff":
+      return "tiff";
+    case "image/svg+xml":
+      return "svg";
     case "video/mp4":
       return "mp4";
     case "video/quicktime":
@@ -509,8 +531,10 @@ const extensionFromMimeType = (mime?: string) => {
       return "m4v";
     case "video/webm":
       return "webm";
+    case "video/avi":
+      return "avi";
     default:
-      return undefined;
+      return "jpg"; // Default to jpg for unknown types
   }
 };
 

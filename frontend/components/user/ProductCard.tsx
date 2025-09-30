@@ -6,11 +6,11 @@ import {
   StyleSheet,
   Image,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { Product } from '@/types/product';
+import { useFavorites } from '@/hooks/useFavorites';
 
 interface ProductCardProps {
   product: Product;
@@ -23,8 +23,8 @@ const imageWidth = 120;
 const detailsWidth = cardWidth - imageWidth;
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
-  const [isFavorite, setIsFavorite] = React.useState(false);
   const router = useRouter();
+  const { isFavorite, toggleFavorite, isLoading } = useFavorites();
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN'); // Indian number format
@@ -35,8 +35,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
     return sizes;
   };
 
-  const handleFavoritePress = () => {
-    setIsFavorite(!isFavorite);
+  const handleFavoritePress = async () => {
+    await toggleFavorite(product._id);
   };
 
   const handleAddToCart = () => {
@@ -48,8 +48,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
         productName: product.name,
         productPrice: product.price.toString(),
         productImage: product.images?.[0] || '',
-        storeId: product.store,
-        storeName: product.storeName || 'Store'
+        storeId: product.storeId._id,
+        storeName: product.storeId.storeName || 'Store'
       }
     });
   };
@@ -90,11 +90,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
               style={styles.favoriteButton} 
               onPress={handleFavoritePress}
               activeOpacity={0.7}
+              disabled={isLoading}
             >
               <Ionicons 
-                name={isFavorite ? "heart" : "heart-outline"} 
+                name={isFavorite(product._id) ? "heart" : "heart-outline"} 
                 size={24} 
-                color="#EF4444" 
+                color={isFavorite(product._id) ? "#EF4444" : "#9CA3AF"} 
               />
             </TouchableOpacity>
           </View>

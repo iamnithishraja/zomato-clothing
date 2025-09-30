@@ -26,7 +26,7 @@ const CountryDropdown: React.FC<CountryDropdownProps> = ({
   onClose,
   inputPosition,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery] = useState('');
 
   const filteredCountries = useMemo(() => {
     if (!searchQuery.trim()) return COUNTRIES.slice(0, 10); // Show first 10 countries by default

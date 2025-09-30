@@ -502,4 +502,55 @@ async function getBestSellerStores(req: Request, res: Response) {
   }
 }
 
-export { createStore, updateStore, getStoreDetails, deleteStoreDetails, getAllStores, getBestSellerStores };
+// Get store by ID (public endpoint)
+async function getStoreById(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Store ID is required"
+      });
+    }
+
+    const store = await StoreModel.findById(id)
+      .populate('merchantId', 'name email');
+
+    if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: "Store not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Store retrieved successfully",
+      store: {
+        _id: store._id,
+        storeName: store.storeName,
+        description: store.description,
+        storeImages: store.storeImages,
+        address: store.address,
+        mapLink: store.mapLink,
+        contact: store.contact,
+        workingDays: store.workingDays,
+        rating: store.rating,
+        isActive: store.isActive,
+        merchantId: store.merchantId,
+        createdAt: store.createdAt,
+        updatedAt: store.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting store by ID:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+export { createStore, updateStore, getStoreDetails, deleteStoreDetails, getAllStores, getBestSellerStores, getStoreById };

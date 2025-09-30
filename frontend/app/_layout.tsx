@@ -28,6 +28,8 @@ export default function RootLayout() {
           <Stack.Screen name="(merchantTabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(deliveryTabs)" options={{ headerShown: false }} />
           <Stack.Screen name="merchant" options={{ headerShown: false }} />
+          <Stack.Screen name="store" options={{ headerShown: false }} />
+          <Stack.Screen name="product" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

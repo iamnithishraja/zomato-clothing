@@ -16,6 +16,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
 
@@ -28,8 +29,8 @@ export default function ProductDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [showCharacteristics, setShowCharacteristics] = useState(false);
+  const { isFavorite, toggleFavorite, isLoading: isFavoriteLoading } = useFavorites();
   const scrollViewRef = useRef<ScrollView>(null);
   const imageScrollViewRef = useRef<ScrollView>(null);
 
@@ -92,20 +93,29 @@ export default function ProductDetailsScreen() {
       return;
     }
     
-    Alert.alert(
-      'Added to Cart',
-      `${product?.name} (${selectedSizes.join(', ')}) has been added to your cart`,
-      [
-        { text: 'Continue Shopping', style: 'cancel' },
-        { text: 'View Cart', onPress: () => console.log('Navigate to cart') }
-      ]
-    );
-  }, [selectedSizes, product]);
+    if (product) {
+      // Navigate to cart with product data
+      router.push({
+        pathname: '/(tabs)/cart',
+        params: {
+          productId: product._id,
+          productName: product.name,
+          productPrice: product.price.toString(),
+          productImage: product.images?.[0] || '',
+          storeId: product.storeId?._id || '',
+          storeName: product.storeId?.storeName || '',
+          selectedSizes: selectedSizes.join(','),
+        }
+      });
+    }
+  }, [selectedSizes, product, router]);
 
   // Handle favorite toggle
-  const handleFavoriteToggle = useCallback(() => {
-    setIsFavorite(!isFavorite);
-  }, [isFavorite]);
+  const handleFavoriteToggle = useCallback(async () => {
+    if (product?._id) {
+      await toggleFavorite(product._id);
+    }
+  }, [product?._id, toggleFavorite]);
 
   // Handle view all
   const handleViewAll = useCallback(() => {
@@ -180,11 +190,12 @@ export default function ProductDetailsScreen() {
               style={styles.heartButton} 
               onPress={handleFavoriteToggle}
               activeOpacity={0.7}
+              disabled={isFavoriteLoading}
             >
               <Ionicons 
-                name={isFavorite ? "heart" : "heart-outline"} 
+                name={isFavorite(product?._id || '') ? "heart" : "heart-outline"} 
                 size={28} 
-                color={isFavorite ? Colors.error : "#000"} 
+                color={isFavorite(product?._id || '') ? Colors.error : "#000"} 
               />
             </TouchableOpacity>
           </View>

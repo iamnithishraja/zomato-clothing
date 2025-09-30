@@ -16,15 +16,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import ProductCard from '@/components/user/ProductCard';
+import FilterModal, { FilterOptions } from '@/components/user/FilterModal';
+import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
 
 export default function CategoryScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams();
+  const { checkMultipleFavorites } = useFavorites();
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<FilterOptions>({
+    priceRange: { min: 0, max: 10000 },
+    categories: [],
+    sizes: [],
+    brands: [],
+    sortBy: 'newest',
+    inStock: false,
+  });
 
   // Convert category slug to subcategory name - memoized to prevent multiple conversions
   const subcategoryName = useMemo(() => {
@@ -68,11 +81,21 @@ export default function CategoryScreen() {
       // API response received
       
       if (response.data.success) {
-        setProducts(response.data.products || []);
-        console.log(`Loaded ${response.data.products?.length || 0} products for subcategory: ${subcategoryName}`);
+        const productsData = response.data.products || [];
+        setProducts(productsData);
+        setFilteredProducts(productsData);
+        
+        // Check favorites for all products
+        if (productsData.length > 0) {
+          const productIds = productsData.map(p => p._id);
+          checkMultipleFavorites(productIds);
+        }
+        
+        console.log(`Loaded ${productsData.length} products for subcategory: ${subcategoryName}`);
       } else {
         console.log('API returned success: false');
         setProducts([]);
+        setFilteredProducts([]);
       }
     } catch (error: any) {
       console.error('Error loading products:', error);
@@ -84,7 +107,7 @@ export default function CategoryScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [subcategoryName]);
+  }, [subcategoryName, checkMultipleFavorites]);
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
@@ -100,9 +123,66 @@ export default function CategoryScreen() {
 
   // Handle filter press
   const handleFilterPress = useCallback(() => {
-    // TODO: Open filter modal
-    console.log('Filter pressed');
+    setShowFilterModal(true);
   }, []);
+
+  // Handle filter apply
+  const handleFilterApply = useCallback((filters: FilterOptions) => {
+    setActiveFilters(filters);
+    
+    let filtered = [...products];
+
+    // Apply price filter
+    if (filters.priceRange.min > 0 || filters.priceRange.max < 10000) {
+      filtered = filtered.filter(product => 
+        product.price >= filters.priceRange.min && product.price <= filters.priceRange.max
+      );
+    }
+
+    // Apply category filter
+    if (filters.categories.length > 0) {
+      filtered = filtered.filter(product => 
+        filters.categories.includes(product.category) || 
+        filters.categories.includes(product.subcategory)
+      );
+    }
+
+    // Apply size filter
+    if (filters.sizes.length > 0) {
+      filtered = filtered.filter(product => 
+        product.sizes.some(size => filters.sizes.includes(size))
+      );
+    }
+
+    // Apply in stock filter
+    if (filters.inStock) {
+      filtered = filtered.filter(product => product.availableQuantity > 0);
+    }
+
+    // Apply sorting
+    switch (filters.sortBy) {
+      case 'price_low':
+        filtered.sort((a, b) => a.price - b.price);
+        break;
+      case 'price_high':
+        filtered.sort((a, b) => b.price - a.price);
+        break;
+      case 'newest':
+        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+      case 'oldest':
+        filtered.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        break;
+      case 'rating':
+        filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+      case 'popularity':
+        filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
+        break;
+    }
+
+    setFilteredProducts(filtered);
+  }, [products]);
 
   // Load products on mount
   useEffect(() => {
@@ -170,7 +250,7 @@ export default function CategoryScreen() {
         </TouchableOpacity>
       </View>
     </LinearGradient>
-  ), [formattedCategoryName, products.length, handleFilterPress, router]);
+  ), [formattedCategoryName, handleFilterPress, router]);
 
   return (
     <View style={styles.container}>
@@ -183,7 +263,7 @@ export default function CategoryScreen() {
         {renderHeader()}
         
         <FlatList
-          data={products}
+          data={filteredProducts}
           renderItem={renderProduct}
           keyExtractor={(item) => item._id}
           numColumns={1}
@@ -199,6 +279,14 @@ export default function CategoryScreen() {
             />
           }
           ListEmptyComponent={isLoading ? renderLoadingState : renderEmptyState}
+        />
+
+        {/* Filter Modal */}
+        <FilterModal
+          visible={showFilterModal}
+          onClose={() => setShowFilterModal(false)}
+          onApply={handleFilterApply}
+          initialFilters={activeFilters}
         />
       </SafeAreaView>
     </View>

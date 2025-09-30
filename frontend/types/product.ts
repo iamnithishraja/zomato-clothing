@@ -75,6 +75,8 @@ export interface Product {
   isActive: boolean;
   isNewArrival: boolean;
   isBestSeller: boolean;
+  rating?: number;
+  views?: number;
   merchantId: {
     _id: string;
     name: string;

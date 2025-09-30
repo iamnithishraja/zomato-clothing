@@ -24,6 +24,7 @@ interface CartItem {
   storeId: string;
   storeName: string;
   quantity: number;
+  selectedSizes?: string[];
 }
 
 export default function CartScreen() {
@@ -46,12 +47,33 @@ export default function CartScreen() {
         productImage: params.productImage as string,
         storeId: params.storeId as string,
         storeName: params.storeName as string,
-        quantity: 1
+        quantity: 1,
+        selectedSizes: params.selectedSizes ? (params.selectedSizes as string).split(',') : []
       };
-      setCartItems([newItem]);
+      
+      // Check if item already exists in cart
+      const existingItemIndex = cartItems.findIndex(item => 
+        item.productId === newItem.productId && 
+        JSON.stringify(item.selectedSizes) === JSON.stringify(newItem.selectedSizes)
+      );
+      
+      if (existingItemIndex >= 0) {
+        // Update quantity of existing item
+        setCartItems(items => 
+          items.map((item, index) => 
+            index === existingItemIndex 
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        );
+      } else {
+        // Add new item
+        setCartItems(prev => [...prev, newItem]);
+      }
+      
       hasProcessedParams.current = true;
     }
-  }, [params.productId, params.productName, params.productPrice, params.productImage, params.storeId, params.storeName]);
+  }, [params.productId, params.productName, params.productPrice, params.productImage, params.storeId, params.storeName, params.selectedSizes, cartItems]);
 
   const updateQuantity = (productId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
@@ -213,6 +235,9 @@ export default function CartScreen() {
                   {item.productName}
                 </Text>
                 <Text style={styles.itemStore}>{item.storeName}</Text>
+                {item.selectedSizes && item.selectedSizes.length > 0 && (
+                  <Text style={styles.itemSizes}>Size: {item.selectedSizes.join(', ')}</Text>
+                )}
                 <Text style={styles.itemPrice}>₹{item.productPrice}</Text>
               </View>
 
@@ -397,6 +422,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginBottom: 4,
+  },
+  itemSizes: {
+    fontSize: 12,
+    color: Colors.primary,
+    marginBottom: 4,
+    fontWeight: '500',
   },
   itemPrice: {
     fontSize: 16,

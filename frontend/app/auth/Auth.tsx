@@ -176,7 +176,7 @@ const Auth = () => {
           });
 
           if (registerResponse.data.success) {
-            const { token, user, isProfileComplete } = registerResponse.data;
+            const { token, user } = registerResponse.data;
             await login(user, token);
             
             // New users always need to complete profile

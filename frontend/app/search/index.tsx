@@ -233,7 +233,9 @@ export default function SearchScreen() {
           <View style={styles.resultsSummary}>
             <View style={styles.resultsHeader}>
               <Text style={styles.resultsText}>
-                {isLoading ? 'Searching...' : `${getTotalCount()} results for "${searchQuery}"`}
+                {isLoading
+                  ? 'Searching...'
+                  : `${getTotalCount()} results for "${searchQuery}"`}
               </Text>
               {isLoading && (
                 <ActivityIndicator size="small" color={Colors.primary} style={styles.loadingIndicator} />
@@ -241,7 +243,7 @@ export default function SearchScreen() {
             </View>
             {getTotalCount() > 0 && !isLoading && (
               <Text style={styles.resultsBreakdown}>
-                {searchResults.stores.length} stores • {searchResults.products.length} products
+                {searchResults.products.length} products
               </Text>
             )}
           </View>

@@ -271,13 +271,13 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 14, // Increased from 16
     fontWeight: '600',
-    color: '#0000FF',
+    color: '#2196F3',
     marginRight: 2,
   },
   price: {
     fontSize: 18, // Increased from 18
     fontWeight: '600',
-    color: '#0000FF',
+    color: '#2196F3',
   },
   productDescription: {
     fontSize: 16, // Increased from 14
@@ -392,13 +392,13 @@ const styles = StyleSheet.create({
   },
   discountedPrice: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#2563EB', // Blue color
+    fontWeight: '600',
+    color: '#2196F3', // Blue color
   },
   currencySymbolBlue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#2563EB', // Blue color
+    fontWeight: '600',
+    color: '#2196F3', // Blue color
     marginRight: 2,
   },
   regularPriceRow: {

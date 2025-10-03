@@ -2,8 +2,7 @@ import OrderModel from "../Models/orderModel";
 import ProductModel from "../Models/productModel";
 import StoreModel from "../Models/storeModel";
 import type { Response, Request } from "express";
-import { type CustomRequest } from "../types";
-import { type IOrder } from "../types/order";
+import { validateUserRole, sendErrorResponse } from "../utils/validation";
 import z from "zod";
 
 // Validation schema for order creation
@@ -33,12 +32,7 @@ async function createOrder(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a customer
-    if (user.role !== 'User') {
-      return res.status(403).json({
-          success: false,
-        message: "Only customers can create orders"
-      });
-    }
+    if (!validateUserRole(user, res)) return;
 
     // Validate request body
     const validatedData = createOrderSchema.parse(req.body);
@@ -52,33 +46,21 @@ async function createOrder(req: Request, res: Response) {
     for (const item of orderItems) {
       const product = await ProductModel.findById(item.product);
       if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: `Product not found: ${item.product}`
-        });
+        return sendErrorResponse(res, 404, `Product not found: ${item.product}`);
       }
 
       if (!product.isActive) {
-        return res.status(400).json({
-            success: false,
-          message: `Product is not available: ${product.name}`
-          });
+        return sendErrorResponse(res, 400, `Product is not available: ${product.name}`);
       }
 
       if (storeId === null) {
         storeId = product.storeId;
       } else if (product.storeId.toString() !== storeId.toString()) {
-        return res.status(400).json({
-            success: false,
-          message: "All products must be from the same store"
-          });
+        return sendErrorResponse(res, 400, "All products must be from the same store");
       }
 
       if (product.availableQuantity < item.quantity) {
-        return res.status(400).json({
-            success: false,
-          message: `Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`
-        });
+        return sendErrorResponse(res, 400, `Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
       }
 
       // Use current product price
@@ -95,10 +77,7 @@ async function createOrder(req: Request, res: Response) {
     // Verify store exists and is active
     const store = await StoreModel.findById(storeId);
     if (!store || !store.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "Store is not available"
-      });
+      return sendErrorResponse(res, 400, "Store is not available");
     }
 
     // Create order
@@ -146,10 +125,7 @@ async function createOrder(req: Request, res: Response) {
       });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -203,10 +179,7 @@ async function getOrderById(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting order:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -276,10 +249,7 @@ async function getOrdersForUser(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting orders:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -394,10 +364,7 @@ async function updateOrderStatus(req: Request, res: Response) {
       });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -466,10 +433,7 @@ async function getOrderStats(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting order stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 

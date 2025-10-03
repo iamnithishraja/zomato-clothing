@@ -1,7 +1,11 @@
 import ProductModel from "../Models/productModel";
 import StoreModel from "../Models/storeModel";
-import UserModel from "../Models/userModel";
 import type { Response, Request } from "express";
+import { 
+  validateMerchantRole, 
+  validateProductData, 
+  sendErrorResponse,
+} from "../utils/validation";
 
 // Create a new product
 async function createProduct(req: Request, res: Response) {
@@ -10,12 +14,7 @@ async function createProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'Merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can create products"
-      });
-    }
+    if (!validateMerchantRole(user, res)) return;
 
     // Get product data from request body
     const {
@@ -35,87 +34,16 @@ async function createProduct(req: Request, res: Response) {
       isBestSeller
     } = req.body;
 
-    // Basic validation
-    if (!name || name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Product name is required and must be at least 2 characters long"
-      });
-    }
-
-    if (!category) {
-      return res.status(400).json({
-        success: false,
-        message: "Category is required"
-      });
-    }
-
-    // Validate category enum
-    const validCategories = ["Men", "Women", "Kids", "Unisex"];
-    if (!validCategories.includes(category)) {
-      return res.status(400).json({
-        success: false,
-        message: `Category must be one of: ${validCategories.join(', ')}`
-      });
-    }
-
-    if (!subcategory) {
-      return res.status(400).json({
-        success: false,
-        message: "Subcategory is required"
-      });
-    }
-
-    // Validate subcategory enum
-    const validSubcategories = [
-      "Shirts", "T-Shirts", "Pants", "Jeans", "Shorts", "Jackets", "Suits",
-      "Dresses", "Tops", "Sarees", "Kurtas", "Skirts", "Leggings",
-      "Hoodies", "Sweatshirts", "Sweaters", "Cardigans", "Blazers", "Coats",
-      "Underwear", "Sleepwear", "Activewear", "Swimwear", "Ethnic Wear"
-    ];
-    if (!validSubcategories.includes(subcategory)) {
-      return res.status(400).json({
-        success: false,
-        message: `Subcategory must be one of: ${validSubcategories.join(', ')}`
-      });
-    }
-
-    if (!price || price <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid price is required"
-      });
-    }
-
-    if (availableQuantity === undefined || availableQuantity < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid available quantity is required"
-      });
-    }
-
-    if (!images || images.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one product image is required"
-      });
-    }
-
-    // Validate discount fields
-    if (discountPercentage !== undefined && (discountPercentage < 0 || discountPercentage > 100)) {
-      return res.status(400).json({
-        success: false,
-        message: "Discount percentage must be between 0 and 100"
-      });
+    // Validate product data
+    const validationError = validateProductData(req.body);
+    if (validationError) {
+      return sendErrorResponse(res, 400, validationError);
     }
 
     // Check if merchant has a store
     const store = await StoreModel.findOne({ merchantId: user._id });
     if (!store) {
-      return res.status(400).json({
-        success: false,
-        message: "You must create a store before adding products"
-      });
+      return sendErrorResponse(res, 400, "You must create a store before adding products");
     }
 
     // Calculate final price based on discount
@@ -176,10 +104,7 @@ async function createProduct(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error creating product:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -190,12 +115,7 @@ async function getMerchantProducts(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'Merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can access their products"
-      });
-    }
+    if (!validateMerchantRole(user, res)) return;
 
     // Get query parameters for pagination and filtering
     const page = parseInt(req.query.page as string) || 1;
@@ -241,10 +161,7 @@ async function getMerchantProducts(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting merchant products:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -262,10 +179,7 @@ async function getProductById(req: Request, res: Response) {
       .populate('storeId', 'storeName address storeImages');
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
+      return sendErrorResponse(res, 404, "Product not found");
     }
 
     // For merchants, allow viewing their own products
@@ -284,10 +198,7 @@ async function getProductById(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting product:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -298,12 +209,7 @@ async function updateProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'Merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can update products"
-      });
-    }
+    if (!validateMerchantRole(user, res)) return;
 
     const { productId } = req.params;
     const updateData = req.body;
@@ -315,40 +221,25 @@ async function updateProduct(req: Request, res: Response) {
     });
 
     if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found or you don't have permission to update it"
-      });
+      return sendErrorResponse(res, 404, "Product not found or you don't have permission to update it");
     }
 
     // Validate update data
     if (updateData.name && updateData.name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Product name must be at least 2 characters long"
-      });
+      return sendErrorResponse(res, 400, "Product name must be at least 2 characters long");
     }
 
     if (updateData.price && updateData.price <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Price must be greater than 0"
-      });
+      return sendErrorResponse(res, 400, "Price must be greater than 0");
     }
 
     if (updateData.availableQuantity && updateData.availableQuantity < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Available quantity cannot be negative"
-      });
+      return sendErrorResponse(res, 400, "Available quantity cannot be negative");
     }
 
     // Validate discount fields
     if (updateData.discountPercentage !== undefined && (updateData.discountPercentage < 0 || updateData.discountPercentage > 100)) {
-      return res.status(400).json({
-        success: false,
-        message: "Discount percentage must be between 0 and 100"
-      });
+      return sendErrorResponse(res, 400, "Discount percentage must be between 0 and 100");
     }
 
     // Handle discount calculation if price or discount fields are being updated
@@ -356,10 +247,7 @@ async function updateProduct(req: Request, res: Response) {
       // Get current product to use as base for calculation
       const currentProduct = await ProductModel.findById(productId);
       if (!currentProduct) {
-        return res.status(404).json({
-          success: false,
-          message: "Product not found"
-        });
+        return sendErrorResponse(res, 404, "Product not found");
       }
 
       // Use updated values or current values
@@ -401,10 +289,7 @@ async function updateProduct(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error updating product:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -415,12 +300,7 @@ async function deleteProduct(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'Merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can delete products"
-      });
-    }
+    if (!validateMerchantRole(user, res)) return;
 
     const { productId } = req.params;
 
@@ -431,10 +311,7 @@ async function deleteProduct(req: Request, res: Response) {
     });
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found or you don't have permission to delete it"
-      });
+      return sendErrorResponse(res, 404, "Product not found or you don't have permission to delete it");
     }
 
     // Delete product
@@ -447,10 +324,7 @@ async function deleteProduct(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error deleting product:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -528,10 +402,7 @@ async function getAllProducts(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Error getting all products:", error);
     console.error("Error details:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -553,10 +424,7 @@ async function getProductsBySubcategory(req: Request, res: Response) {
 
     // Validate subcategory parameter
     if (!subcategory) {
-      return res.status(400).json({
-        success: false,
-        message: "Subcategory parameter is required"
-      });
+      return sendErrorResponse(res, 400, "Subcategory parameter is required");
     }
 
     // Build filter object
@@ -618,10 +486,7 @@ async function getProductsBySubcategory(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Error getting products by subcategory:", error);
     console.error("Error details:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 
@@ -668,10 +533,7 @@ async function getProductsByStore(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting store products:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 

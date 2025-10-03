@@ -1,6 +1,5 @@
 import type { Request, Response } from 'express';
 import { generateUploadUrlProfile, deleteFileFromR2 } from "../utils/fileUpload";
-import { v4 as uuidv4 } from 'uuid';
 
 export const getUploadUrl = async (req: Request, res: Response): Promise<void> => {
     try {

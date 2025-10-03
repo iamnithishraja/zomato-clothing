@@ -1,6 +1,11 @@
 import StoreModel from "../Models/storeModel";
 import UserModel from "../Models/userModel";
 import type { Response, Request } from "express";
+import { 
+  validateMerchantRole, 
+  validateStoreData, 
+  sendErrorResponse 
+} from "../utils/validation";
 
 // Create store details
 async function createStore(req: Request, res: Response) {
@@ -9,12 +14,7 @@ async function createStore(req: Request, res: Response) {
     const user = (req as any).user;
     
     // Check if user is a merchant
-    if (user.role !== 'Merchant') {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can create store details"
-      });
-    }
+    if (!validateMerchantRole(user, res)) return;
     
     // Get store data from request body
     const {
@@ -27,74 +27,10 @@ async function createStore(req: Request, res: Response) {
       workingDays
     } = req.body;
     
-    // Basic validation - check required fields
-    if (!storeName || storeName.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Store name is required and must be at least 2 characters long"
-      });
-    }
-    
-    if (!address || address.trim().length < 5) {
-      return res.status(400).json({
-        success: false,
-        message: "Address is required and must be at least 5 characters long"
-      });
-    }
-    
-    if (!mapLink || mapLink.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Map link is required"
-      });
-    }
-    
-    // Validate contact information if provided
-    if (contact) {
-      if (contact.phone && (contact.phone.length < 10 || contact.phone.length > 12)) {
-        return res.status(400).json({
-          success: false,
-          message: "Phone number must be between 10-12 digits"
-        });
-      }
-      
-      if (contact.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
-        return res.status(400).json({
-          success: false,
-          message: "Please provide a valid email address"
-        });
-      }
-      
-      if (contact.website && !/^https?:\/\/.+/.test(contact.website)) {
-        return res.status(400).json({
-          success: false,
-          message: "Website must be a valid URL starting with http:// or https://"
-        });
-      }
-    }
-    
-    // Validate working days if provided
-    if (workingDays) {
-      const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      const providedDays = Object.keys(workingDays);
-      
-      // Check if all provided days are valid
-      const invalidDays = providedDays.filter(day => !validDays.includes(day));
-      if (invalidDays.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid working days: ${invalidDays.join(', ')}`
-        });
-      }
-      
-      // Check if at least one day is selected
-      const hasWorkingDays = Object.values(workingDays).some(day => day === true);
-      if (!hasWorkingDays) {
-        return res.status(400).json({
-          success: false,
-          message: "Please select at least one working day"
-        });
-      }
+    // Validate store data
+    const validationError = validateStoreData(req.body);
+    if (validationError) {
+      return sendErrorResponse(res, 400, validationError);
     }
     
     // Prepare store data
@@ -112,10 +48,7 @@ async function createStore(req: Request, res: Response) {
     const existingStore = await StoreModel.findOne({ merchantId: user._id });
     
     if (existingStore) {
-      return res.status(409).json({
-        success: false,
-        message: "Store already exists. Use PUT /update to modify store details."
-      });
+      return sendErrorResponse(res, 409, "Store already exists. Use PUT /update to modify store details.");
     }
     
     // Create new store
@@ -125,10 +58,7 @@ async function createStore(req: Request, res: Response) {
     });
     
     if (!store) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to save store details"
-      });
+      return sendErrorResponse(res, 500, "Failed to save store details");
     }
     
     // Update user's profile completion status to true
@@ -157,11 +87,7 @@ async function createStore(req: Request, res: Response) {
     
   } catch (error) {
     console.error("Error creating store:", error);
-    
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    return sendErrorResponse(res, 500, "Internal server error");
   }
 }
 

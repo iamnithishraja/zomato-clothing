@@ -270,14 +270,16 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 14, // Increased from 16
-    fontWeight: '600',
-    color: '#2196F3',
+    // fontWeight: '600', // Remove bold
+    color: '#000000',
     marginRight: 2,
+    fontWeight: '400', // Normal font
   },
   price: {
     fontSize: 18, // Increased from 18
-    fontWeight: '600',
-    color: '#2196F3',
+    // fontWeight: '600', // Remove bold
+    color: '#000000',
+    fontWeight: '400', // Normal font
   },
   productDescription: {
     fontSize: 16, // Increased from 14
@@ -382,9 +384,10 @@ const styles = StyleSheet.create({
   },
   originalPrice: {
     fontSize: 14,
-    fontWeight: '600',
+    // fontWeight: '600', // Remove bold
     color: '#000000',
     textDecorationLine: 'line-through',
+    fontWeight: '400', // Normal font
   },
   discountedPriceRow: {
     flexDirection: 'row',
@@ -392,14 +395,16 @@ const styles = StyleSheet.create({
   },
   discountedPrice: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2196F3', // Blue color
+    // fontWeight: '600', // Remove bold
+    color: '#000000', // Blue color
+    fontWeight: '400', // Normal font
   },
   currencySymbolBlue: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#2196F3', // Blue color
+    // fontWeight: '600', // Remove bold
+    color: '#000000', // Blue color
     marginRight: 2,
+    fontWeight: '400', // Normal font
   },
   regularPriceRow: {
     flexDirection: 'row',

@@ -134,7 +134,7 @@ export const useFavorites = () => {
     } else {
       setFavorites([]);
     }
-  }, [user, loadFavorites]);
+  }, [user]); // Only depend on user, not loadFavorites, since loadFavorites already depends on user
 
   return {
     favorites,

@@ -154,7 +154,10 @@ export default function HomeScreen() {
       />
 
       {/* Category Icons */}
-      <CategoryIcons />
+      <CategoryIcons 
+        showHeader={true}
+        screenType="home"
+      />
 
       {/* Best Seller Carousel */}
       <SwipeCarousel
@@ -166,6 +169,7 @@ export default function HomeScreen() {
       <FilterButtons
         selectedFilter={selectedFilter}
         onFilterSelect={handleFilterChange}
+        screenType="home"
       />
 
       {/* Stores Section Header */}

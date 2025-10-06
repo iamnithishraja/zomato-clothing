@@ -21,6 +21,7 @@ interface FilterButtonsProps {
   selectedFilter: string | null;
   onFilterSelect: (filterId: string) => void;
   filterType?: 'product' | 'search';
+  screenType?: 'home' | 'category'; // Screen type to determine which filters to show
 }
 
 const PRODUCT_FILTER_OPTIONS: FilterOption[] = [
@@ -32,6 +33,15 @@ const PRODUCT_FILTER_OPTIONS: FilterOption[] = [
   { id: 'new', name: 'New Arrivals', icon: 'sparkles-outline' },
   { id: 'bestseller', name: 'Best Sellers', icon: 'star-outline' },
   { id: 'instock', name: 'In Stock', icon: 'checkmark-circle-outline' },
+];
+
+// Limited filter options for category screen - only gender-based filters
+const CATEGORY_FILTER_OPTIONS: FilterOption[] = [
+  { id: 'men', name: 'Men', icon: 'man-outline' },
+  { id: 'women', name: 'Women', icon: 'woman-outline' },
+  { id: 'kids', name: 'Kids', icon: 'people-outline' },
+  { id: 'unisex', name: 'Unisex', icon: 'people-outline' },
+  { id: 'new', name: 'New Arrivals', icon: 'sparkles-outline' },
 ];
 
 const SEARCH_FILTER_OPTIONS: FilterOption[] = [
@@ -48,8 +58,17 @@ const FilterButtons: React.FC<FilterButtonsProps> = ({
   selectedFilter,
   onFilterSelect,
   filterType = 'product',
+  screenType = 'home',
 }) => {
-  const filterOptions = filterType === 'search' ? SEARCH_FILTER_OPTIONS : PRODUCT_FILTER_OPTIONS;
+  let filterOptions: FilterOption[];
+  
+  if (filterType === 'search') {
+    filterOptions = SEARCH_FILTER_OPTIONS;
+  } else if (screenType === 'category') {
+    filterOptions = CATEGORY_FILTER_OPTIONS;
+  } else {
+    filterOptions = PRODUCT_FILTER_OPTIONS;
+  }
 
   return (
     <View style={styles.container}>

@@ -15,6 +15,8 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface CategoryIconsProps {
   onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
+  showHeader?: boolean; // Whether to show the "Shop by Category" header
+  screenType?: 'home' | 'category'; // Screen type to determine behavior
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -92,7 +94,11 @@ const getImageForSubcategory = (subcategory: string): string => {
   return imageMap[subcategory] || 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png';
 };
 
-const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
+const CategoryIcons: React.FC<CategoryIconsProps> = ({ 
+  onCategoryPress, 
+  showHeader = true, 
+  screenType = 'home' 
+}) => {
   const router = useRouter();
   const { user } = useAuth();
   
@@ -102,34 +108,41 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({ onCategoryPress }) => {
   const handleCategoryPress = (subcategory: string) => {
     console.log(`Category button pressed: ${subcategory}`);
     
-    try {
-      // Navigate to category screen immediately
-      let categorySlug = subcategory.toLowerCase().replace(/\s+/g, '-');
-      
-      // Handle special cases
-      if (subcategory === 'T-Shirts') {
-        categorySlug = 't-shirts';
+    if (screenType === 'category' && onCategoryPress) {
+      // On category screen, use the callback to update the same screen
+      onCategoryPress(subcategory);
+    } else {
+      // On home screen, navigate to category screen
+      try {
+        let categorySlug = subcategory.toLowerCase().replace(/\s+/g, '-');
+        
+        // Handle special cases
+        if (subcategory === 'T-Shirts') {
+          categorySlug = 't-shirts';
+        }
+        
+        console.log(`Navigating to category: ${categorySlug} (from subcategory: ${subcategory})`);
+        router.push(`/category/${categorySlug}` as any);
+        
+        // Call the optional callback if provided (but don't wait for it)
+        if (onCategoryPress) {
+          onCategoryPress(subcategory);
+        }
+      } catch (error) {
+        console.error(`Error navigating to category ${subcategory}:`, error);
       }
-      
-      console.log(`Navigating to category: ${categorySlug} (from subcategory: ${subcategory})`);
-      router.push(`/category/${categorySlug}` as any);
-      
-      // Call the optional callback if provided (but don't wait for it)
-      if (onCategoryPress) {
-        onCategoryPress(subcategory);
-      }
-    } catch (error) {
-      console.error(`Error navigating to category ${subcategory}:`, error);
     }
   };
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Shop by Category</Text>
-        <TouchableOpacity activeOpacity={0.7}>
-          <Text style={styles.seeAllText}>See All</Text>
-        </TouchableOpacity>
-      </View>
+      {showHeader && (
+        <View style={styles.header}>
+          <Text style={styles.title}>Shop by Category</Text>
+          <TouchableOpacity activeOpacity={0.7}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       
       <ScrollView
         horizontal

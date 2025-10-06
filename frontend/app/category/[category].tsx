@@ -16,7 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import ProductCard from '@/components/user/ProductCard';
-import FilterModal, { FilterOptions } from '@/components/user/FilterModal';
+import FilterModal from '@/components/user/FilterModal';
+import type { ProductFilters } from '@/types/filters';
+import CategoryIcons from '@/components/user/CategoryIcons';
+import FilterButtons from '@/components/user/FilterButtons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
@@ -30,20 +33,28 @@ export default function CategoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<FilterOptions>({
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ProductFilters>({
     priceRange: { min: 0, max: 10000 },
-    categories: [],
+    category: [],
+    subcategory: [],
     sizes: [],
-    brands: [],
-    sortBy: 'newest',
+    materials: [],
+    fits: [],
+    patterns: [],
+    seasons: [],
+    isNewArrival: false,
+    isBestSeller: false,
+    isActive: true,
+    isOnSale: false,
     inStock: false,
+    sortBy: 'newest',
   });
 
-  // Convert category slug to subcategory name - memoized to prevent multiple conversions
-  const subcategoryName = useMemo(() => {
-    if (!category || typeof category !== 'string') return '';
-    
-    let converted = category
+  // Helper function to convert category slug to subcategory name
+  const convertCategorySlug = useCallback((categorySlug: string) => {
+    let converted = categorySlug
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
@@ -53,9 +64,75 @@ export default function CategoryScreen() {
       converted = 'T-Shirts';
     }
     
-    // Category conversion completed
     return converted;
-  }, [category]);
+  }, []);
+
+  // Convert category slug to subcategory name - memoized to prevent multiple conversions
+  const subcategoryName = useMemo(() => {
+    // Use selectedCategory if it's set (from category selection), otherwise use URL parameter
+    const categoryToUse = selectedCategory || category;
+    
+    if (!categoryToUse || typeof categoryToUse !== 'string') return '';
+    
+    return convertCategorySlug(categoryToUse);
+  }, [selectedCategory, category, convertCategorySlug]);
+
+  // Initialize selected category from URL parameter on mount
+  useEffect(() => {
+    if (category && typeof category === 'string' && !selectedCategory) {
+      setSelectedCategory(convertCategorySlug(category));
+    }
+  }, [category, selectedCategory, convertCategorySlug]);
+
+  // Apply filters based on selected filter
+  const applyFilters = useCallback((filterId: string) => {
+    let filtered = [...products];
+
+    switch (filterId) {
+      case 'men':
+        filtered = filtered.filter(product => product.category === 'Men');
+        break;
+      case 'women':
+        filtered = filtered.filter(product => product.category === 'Women');
+        break;
+      case 'kids':
+        filtered = filtered.filter(product => product.category === 'Kids');
+        break;
+      case 'unisex':
+        filtered = filtered.filter(product => product.category === 'Unisex');
+        break;
+      case 'new':
+        // Filter for new arrivals (products created in last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        filtered = filtered.filter(product => 
+          new Date(product.createdAt) > thirtyDaysAgo
+        );
+        break;
+      default:
+        // No additional filtering - show all products for the subcategory
+        break;
+    }
+
+    setFilteredProducts(filtered);
+  }, [products]);
+
+  // Handle category selection from CategoryIcons
+  const handleCategoryPress = useCallback((subcategory: string) => {
+    console.log(`Category selected on category screen: ${subcategory}`);
+    setSelectedCategory(subcategory);
+    // Reset filter when changing category - no default filter selected
+    setSelectedFilter(null);
+    // The loadProducts function will be triggered by the useEffect when subcategoryName changes
+    // No navigation needed - just update the current screen
+  }, []);
+
+  // Handle filter selection from FilterButtons
+  const handleFilterSelect = useCallback((filterId: string) => {
+    setSelectedFilter(filterId);
+    // Apply filter logic here
+    applyFilters(filterId);
+  }, [applyFilters]);
 
   // Load products for the category
   const loadProducts = useCallback(async () => {
@@ -87,7 +164,7 @@ export default function CategoryScreen() {
         
         // Check favorites for all products
         if (productsData.length > 0) {
-          const productIds = productsData.map(p => p._id);
+          const productIds = productsData.map((p: Product) => p._id);
           checkMultipleFavorites(productIds);
         }
         
@@ -127,7 +204,7 @@ export default function CategoryScreen() {
   }, []);
 
   // Handle filter apply
-  const handleFilterApply = useCallback((filters: FilterOptions) => {
+  const handleFilterApply = useCallback((filters: ProductFilters) => {
     setActiveFilters(filters);
     
     let filtered = [...products];
@@ -140,17 +217,23 @@ export default function CategoryScreen() {
     }
 
     // Apply category filter
-    if (filters.categories.length > 0) {
+    if (filters.category && filters.category.length > 0) {
       filtered = filtered.filter(product => 
-        filters.categories.includes(product.category) || 
-        filters.categories.includes(product.subcategory)
+        filters.category!.includes(product.category)
+      );
+    }
+
+    // Apply subcategory filter
+    if (filters.subcategory && filters.subcategory.length > 0) {
+      filtered = filtered.filter(product => 
+        filters.subcategory!.includes(product.subcategory)
       );
     }
 
     // Apply size filter
-    if (filters.sizes.length > 0) {
+    if (filters.sizes && filters.sizes.length > 0) {
       filtered = filtered.filter(product => 
-        product.sizes.some(size => filters.sizes.includes(size))
+        product.sizes.some(size => filters.sizes!.includes(size))
       );
     }
 
@@ -173,21 +256,35 @@ export default function CategoryScreen() {
       case 'oldest':
         filtered.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         break;
-      case 'rating':
-        filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      case 'name_asc':
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
         break;
-      case 'popularity':
-        filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
+      case 'name_desc':
+        filtered.sort((a, b) => b.name.localeCompare(a.name));
         break;
     }
 
     setFilteredProducts(filtered);
   }, [products]);
 
-  // Load products on mount
+  // Apply filters when products or selectedFilter changes
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (products.length > 0) {
+      if (selectedFilter) {
+        applyFilters(selectedFilter);
+      } else {
+        // If no filter is selected, show all products for the subcategory
+        setFilteredProducts(products);
+      }
+    }
+  }, [products, selectedFilter, applyFilters]);
+
+  // Load products when subcategory changes (either from URL or category selection)
+  useEffect(() => {
+    if (subcategoryName) {
+      loadProducts();
+    }
+  }, [subcategoryName, loadProducts]);
 
   // Use the same subcategory name for display
   const formattedCategoryName = subcategoryName || 'Category';
@@ -234,11 +331,8 @@ export default function CategoryScreen() {
         
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>
-            {formattedCategoryName}
+            {selectedCategory || formattedCategoryName}
           </Text>
-          {/* <Text style={styles.headerSubtitle}>
-            {products.length} {products.length === 1 ? 'item' : 'items'}
-          </Text> */}
         </View>
         
         <TouchableOpacity 
@@ -250,7 +344,26 @@ export default function CategoryScreen() {
         </TouchableOpacity>
       </View>
     </LinearGradient>
-  ), [formattedCategoryName, handleFilterPress, router]);
+  ), [selectedCategory, formattedCategoryName, handleFilterPress, router]);
+
+  const renderListHeader = useCallback(() => (
+    <>
+      {/* Category Icons */}
+      <CategoryIcons 
+        onCategoryPress={handleCategoryPress}
+        showHeader={false}
+        screenType="category"
+      />
+
+      {/* Filter Buttons */}
+      <FilterButtons
+        selectedFilter={selectedFilter}
+        onFilterSelect={handleFilterSelect}
+        filterType="product"
+        screenType="category"
+      />
+    </>
+  ), [handleCategoryPress, selectedFilter, handleFilterSelect]);
 
   return (
     <View style={styles.container}>
@@ -269,6 +382,7 @@ export default function CategoryScreen() {
           numColumns={1}
           contentContainerStyle={styles.flatListContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={renderListHeader}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -339,7 +453,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   flatListContent: {
-    paddingTop: 20,
     paddingBottom: 120, // Extra padding for tab bar
   },
   emptyState: {

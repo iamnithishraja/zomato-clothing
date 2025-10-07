@@ -6,6 +6,8 @@ import {
   StyleSheet,
   Image,
   Dimensions,
+  Share,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -38,6 +40,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
 
   const handleFavoritePress = async () => {
     await toggleFavorite(product._id);
+  };
+
+  const handleSharePress = async () => {
+    try {
+      const shareMessage = `Check out this amazing product: ${product.name}\nPrice: ₹${formatPrice(product.price)}\nFrom: ${product.storeId.storeName}`;
+      
+      await Share.share({
+        message: shareMessage,
+        title: product.name,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Unable to share this product');
+    }
   };
 
   const handleAddToCart = () => {
@@ -131,22 +146,41 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
             </Text>
           )}
 
-          {/* Favorites Button */}
-          <TouchableOpacity 
-            style={styles.favoriteButton} 
-            onPress={(e) => {
-              e.stopPropagation();
-              handleFavoritePress();
-            }}
-            activeOpacity={0.7}
-            disabled={isLoading}
-          >
-            <Ionicons 
-              name={isFavorite(product._id) ? "heart" : "heart-outline"} 
-              size={20} 
-              color={isFavorite(product._id) ? "#EF4444" : "#000000"} 
-            />
-          </TouchableOpacity>
+          {/* Favorites and Share Buttons */}
+          <View style={{ flexDirection: 'row', gap: 8, alignSelf: 'flex-start' }}>
+            {/* Favorites Button */}
+            <TouchableOpacity 
+              style={styles.favoriteButton} 
+              onPress={(e) => {
+                e.stopPropagation();
+                handleFavoritePress();
+              }}
+              activeOpacity={0.7}
+              disabled={isLoading}
+            >
+              <Ionicons 
+                name={isFavorite(product._id) ? "heart" : "heart-outline"} 
+                size={20} 
+                color={isFavorite(product._id) ? "#EF4444" : "#000000"} 
+              />
+            </TouchableOpacity>
+
+            {/* Share Button */}
+            <TouchableOpacity 
+              style={styles.favoriteButton} 
+              onPress={(e) => {
+                e.stopPropagation();
+                handleSharePress();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="share-outline" 
+                size={20} 
+                color="#000000" 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Right Section: Product Image with Add to Cart */}
@@ -303,7 +337,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    alignSelf: 'flex-start',
   },
   imageContainer: {
     width: imageWidth,

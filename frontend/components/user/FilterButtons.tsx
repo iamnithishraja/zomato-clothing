@@ -127,8 +127,7 @@ const FilterButtons: React.FC<FilterButtonsProps> = ({
 };
 const styles = StyleSheet.create({
   container: {
-    marginTop: 10,
-    paddingHorizontal: 16,
+    marginLeft: 26,
   },
   scrollView: {
     flexGrow: 0,
@@ -138,21 +137,24 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    minHeight: 44,
   },
   selectedFilterButton: {
     backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.25,
+    elevation: 6,
+    transform: [{ scale: 1.02 }],
   },
   buttonContent: {
     flexDirection: 'row',

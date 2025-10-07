@@ -18,7 +18,8 @@ import { Colors } from '@/constants/colors';
 import ProductCard from '@/components/user/ProductCard';
 import FilterModal from '@/components/user/FilterModal';
 import type { ProductFilters } from '@/types/filters';
-import CategoryIcons from '@/components/user/CategoryIcons';
+import SearchBar from '@/components/user/SearchBar';
+import SpecificationFilters, { SpecificationFilters as SpecFilters } from '@/components/user/SpecificationFilters';
 import FilterButtons from '@/components/user/FilterButtons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
@@ -50,6 +51,13 @@ export default function CategoryScreen() {
     isOnSale: false,
     inStock: false,
     sortBy: 'newest',
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [specificationFilters, setSpecificationFilters] = useState<SpecFilters>({
+    materials: [],
+    fits: [],
+    patterns: [],
+    seasons: []
   });
 
   // Helper function to convert category slug to subcategory name
@@ -117,15 +125,66 @@ export default function CategoryScreen() {
     setFilteredProducts(filtered);
   }, [products]);
 
-  // Handle category selection from CategoryIcons
-  const handleCategoryPress = useCallback((subcategory: string) => {
-    console.log(`Category selected on category screen: ${subcategory}`);
-    setSelectedCategory(subcategory);
-    // Reset filter when changing category - no default filter selected
-    setSelectedFilter(null);
-    // The loadProducts function will be triggered by the useEffect when subcategoryName changes
-    // No navigation needed - just update the current screen
-  }, []);
+  // Handle search
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    // Filter products based on search query
+    if (query.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter(product => 
+        product.name.toLowerCase().includes(query.toLowerCase()) ||
+        product.description?.toLowerCase().includes(query.toLowerCase()) ||
+        product.category.toLowerCase().includes(query.toLowerCase()) ||
+        product.subcategory.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [products]);
+
+  // Handle specification filters
+  const handleSpecificationFilters = useCallback((filters: SpecFilters) => {
+    setSpecificationFilters(filters);
+    
+    let filtered = [...products];
+    
+    // Apply search filter first
+    if (searchQuery.trim() !== '') {
+      filtered = filtered.filter(product => 
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.subcategory.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply specification filters
+    if (filters.materials.length > 0) {
+      filtered = filtered.filter(product => 
+        product.specifications?.material && filters.materials.includes(product.specifications.material)
+      );
+    }
+    
+    if (filters.fits.length > 0) {
+      filtered = filtered.filter(product => 
+        product.specifications?.fit && filters.fits.includes(product.specifications.fit)
+      );
+    }
+    
+    if (filters.patterns.length > 0) {
+      filtered = filtered.filter(product => 
+        product.specifications?.pattern && filters.patterns.includes(product.specifications.pattern)
+      );
+    }
+    
+    if (filters.seasons.length > 0) {
+      filtered = filtered.filter(product => 
+        product.season && filters.seasons.includes(product.season)
+      );
+    }
+    
+    setFilteredProducts(filtered);
+  }, [products, searchQuery]);
 
   // Handle filter selection from FilterButtons
   const handleFilterSelect = useCallback((filterId: string) => {
@@ -267,17 +326,74 @@ export default function CategoryScreen() {
     setFilteredProducts(filtered);
   }, [products]);
 
-  // Apply filters when products or selectedFilter changes
+  // Apply filters when products, selectedFilter, or search query changes
   useEffect(() => {
     if (products.length > 0) {
-      if (selectedFilter) {
-        applyFilters(selectedFilter);
-      } else {
-        // If no filter is selected, show all products for the subcategory
-        setFilteredProducts(products);
+      let filtered = [...products];
+      
+      // Apply search filter
+      if (searchQuery.trim() !== '') {
+        filtered = filtered.filter(product => 
+          product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.subcategory.toLowerCase().includes(searchQuery.toLowerCase())
+        );
       }
+      
+      // Apply specification filters
+      if (specificationFilters.materials.length > 0) {
+        filtered = filtered.filter(product => 
+          product.specifications?.material && specificationFilters.materials.includes(product.specifications.material)
+        );
+      }
+      
+      if (specificationFilters.fits.length > 0) {
+        filtered = filtered.filter(product => 
+          product.specifications?.fit && specificationFilters.fits.includes(product.specifications.fit)
+        );
+      }
+      
+      if (specificationFilters.patterns.length > 0) {
+        filtered = filtered.filter(product => 
+          product.specifications?.pattern && specificationFilters.patterns.includes(product.specifications.pattern)
+        );
+      }
+      
+      if (specificationFilters.seasons.length > 0) {
+        filtered = filtered.filter(product => 
+          product.season && specificationFilters.seasons.includes(product.season)
+        );
+      }
+      
+      // Apply category filter if selected
+      if (selectedFilter) {
+        switch (selectedFilter) {
+          case 'men':
+            filtered = filtered.filter(product => product.category === 'Men');
+            break;
+          case 'women':
+            filtered = filtered.filter(product => product.category === 'Women');
+            break;
+          case 'kids':
+            filtered = filtered.filter(product => product.category === 'Kids');
+            break;
+          case 'unisex':
+            filtered = filtered.filter(product => product.category === 'Unisex');
+            break;
+          case 'new':
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            filtered = filtered.filter(product => 
+              new Date(product.createdAt) > thirtyDaysAgo
+            );
+            break;
+        }
+      }
+      
+      setFilteredProducts(filtered);
     }
-  }, [products, selectedFilter, applyFilters]);
+  }, [products, selectedFilter, searchQuery, specificationFilters]);
 
   // Load products when subcategory changes (either from URL or category selection)
   useEffect(() => {
@@ -347,23 +463,36 @@ export default function CategoryScreen() {
   ), [selectedCategory, formattedCategoryName, handleFilterPress, router]);
 
   const renderListHeader = useCallback(() => (
-    <>
-      {/* Category Icons */}
-      <CategoryIcons 
-        onCategoryPress={handleCategoryPress}
-        showHeader={false}
-        screenType="category"
-      />
+    <View style={styles.listHeaderContainer}>
+      {/* Search Bar */}
+      <View style={styles.searchBarContainer}>
+        <SearchBar 
+          onSearch={handleSearch}
+          placeholder="Search products..."
+          initialValue={searchQuery}
+          showNavigation={false}
+        />
+      </View>
+
+      {/* Specification Filters */}
+      <View style={styles.filtersContainer}>
+        <SpecificationFilters
+          onFilterChange={handleSpecificationFilters}
+          initialFilters={specificationFilters}
+        />
+      </View>
 
       {/* Filter Buttons */}
-      <FilterButtons
-        selectedFilter={selectedFilter}
-        onFilterSelect={handleFilterSelect}
-        filterType="product"
-        screenType="category"
-      />
-    </>
-  ), [handleCategoryPress, selectedFilter, handleFilterSelect]);
+      <View style={styles.categoryFiltersContainer}>
+        <FilterButtons
+          selectedFilter={selectedFilter}
+          onFilterSelect={handleFilterSelect}
+          filterType="product"
+          screenType="category"
+        />
+      </View>
+    </View>
+  ), [handleSearch, searchQuery, handleSpecificationFilters, specificationFilters, selectedFilter, handleFilterSelect]);
 
   return (
     <View style={styles.container}>
@@ -454,6 +583,24 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingBottom: 120, // Extra padding for tab bar
+  },
+  listHeaderContainer: {
+    backgroundColor: Colors.background,
+  },
+  searchBarContainer: {
+    paddingTop: 4,
+    paddingBottom: 8,
+    backgroundColor: Colors.background,
+    zIndex: 10,
+  },
+  filtersContainer: {
+    backgroundColor: Colors.background,
+    paddingVertical: 4,
+  },
+  categoryFiltersContainer: {
+    paddingTop: 4,
+    paddingBottom: 12,
+    backgroundColor: Colors.background,
   },
   emptyState: {
     flex: 1,

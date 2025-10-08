@@ -19,7 +19,7 @@ import ProductCard from '@/components/user/ProductCard';
 import FilterModal from '@/components/user/FilterModal';
 import type { ProductFilters } from '@/types/filters';
 import SearchBar from '@/components/user/SearchBar';
-import SpecificationFilters, { SpecificationFilters as SpecFilters } from '@/components/user/SpecificationFilters';
+import SpecificationIcons from '@/components/user/SpecificationIcons';
 import FilterButtons from '@/components/user/FilterButtons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
@@ -53,12 +53,7 @@ export default function CategoryScreen() {
     sortBy: 'newest',
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [specificationFilters, setSpecificationFilters] = useState<SpecFilters>({
-    materials: [],
-    fits: [],
-    patterns: [],
-    seasons: []
-  });
+  const [selectedSpecification, setSelectedSpecification] = useState<{ value: string; category: string } | null>(null);
 
   // Helper function to convert category slug to subcategory name
   const convertCategorySlug = useCallback((categorySlug: string) => {
@@ -142,49 +137,15 @@ export default function CategoryScreen() {
     }
   }, [products]);
 
-  // Handle specification filters
-  const handleSpecificationFilters = useCallback((filters: SpecFilters) => {
-    setSpecificationFilters(filters);
-    
-    let filtered = [...products];
-    
-    // Apply search filter first
-    if (searchQuery.trim() !== '') {
-      filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.subcategory.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+  // Handle specification selection from SpecificationIcons
+  const handleSpecificationSelect = useCallback((spec: string, category: string) => {
+    // If the same specification is selected, deselect it
+    if (selectedSpecification?.value === spec && selectedSpecification?.category === category) {
+      setSelectedSpecification(null);
+    } else {
+      setSelectedSpecification({ value: spec, category });
     }
-    
-    // Apply specification filters
-    if (filters.materials.length > 0) {
-      filtered = filtered.filter(product => 
-        product.specifications?.material && filters.materials.includes(product.specifications.material)
-      );
-    }
-    
-    if (filters.fits.length > 0) {
-      filtered = filtered.filter(product => 
-        product.specifications?.fit && filters.fits.includes(product.specifications.fit)
-      );
-    }
-    
-    if (filters.patterns.length > 0) {
-      filtered = filtered.filter(product => 
-        product.specifications?.pattern && filters.patterns.includes(product.specifications.pattern)
-      );
-    }
-    
-    if (filters.seasons.length > 0) {
-      filtered = filtered.filter(product => 
-        product.season && filters.seasons.includes(product.season)
-      );
-    }
-    
-    setFilteredProducts(filtered);
-  }, [products, searchQuery]);
+  }, [selectedSpecification]);
 
   // Handle filter selection from FilterButtons
   const handleFilterSelect = useCallback((filterId: string) => {
@@ -341,29 +302,30 @@ export default function CategoryScreen() {
         );
       }
       
-      // Apply specification filters
-      if (specificationFilters.materials.length > 0) {
-        filtered = filtered.filter(product => 
-          product.specifications?.material && specificationFilters.materials.includes(product.specifications.material)
-        );
-      }
-      
-      if (specificationFilters.fits.length > 0) {
-        filtered = filtered.filter(product => 
-          product.specifications?.fit && specificationFilters.fits.includes(product.specifications.fit)
-        );
-      }
-      
-      if (specificationFilters.patterns.length > 0) {
-        filtered = filtered.filter(product => 
-          product.specifications?.pattern && specificationFilters.patterns.includes(product.specifications.pattern)
-        );
-      }
-      
-      if (specificationFilters.seasons.length > 0) {
-        filtered = filtered.filter(product => 
-          product.season && specificationFilters.seasons.includes(product.season)
-        );
+      // Apply specification filter
+      if (selectedSpecification) {
+        switch (selectedSpecification.category) {
+          case 'materials':
+            filtered = filtered.filter(product =>
+              product.specifications?.material === selectedSpecification.value
+            );
+            break;
+          case 'fits':
+            filtered = filtered.filter(product =>
+              product.specifications?.fit === selectedSpecification.value
+            );
+            break;
+          case 'patterns':
+            filtered = filtered.filter(product =>
+              product.specifications?.pattern === selectedSpecification.value
+            );
+            break;
+          case 'seasons':
+            filtered = filtered.filter(product =>
+              product.season === selectedSpecification.value
+            );
+            break;
+        }
       }
       
       // Apply category filter if selected
@@ -393,7 +355,7 @@ export default function CategoryScreen() {
       
       setFilteredProducts(filtered);
     }
-  }, [products, selectedFilter, searchQuery, specificationFilters]);
+  }, [products, selectedFilter, searchQuery, selectedSpecification]);
 
   // Load products when subcategory changes (either from URL or category selection)
   useEffect(() => {
@@ -435,6 +397,8 @@ export default function CategoryScreen() {
     <LinearGradient
       colors={Colors.gradients.primary as [string, string]}
       style={styles.header}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
     >
       <View style={styles.headerContent}>
         <TouchableOpacity 
@@ -442,13 +406,16 @@ export default function CategoryScreen() {
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={28} color="#000" />
+          <Ionicons name="arrow-back" size={28} color={Colors.textPrimary} />
         </TouchableOpacity>
         
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>
             {selectedCategory || formattedCategoryName}
           </Text>
+          {/* <Text style={styles.headerSubtitle}>
+            Explore {filteredProducts.length} products
+          </Text> */}
         </View>
         
         <TouchableOpacity 
@@ -456,43 +423,48 @@ export default function CategoryScreen() {
           onPress={handleFilterPress}
           activeOpacity={0.7}
         >
-          <Ionicons name="options-outline" size={28} color="#000" />
+          <Ionicons name="options-outline" size={28} color={Colors.textPrimary} />
         </TouchableOpacity>
       </View>
     </LinearGradient>
-  ), [selectedCategory, formattedCategoryName, handleFilterPress, router]);
+  ), [selectedCategory, formattedCategoryName, handleFilterPress, router, filteredProducts.length]);
 
   const renderListHeader = useCallback(() => (
     <View style={styles.listHeaderContainer}>
-      {/* Search Bar */}
+      {/* Search Bar Section - on top */}
       <View style={styles.searchBarContainer}>
-        <SearchBar 
+        <SearchBar
           onSearch={handleSearch}
-          placeholder="Search products..."
+          placeholder="Search products in this category..."
           initialValue={searchQuery}
           showNavigation={false}
         />
       </View>
 
-      {/* Specification Filters */}
-      <View style={styles.filtersContainer}>
-        <SpecificationFilters
-          onFilterChange={handleSpecificationFilters}
-          initialFilters={specificationFilters}
-        />
+      {/* Category Filters Section - Quick Categories */}
+      <View style={styles.categoryFiltersSection}>
+        <View style={styles.categoryFiltersContainer}>
+          <FilterButtons
+            selectedFilter={selectedFilter}
+            onFilterSelect={handleFilterSelect}
+            filterType="product"
+            screenType="category"
+          />
+        </View>
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.categoryFiltersContainer}>
-        <FilterButtons
-          selectedFilter={selectedFilter}
-          onFilterSelect={handleFilterSelect}
-          filterType="product"
-          screenType="category"
-        />
+      {/* Specification Filters Section */}
+      <View style={styles.specificationsSection}>
+        <View style={styles.filtersContainer}>
+          <SpecificationIcons
+            onSpecificationPress={handleSpecificationSelect}
+            showHeader={false}
+            screenType="category"
+          />
+        </View>
       </View>
     </View>
-  ), [handleSearch, searchQuery, handleSpecificationFilters, specificationFilters, selectedFilter, handleFilterSelect]);
+  ), [handleSearch, searchQuery, handleSpecificationSelect, selectedSpecification, selectedFilter, handleFilterSelect]);
 
   return (
     <View style={styles.container}>
@@ -565,16 +537,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.textPrimary,
     letterSpacing: -0.5,
     marginBottom: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
+    opacity: 0.8,
+    letterSpacing: 0.2,
   },
   filterButton: {
     width: 52,
@@ -586,20 +560,42 @@ const styles = StyleSheet.create({
   },
   listHeaderContainer: {
     backgroundColor: Colors.background,
+    paddingBottom: 8,
   },
   searchBarContainer: {
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingHorizontal: 16,
     backgroundColor: Colors.background,
-    zIndex: 10,
   },
-  filtersContainer: {
+  specificationsSection: {
     backgroundColor: Colors.background,
     paddingVertical: 4,
   },
-  categoryFiltersContainer: {
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filtersContainer: {
+    backgroundColor: Colors.background,
+    paddingVertical: 2,
+  },
+  categoryFiltersSection: {
+    backgroundColor: Colors.background,
     paddingTop: 4,
-    paddingBottom: 12,
+  },
+  categoryFiltersContainer: {
+    paddingTop: 2,
     backgroundColor: Colors.background,
   },
   emptyState: {

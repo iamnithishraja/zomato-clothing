@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   },
   slideContainer: {
     width: width,
-    height: 320,
+    height: 340,
   },
   gradient: {
     flex: 1,

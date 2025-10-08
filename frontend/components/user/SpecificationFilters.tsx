@@ -47,9 +47,9 @@ const SpecificationFilters: React.FC<SpecificationFiltersProps> = ({
     onFilterChange(newFilters);
   };
 
-  // Combine all filter options into one array with category info
+  // Combine all filter options into one array with category info and category-like icons
   const allFilterOptions = [
-    ...PRODUCT_MATERIALS.map(item => ({ value: item, category: 'materials' as keyof SpecificationFilters, icon: 'shirt-outline' })),
+    ...PRODUCT_MATERIALS.map(item => ({ value: item, category: 'materials' as keyof SpecificationFilters, icon: 'layers-outline' })),
     ...PRODUCT_FITS.map(item => ({ value: item, category: 'fits' as keyof SpecificationFilters, icon: 'resize-outline' })),
     ...PRODUCT_PATTERNS.map(item => ({ value: item, category: 'patterns' as keyof SpecificationFilters, icon: 'color-palette-outline' })),
     ...PRODUCT_SEASONS.map(item => ({ value: item, category: 'seasons' as keyof SpecificationFilters, icon: 'sunny-outline' })),
@@ -76,12 +76,12 @@ const SpecificationFilters: React.FC<SpecificationFiltersProps> = ({
               onPress={() => handleFilterToggle(option.category, option.value)}
               activeOpacity={0.8}
             >
-              {/* <Ionicons 
+              <Ionicons 
                 name={option.icon as any} 
                 size={16} 
                 color={isSelected ? Colors.background : Colors.textSecondary} 
                 style={styles.chipIcon}
-              /> */}
+              />
               <Text style={[
                 styles.modernChipText,
                 isSelected && styles.modernChipTextSelected
@@ -122,40 +122,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   scrollContainer: {
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 16,
+    gap: 0,
   },
   modernChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 28,
     backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 0,
-    marginRight: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginRight: 12,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-    minHeight: 40,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    minHeight: 48,
   },
   modernChipSelected: {
     backgroundColor: Colors.primary,
     shadowColor: Colors.primary,
-    shadowOpacity: 0.25,
-    elevation: 6,
-    transform: [{ scale: 1.02 }],
+    shadowOpacity: 0.3,
+    elevation: 8,
+    transform: [{ scale: 1.05 }],
+    borderColor: Colors.primary,
   },
   chipIcon: {
-    marginRight: 6,
+    marginRight: 8,
   },
   modernChipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
   modernChipTextSelected: {
     color: Colors.background,

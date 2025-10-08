@@ -141,12 +141,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     marginRight: 12,
-    borderWidth: 0,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
     minHeight: 44,
   },
   selectedFilterButton: {

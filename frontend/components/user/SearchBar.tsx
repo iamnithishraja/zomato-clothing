@@ -90,8 +90,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
       >
         <View style={styles.searchIconContainer}>
           <Ionicons 
-            name="search-outline" 
-            size={22} 
+            name="search" 
+            size={24} 
             color={isFocused ? Colors.primary : Colors.textSecondary} 
           />
         </View>
@@ -141,7 +141,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 8,
     zIndex: 1,
   },
@@ -161,8 +161,10 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   searchIconContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchInput: {
     flex: 1,

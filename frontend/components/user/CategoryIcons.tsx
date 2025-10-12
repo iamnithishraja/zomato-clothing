@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,19 @@ import {
   ScrollView,
   Dimensions,
   Image,
+  InteractionManager,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { PRODUCT_SUBCATEGORIES } from '@/types/product';
 import { useAuth } from '@/contexts/AuthContext';
+import CategoryGridModal, { GridItem } from '@/components/ui/CategoryGridModal';
 
 interface CategoryIconsProps {
   onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
   showHeader?: boolean; // Whether to show the "Shop by Category" header
   screenType?: 'home' | 'category'; // Screen type to determine behavior
+  selectedSubcategory?: string; // For category screen: highlight selected
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -54,7 +57,7 @@ const getAllSubcategories = (userGender?: 'Male' | 'Female' | 'Other') => {
 };
 
 // Image mapping for subcategories with fashion category images
-const getImageForSubcategory = (subcategory: string): string => {
+export const getImageForSubcategory = (subcategory: string): string => {
   const imageMap: { [key: string]: string } = {
     // Tops & Shirts
     'Shirts': 'https://cdn-icons-png.flaticon.com/128/3046/3046982.png',
@@ -97,10 +100,12 @@ const getImageForSubcategory = (subcategory: string): string => {
 const CategoryIcons: React.FC<CategoryIconsProps> = ({ 
   onCategoryPress, 
   showHeader = true, 
-  screenType = 'home' 
+  screenType = 'home',
+  selectedSubcategory,
 }) => {
   const router = useRouter();
   const { user } = useAuth();
+  const [modalVisible, setModalVisible] = useState(false);
   
   // Get subcategories based on user gender
   const SUBCATEGORIES = getAllSubcategories(user?.gender);
@@ -122,7 +127,10 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
         }
         
         console.log(`Navigating to category: ${categorySlug} (from subcategory: ${subcategory})`);
-        router.push(`/category/${categorySlug}` as any);
+        // Defer navigation until after current interactions to avoid state updates during insertion
+        InteractionManager.runAfterInteractions(() => {
+          router.push(`/category/${categorySlug}` as any);
+        });
         
         // Call the optional callback if provided (but don't wait for it)
         if (onCategoryPress) {
@@ -133,12 +141,23 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
       }
     }
   };
+  const modalItems: GridItem[] = useMemo(() => (
+    SUBCATEGORIES.map((sc) => ({ key: sc, label: sc, iconUri: getImageForSubcategory(sc) }))
+  ), [SUBCATEGORIES]);
+
+  const handleSelectFromModal = (item: GridItem) => {
+    // Close modal first to prevent state updates during navigation transition
+    setModalVisible(false);
+    // Navigate on next tick to ensure modal state commits before routing
+    setTimeout(() => handleCategoryPress(item.label), 0);
+  };
+
   return (
     <View style={styles.container}>
       {showHeader && (
         <View style={styles.header}>
           <Text style={styles.title}>Shop by Category</Text>
-          <TouchableOpacity activeOpacity={0.7}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setModalVisible(true)}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
@@ -151,6 +170,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
         style={styles.scrollView}
       >
         {SUBCATEGORIES.map((subcategory, index) => {
+          const isSelected = screenType === 'category' && selectedSubcategory === subcategory;
           return (
             <TouchableOpacity
               key={subcategory}
@@ -177,17 +197,24 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
               <Text style={styles.categoryName} numberOfLines={2}>
                 {subcategory}
               </Text>
+              {isSelected && <View style={styles.selectedUnderline} />}
             </TouchableOpacity>
           );
         })}
       </ScrollView>
+      <CategoryGridModal
+        visible={modalVisible}
+        title="Categories"
+        items={modalItems}
+        onSelect={handleSelectFromModal}
+        onClose={() => setModalVisible(false)}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 14,
     zIndex: 10, // Ensure category icons are above other elements
     elevation: 10, // For Android
   },
@@ -253,6 +280,14 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.1)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  selectedUnderline: {
+    height: 3,
+    width: 28,
+    borderRadius: 2,
+    backgroundColor: Colors.primary,
+    alignSelf: 'center',
+    marginTop: 6,
   },
 });
 

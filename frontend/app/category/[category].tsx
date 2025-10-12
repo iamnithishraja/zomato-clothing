@@ -19,7 +19,7 @@ import ProductCard from '@/components/user/ProductCard';
 import FilterModal from '@/components/user/FilterModal';
 import type { ProductFilters } from '@/types/filters';
 import SearchBar from '@/components/user/SearchBar';
-import SpecificationIcons from '@/components/user/SpecificationIcons';
+import CategoryIcons from '@/components/user/CategoryIcons';
 import FilterButtons from '@/components/user/FilterButtons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
@@ -453,18 +453,19 @@ export default function CategoryScreen() {
         </View>
       </View>
 
-      {/* Specification Filters Section */}
+      {/* Category Icons Section (replaces specification icons) */}
       <View style={styles.specificationsSection}>
         <View style={styles.filtersContainer}>
-          <SpecificationIcons
-            onSpecificationPress={handleSpecificationSelect}
+          <CategoryIcons
             showHeader={false}
             screenType="category"
+            selectedSubcategory={selectedCategory}
+            onCategoryPress={(sc) => setSelectedCategory(sc)}
           />
         </View>
       </View>
     </View>
-  ), [handleSearch, searchQuery, handleSpecificationSelect, selectedSpecification, selectedFilter, handleFilterSelect]);
+  ), [handleSearch, searchQuery, selectedFilter, handleFilterSelect, selectedCategory]);
 
   return (
     <View style={styles.container}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 
 import CategoryIcons from '@/components/user/CategoryIcons';
@@ -16,12 +18,14 @@ import SwipeCarousel from '@/components/user/SwipeCarousel';
 import FilterButtons from '@/components/user/FilterButtons';
 import ModernStoreCard from '@/components/user/ModernStoreCard';
 import PromotionalBanner from '@/components/user/PromotionalBanner';
+import SearchBar from '@/components/user/SearchBar';
 
 // Import types and API client
 import type { Store, Location } from '@/types/store';
 import apiClient from '@/api/client';
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string | null>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +34,12 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasLoadedData, setHasLoadedData] = useState(false);
 
-  // Load initial data - only load once on mount
+  // Scroll/animation values
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const bannerHeight = 320; // PromotionalBanner visual height
+  const categoryIconsHeight = 160; // Height of category icons section within header
+  const triggerPoint = bannerHeight + categoryIconsHeight; // When sticky elements should appear
+  const [showSticky, setShowSticky] = useState(false);
   const loadData = useCallback(async () => {
     if (hasLoadedData) {
       console.log('Data already loaded, skipping...');
@@ -137,6 +146,49 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - run only once
 
+  // Animated values
+  const bannerTranslateY = scrollY.interpolate({
+    inputRange: [0, bannerHeight],
+    outputRange: [0, -bannerHeight],
+    extrapolate: 'clamp',
+  });
+
+  // Sticky visibility (appear only after triggerPoint)
+  const stickySearchOpacity = scrollY.interpolate({
+    inputRange: [0, triggerPoint - 40, triggerPoint],
+    outputRange: [0, 0, 1],
+    extrapolate: 'clamp',
+  });
+  const stickySearchTranslateY = scrollY.interpolate({
+    inputRange: [0, triggerPoint - 40, triggerPoint],
+    outputRange: [-80, -80, 0],
+    extrapolate: 'clamp',
+  });
+  const stickyIconsOpacity = scrollY.interpolate({
+    inputRange: [0, triggerPoint - 40, triggerPoint],
+    outputRange: [0, 0, 1],
+    extrapolate: 'clamp',
+  });
+  const stickyIconsTranslateY = scrollY.interpolate({
+    inputRange: [0, triggerPoint - 40, triggerPoint],
+    outputRange: [-80, -80, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Handle scroll event
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (e: { nativeEvent?: { contentOffset?: { y?: number } } }) => {
+        const y = e?.nativeEvent?.contentOffset?.y ?? 0;
+        // Enable sticky touch handling right when fade-in begins
+        const shouldShow = y >= (triggerPoint - 40);
+        if (shouldShow !== showSticky) setShowSticky(shouldShow);
+      },
+    }
+  );
+
   const renderStoreCard = useCallback(({ item }: { item: Store }) => (
     <View style={styles.storeCardContainer}>
       <ModernStoreCard store={item} onPress={handleStorePress} />
@@ -145,16 +197,23 @@ export default function HomeScreen() {
 
   const renderHeader = useCallback(() => (
     <>
-      {/* Promotional Banner with Location and Search */}
-      <PromotionalBanner 
-        onOrderPress={handleOrderPress}
-        selectedLocation={selectedLocation}
-        onLocationSelect={setSelectedLocation}
-        onSearch={handleSearch}
-      />
+      {/* Promotional Banner (covers status bar) */}
+      <Animated.View
+        style={[
+          styles.bannerContainer,
+          { transform: [{ translateY: bannerTranslateY }] }
+        ]}
+      >
+        <PromotionalBanner
+          onOrderPress={handleOrderPress}
+          selectedLocation={selectedLocation}
+          onLocationSelect={setSelectedLocation}
+          onSearch={handleSearch}
+        />
+      </Animated.View>
 
-      {/* Category Icons */}
-      <CategoryIcons 
+      {/* Category Icons - after banner within list header */}
+      <CategoryIcons
         showHeader={true}
         screenType="home"
       />
@@ -178,26 +237,59 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>
             {searchQuery ? 'Search Results' : 'Nearby Stores'}
           </Text>
-          {/* <Text style={styles.sectionSubtitle}>
-            {stores.length} stores found
-            {products.length > 0 && ` • ${products.length} products found`}
-          </Text> */}
         </View>
       </View>
     </>
-  ), [selectedLocation, handleSearch, bestSellerStores, handleStorePress, selectedFilter, handleFilterChange, searchQuery, handleOrderPress]);
+  ), [selectedLocation, handleSearch, bestSellerStores, handleStorePress, selectedFilter, handleFilterChange, searchQuery, handleOrderPress, bannerTranslateY]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-      
-      <FlatList
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* Sticky Search Bar (always mounted; smooth animation) */}
+      <Animated.View
+        style={[
+          styles.stickySearchBar,
+          {
+            paddingTop: Math.max(insets.top, 14),
+            opacity: stickySearchOpacity,
+            transform: [{ translateY: stickySearchTranslateY }]
+          }
+        ]}
+        pointerEvents={showSticky ? 'box-none' : 'none'}
+      >
+        <SearchBar
+          onSearch={handleSearch}
+          placeholder="Search stores and products..."
+          initialValue={searchQuery}
+          showNavigation={true}
+        />
+      </Animated.View>
+
+      {/* Sticky Category Icons (always mounted; smooth animation) */}
+      <Animated.View
+        style={[
+          styles.stickyCategoryIcons,
+          {
+            paddingTop: 30,
+            opacity: stickyIconsOpacity,
+            transform: [{ translateY: stickyIconsTranslateY }]
+          }
+        ]}
+        pointerEvents={showSticky ? 'box-none' : 'none'}
+      >
+        <CategoryIcons showHeader={false} screenType="home" />
+      </Animated.View>
+
+      <FlatList<Store>
         data={stores}
         renderItem={renderStoreCard}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.flatListContent}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -216,8 +308,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  bannerContainer: {
+    zIndex: 1,
+  },
+  stickySearchBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.background,
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+    zIndex: 10,
+    // Clean top: no shadow/elevation
+  },
+  stickyCategoryIcons: {
+    position: 'absolute',
+    top: 70,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.background,
+    zIndex: 9,
+    // Clean: no elevation
+  },
   flatListContent: {
     paddingBottom: 100, // Extra padding for tab bar
+    paddingTop: 0, // Initial view: banner handles top spacing
   },
   storeCardContainer: {
     // Remove padding - let the card handle its own margins

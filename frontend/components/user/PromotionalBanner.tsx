@@ -253,8 +253,8 @@ const PromotionalBanner: React.FC<PromotionalBannerProps> = ({
       </ScrollView>
 
       {/* Transparent Location Selector Overlay */}
-      <View style={styles.topRow}>
-        <View style={styles.locationContainer}>
+      <View style={styles.topRow} pointerEvents="box-none">
+        <View style={styles.locationContainer} pointerEvents="auto">
           <LocationSelector
             selectedLocation={selectedLocation}
             onLocationSelect={onLocationSelect}
@@ -263,8 +263,10 @@ const PromotionalBanner: React.FC<PromotionalBannerProps> = ({
       </View>
 
       {/* Transparent Search Bar Overlay */}
-      <View style={styles.searchContainer}>
-        <SearchBar onSearch={onSearch} />
+      <View style={styles.searchContainer} pointerEvents="box-none">
+        <View style={styles.searchBarWrapper} pointerEvents="auto">
+          <SearchBar onSearch={onSearch} showNavigation={true} />
+        </View>
       </View>
     </View>
   );
@@ -300,11 +302,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 5, // Reduced z-index to prevent interference
+    zIndex: 15,
     backgroundColor: 'transparent',
+    // Ensure touch events are captured properly
+    elevation: 10,
   },
   locationContainer: {
     flex: 1,
+    // Prevent touch events from bubbling to parent
+    zIndex: 16,
   },
   searchContainer: {
     position: 'absolute',
@@ -313,14 +319,20 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 5, // Reduced z-index to prevent interference
+    zIndex: 20, // Highest z-index for search bar
     backgroundColor: 'transparent',
+    elevation: 10, // Ensure proper layering on Android
+  },
+  searchBarWrapper: {
+    // Ensure touch events are properly captured
+    backgroundColor: 'transparent',
+    zIndex: 21,
+    // Prevent touch events from bubbling to banner content
   },
   sparkleContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
     bottom: 0,
   },
   sparkle: {

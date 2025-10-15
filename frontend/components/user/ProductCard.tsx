@@ -18,16 +18,22 @@ import { Colors } from '@/constants/colors';
 interface ProductCardProps {
   product: Product;
   onPress: (product: Product) => void;
+  isFavorite?: (productId: string) => boolean;
+  onToggleFavorite?: (productId: string) => Promise<boolean> | void;
+  favoritesLoading?: boolean;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = screenWidth - 20; // Reduced margins for wider card
+const cardWidth = screenWidth - 40; // Account for marginHorizontal: 20 on both sides to avoid overflow
 const imageWidth = 140; // Increased image size
 const cardHeight = imageWidth + 60; // Same height maintained
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite, onToggleFavorite, favoritesLoading = false }) => {
   const router = useRouter();
-  const { isFavorite, toggleFavorite, isLoading } = useFavorites();
+  const favoritesHook = useFavorites({ autoLoad: false });
+  const effectiveIsFavorite = isFavorite ?? favoritesHook.isFavorite;
+  const effectiveToggle = onToggleFavorite ?? favoritesHook.toggleFavorite;
+  const effectiveLoading = favoritesLoading ?? favoritesHook.isLoading;
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN');
@@ -39,7 +45,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   };
 
   const handleFavoritePress = async () => {
-    await toggleFavorite(product._id);
+    await effectiveToggle(product._id);
   };
 
   const handleSharePress = async () => {
@@ -156,12 +162,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
                 handleFavoritePress();
               }}
               activeOpacity={0.7}
-              disabled={isLoading}
+              disabled={effectiveLoading}
             >
               <Ionicons 
-                name={isFavorite(product._id) ? "heart" : "heart-outline"} 
+                name={effectiveIsFavorite(product._id) ? "heart" : "heart-outline"} 
                 size={20} 
-                color={isFavorite(product._id) ? "#EF4444" : "#000000"} 
+                color={effectiveIsFavorite(product._id) ? "#EF4444" : "#000000"} 
               />
             </TouchableOpacity>
 

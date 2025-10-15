@@ -28,10 +28,10 @@ import apiClient from '@/api/client';
 export default function CategoryScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams();
-  const { checkMultipleFavorites } = useFavorites();
+  const { checkMultipleFavorites, isFavorite, toggleFavorite, isLoading: favLoading } = useFavorites();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -80,12 +80,7 @@ export default function CategoryScreen() {
     return convertCategorySlug(categoryToUse);
   }, [selectedCategory, category, convertCategorySlug]);
 
-  // Initialize selected category from URL parameter on mount
-  useEffect(() => {
-    if (category && typeof category === 'string' && !selectedCategory) {
-      setSelectedCategory(convertCategorySlug(category));
-    }
-  }, [category, selectedCategory, convertCategorySlug]);
+  // Note: Avoid setting state on mount from URL to prevent updates during insertion
 
   // Apply filters based on selected filter
   const applyFilters = useCallback((filterId: string) => {
@@ -159,12 +154,12 @@ export default function CategoryScreen() {
     if (!subcategoryName) {
       console.error('No subcategory name available');
       setProducts([]);
-      setIsLoading(false);
+      setProductsLoading(false);
       return;
     }
     
     try {
-      setIsLoading(true);
+      setProductsLoading(true);
       
       const response = await apiClient.get('/api/v1/product/subcategory', {
         params: {
@@ -202,7 +197,7 @@ export default function CategoryScreen() {
       );
       setProducts([]);
     } finally {
-      setIsLoading(false);
+      setProductsLoading(false);
     }
   }, [subcategoryName, checkMultipleFavorites]);
 
@@ -368,8 +363,14 @@ export default function CategoryScreen() {
   const formattedCategoryName = subcategoryName || 'Category';
 
   const renderProduct = useCallback(({ item }: { item: Product }) => (
-    <ProductCard product={item} onPress={handleProductPress} />
-  ), [handleProductPress]);
+    <ProductCard 
+      product={item} 
+      onPress={handleProductPress} 
+      isFavorite={isFavorite}
+      onToggleFavorite={toggleFavorite}
+      favoritesLoading={favLoading}
+    />
+  ), [handleProductPress, isFavorite, toggleFavorite, favLoading]);
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
@@ -431,16 +432,6 @@ export default function CategoryScreen() {
 
   const renderListHeader = useCallback(() => (
     <View style={styles.listHeaderContainer}>
-      {/* Search Bar Section - on top */}
-      <View style={styles.searchBarContainer}>
-        <SearchBar
-          onSearch={handleSearch}
-          placeholder="Search products in this category..."
-          initialValue={searchQuery}
-          showNavigation={false}
-        />
-      </View>
-
       {/* Category Filters Section - Quick Categories */}
       <View style={styles.categoryFiltersSection}>
         <View style={styles.categoryFiltersContainer}>
@@ -476,6 +467,16 @@ export default function CategoryScreen() {
       />
       <SafeAreaView style={styles.safeArea}>
         {renderHeader()}
+
+        {/* Sticky SearchBar - stays visible while list scrolls */}
+        <View style={styles.searchBarSticky}>
+          <SearchBar
+            onSearch={handleSearch}
+            placeholder="Search products in this category..."
+            initialValue={searchQuery}
+            showNavigation={false}
+          />
+        </View>
         
         <FlatList
           data={filteredProducts}
@@ -494,7 +495,7 @@ export default function CategoryScreen() {
               progressBackgroundColor={Colors.background}
             />
           }
-          ListEmptyComponent={isLoading ? renderLoadingState : renderEmptyState}
+          ListEmptyComponent={productsLoading ? renderLoadingState : renderEmptyState}
         />
 
         {/* Filter Modal */}
@@ -567,6 +568,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingHorizontal: 16,
     backgroundColor: Colors.background,
+  },
+  searchBarSticky: {
+    backgroundColor: Colors.background,
+    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
   specificationsSection: {
     backgroundColor: Colors.background,

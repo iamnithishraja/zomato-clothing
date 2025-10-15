@@ -10,6 +10,8 @@ import {
   Alert,
   Animated,
 } from 'react-native';
+import type { ListRenderItem } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 
@@ -26,6 +28,7 @@ import apiClient from '@/api/client';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string | null>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,7 +42,6 @@ export default function HomeScreen() {
   const bannerHeight = 320; // PromotionalBanner visual height
   const categoryIconsHeight = 160; // Height of category icons section within header
   const triggerPoint = bannerHeight + categoryIconsHeight; // When sticky elements should appear
-  const [showSticky, setShowSticky] = useState(false);
   const loadData = useCallback(async () => {
     if (hasLoadedData) {
       console.log('Data already loaded, skipping...');
@@ -131,9 +133,8 @@ export default function HomeScreen() {
 
   // Handle store press
   const handleStorePress = useCallback((store: Store) => {
-    // Navigate to store details screen - implement navigation later
-    console.log('Store pressed:', store);
-  }, []);
+    router.push({ pathname: '/store/[storeId]', params: { storeId: store._id } });
+  }, [router]);
 
   // Handle order press
   const handleOrderPress = useCallback(() => {
@@ -178,18 +179,10 @@ export default function HomeScreen() {
   // Handle scroll event
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (e: { nativeEvent?: { contentOffset?: { y?: number } } }) => {
-        const y = e?.nativeEvent?.contentOffset?.y ?? 0;
-        // Enable sticky touch handling right when fade-in begins
-        const shouldShow = y >= (triggerPoint - 40);
-        if (shouldShow !== showSticky) setShowSticky(shouldShow);
-      },
-    }
+    { useNativeDriver: true }
   );
 
-  const renderStoreCard = useCallback(({ item }: { item: Store }) => (
+  const renderStoreCard: ListRenderItem<Store> = useCallback(({ item }) => (
     <View style={styles.storeCardContainer}>
       <ModernStoreCard store={item} onPress={handleStorePress} />
     </View>
@@ -242,6 +235,9 @@ export default function HomeScreen() {
     </>
   ), [selectedLocation, handleSearch, bestSellerStores, handleStorePress, selectedFilter, handleFilterChange, searchQuery, handleOrderPress, bannerTranslateY]);
 
+  // Animated FlatList to support native onScroll driver
+  const AnimatedFlatList: any = Animated.createAnimatedComponent(FlatList as any);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -256,7 +252,7 @@ export default function HomeScreen() {
             transform: [{ translateY: stickySearchTranslateY }]
           }
         ]}
-        pointerEvents={showSticky ? 'box-none' : 'none'}
+        pointerEvents="box-none"
       >
         <SearchBar
           onSearch={handleSearch}
@@ -276,12 +272,12 @@ export default function HomeScreen() {
             transform: [{ translateY: stickyIconsTranslateY }]
           }
         ]}
-        pointerEvents={showSticky ? 'box-none' : 'none'}
+        pointerEvents="box-none"
       >
         <CategoryIcons showHeader={false} screenType="home" />
       </Animated.View>
 
-      <FlatList<Store>
+      <AnimatedFlatList
         data={stores}
         renderItem={renderStoreCard}
         keyExtractor={(item) => item._id}

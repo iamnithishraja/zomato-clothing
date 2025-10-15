@@ -17,9 +17,13 @@ import CategoryGridModal, { GridItem } from '@/components/ui/CategoryGridModal';
 
 interface CategoryIconsProps {
   onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
-  showHeader?: boolean; // Whether to show the "Shop by Category" header
+  showHeader?: boolean; // Whether to show the header
   screenType?: 'home' | 'category'; // Screen type to determine behavior
   selectedSubcategory?: string; // For category screen: highlight selected
+  headerTitle?: string; // Custom header title
+  subcategories?: string[]; // Optional whitelist of subcategories to display
+  showSeeAll?: boolean; // Control See All button visibility
+  noMargin?: boolean; // Remove top margin when true
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -102,13 +106,24 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
   showHeader = true, 
   screenType = 'home',
   selectedSubcategory,
+  headerTitle,
+  subcategories,
+  showSeeAll = true,
+  noMargin = false,
 }) => {
   const router = useRouter();
   const { user } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   
   // Get subcategories based on user gender
-  const SUBCATEGORIES = getAllSubcategories(user?.gender);
+  const DEFAULT_SUBCATEGORIES = getAllSubcategories(user?.gender);
+  const SUBCATEGORIES = useMemo(() => {
+    if (subcategories && subcategories.length > 0) {
+      // Keep order as provided, but ensure unique
+      return Array.from(new Set(subcategories));
+    }
+    return DEFAULT_SUBCATEGORIES;
+  }, [subcategories, DEFAULT_SUBCATEGORIES]);
 
   const handleCategoryPress = (subcategory: string) => {
     console.log(`Category button pressed: ${subcategory}`);
@@ -131,11 +146,6 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
         InteractionManager.runAfterInteractions(() => {
           router.push(`/category/${categorySlug}` as any);
         });
-        
-        // Call the optional callback if provided (but don't wait for it)
-        if (onCategoryPress) {
-          onCategoryPress(subcategory);
-        }
       } catch (error) {
         console.error(`Error navigating to category ${subcategory}:`, error);
       }
@@ -153,13 +163,15 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, noMargin && { marginTop: 0 }]}>
       {showHeader && (
         <View style={styles.header}>
-          <Text style={styles.title}>Shop by Category</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setModalVisible(true)}>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>{headerTitle || 'Shop by Category'}</Text>
+          {showSeeAll && (
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setModalVisible(true)}>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
       
@@ -215,8 +227,8 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    marginTop: 14,
     zIndex: 10, // Ensure category icons are above other elements
-    elevation: 10, // For Android
   },
   header: {
     flexDirection: 'row',

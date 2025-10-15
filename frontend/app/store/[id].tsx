@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,10 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+// Removed gradient header per requirement
 import { Colors } from '@/constants/colors';
 import ProductCard from '@/components/user/ProductCard';
+import CategoryIcons from '@/components/user/CategoryIcons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Store } from '@/types/store';
 import type { Product } from '@/types/product';
@@ -33,9 +34,19 @@ export default function StoreDetailScreen() {
   const { checkMultipleFavorites } = useFavorites();
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentImageIndex] = useState(0);
+  const [showStoreCategories, setShowStoreCategories] = useState(true);
+
+  const storeSubcategories = useMemo(() => {
+    const source = products;
+    const set = new Set<string>();
+    source.forEach(p => p.subcategory && set.add(p.subcategory));
+    return Array.from(set);
+  }, [products]);
 
   // Load store details and products
   const loadStoreData = useCallback(async () => {
@@ -71,6 +82,7 @@ export default function StoreDetailScreen() {
       if (productsResponse.data.success) {
         const productsData = productsResponse.data.products || [];
         setProducts(productsData);
+        setFilteredProducts(productsData);
         
         // Check favorites for all products
         if (productsData.length > 0) {
@@ -94,6 +106,18 @@ export default function StoreDetailScreen() {
     await loadStoreData();
     setIsRefreshing(false);
   }, [loadStoreData]);
+
+  // CategoryIcons filter handler
+  const handleCategoryIconPress = useCallback((subcategory: string) => {
+    // toggle selection
+    const next = selectedCategory === subcategory ? null : subcategory;
+    setSelectedCategory(next);
+    if (!next) {
+      setFilteredProducts(products);
+    } else {
+      setFilteredProducts(products.filter(p => p.subcategory === next));
+    }
+  }, [selectedCategory, products]);
 
   // Handle product press
   const handleProductPress = useCallback((product: Product) => {
@@ -171,48 +195,50 @@ export default function StoreDetailScreen() {
   };
 
   const getWorkingDaysText = () => {
-    if (!store.workingDays) return 'Hours not available';
-    
-    const days = Object.entries(store.workingDays)
+    if (!store?.workingDays) return 'Hours not available';
+    const abbrev = (d: string) => d.slice(0, 3).toUpperCase();
+    const openDays = Object.entries(store.workingDays)
       .filter(([_, isOpen]) => isOpen)
-      .map(([day, _]) => day.charAt(0).toUpperCase() + day.slice(1));
-    
-    return days.length > 0 ? `Open ${days.join(', ')}` : 'Hours not available';
+      .map(([day]) => abbrev(day));
+    return openDays.length > 0 ? `Open ${openDays.join(' · ')}` : 'Hours not available';
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <LinearGradient
-          colors={Colors.gradients.primary as [string, string]}
-          style={styles.header}
-        >
+        {/* Header (transparent, no gradient, no share) */}
+        <View style={styles.headerPlain}>
           <View style={styles.headerContent}>
             <TouchableOpacity 
-              style={styles.headerBackButton} 
+              style={styles.headerBackButton}
               onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={28} color="#000" />
+              <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
             </TouchableOpacity>
-            
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle} numberOfLines={1}>
-                {store.storeName}
-              </Text>
+
+            <View style={styles.headerCenter}>
+              <View style={styles.headerIdentityRow}>
+                {/* Avatar from first store image */}
+                <View style={styles.storeAvatar}>
+                  {store.storeImages?.[0] ? (
+                    <Image source={{ uri: store.storeImages[0] }} style={styles.storeAvatarImage} />
+                  ) : (
+                    <View style={styles.storeAvatarPlaceholder}>
+                      <Ionicons name="storefront-outline" size={18} color={Colors.textSecondary} />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  {store.storeName}
+                </Text>
+              </View>
             </View>
-            
-            <TouchableOpacity 
-              style={styles.shareButton} 
-              onPress={() => Alert.alert('Share', 'Share functionality coming soon')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="share-outline" size={28} color="#000" />
-            </TouchableOpacity>
+
+            <View style={styles.headerRight} />
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView 
           style={styles.scrollView}
@@ -227,43 +253,7 @@ export default function StoreDetailScreen() {
             />
           }
         >
-          {/* Store Images */}
-          {store.storeImages && store.storeImages.length > 0 && (
-            <View style={styles.imageSection}>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                style={styles.imageScrollView}
-                contentContainerStyle={styles.imageScrollContent}
-              >
-                {store.storeImages.map((image, index) => (
-                  <View key={index} style={styles.imageContainer}>
-                    <Image
-                      source={{ uri: image }}
-                      style={styles.storeImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                ))}
-              </ScrollView>
-              
-              {/* Pagination Dots */}
-              {store.storeImages.length > 1 && (
-                <View style={styles.paginationContainer}>
-                  {store.storeImages.map((_, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.paginationDot,
-                        index === currentImageIndex && styles.paginationDotActive
-                      ]}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+          {/* Store cover removed per requirement */}
 
           {/* Store Info */}
           <View style={styles.storeInfo}>
@@ -277,17 +267,13 @@ export default function StoreDetailScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.statusContainer}>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: store.isActive ? Colors.success : Colors.error }
-                ]} />
-                <Text style={[
-                  styles.statusText,
-                  { color: store.isActive ? Colors.success : Colors.error }
-                ]}>
-                  {store.isActive ? 'Open' : 'Closed'}
-                </Text>
+              <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+                <View style={styles.statusContainer}>
+                  <View style={[styles.statusDot,{ backgroundColor: store.isActive ? Colors.success : Colors.error }]} />
+                  <Text style={[styles.statusText,{ color: store.isActive ? Colors.success : Colors.error }]}>
+                    {store.isActive ? 'Open' : 'Closed'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -307,19 +293,9 @@ export default function StoreDetailScreen() {
                 <Text style={styles.contactText}>{getWorkingDaysText()}</Text>
               </View>
 
-              {store.contact?.phone && (
-                <View style={styles.contactItem}>
-                  <Ionicons name="call-outline" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.contactText}>{store.contact.phone}</Text>
-                </View>
-              )}
+              {/* Phone row removed per requirement */}
 
-              {store.contact?.email && (
-                <View style={styles.contactItem}>
-                  <Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />
-                  <Text style={styles.contactText}>{store.contact.email}</Text>
-                </View>
-              )}
+              {/* Email removed as per requirement */}
             </View>
 
             {/* Action Buttons */}
@@ -329,7 +305,7 @@ export default function StoreDetailScreen() {
                 onPress={handleCallStore}
                 activeOpacity={0.7}
               >
-                <Ionicons name="call" size={20} color={Colors.primary} />
+                <Ionicons name="call" size={20} colors="#fff" />
                 <Text style={styles.actionButtonText}>Call</Text>
               </TouchableOpacity>
               
@@ -338,7 +314,7 @@ export default function StoreDetailScreen() {
                 onPress={handleOpenMap}
                 activeOpacity={0.7}
               >
-                <Ionicons name="map" size={20} color={Colors.primary} />
+                <Ionicons name="map" size={20} colors="#fff" />
                 <Text style={styles.actionButtonText}>Directions</Text>
               </TouchableOpacity>
               
@@ -348,31 +324,43 @@ export default function StoreDetailScreen() {
                   onPress={handleVisitWebsite}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="globe" size={20} color={Colors.primary} />
+                  <Ionicons name="globe" size={20} colors="#fff" />
                   <Text style={styles.actionButtonText}>Website</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
 
+          {/* Category Icons (collapsible) */}
+          <View style={styles.categoryIconsWrap}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowStoreCategories((v) => !v)}
+              style={styles.categoryToggle}
+            >
+              <Text style={styles.categoryToggleTitle}>products on store</Text>
+              <Ionicons name={showStoreCategories ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            {showStoreCategories && (
+              <CategoryIcons
+                showHeader={false}
+                showSeeAll={false}
+                subcategories={storeSubcategories}
+                noMargin
+                screenType="category"
+                selectedSubcategory={selectedCategory || undefined}
+                onCategoryPress={handleCategoryIconPress}
+              />
+            )}
+          </View>
+
           {/* Products Section */}
           <View style={styles.productsSection}>
-            <View style={styles.productsHeader}>
-              <Text style={styles.productsTitle}>Products ({products.length})</Text>
-              <TouchableOpacity 
-                style={styles.viewAllButton}
-                onPress={() => router.push(`/category/${store.storeName.toLowerCase().replace(/\s+/g, '-')}`)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.viewAllButtonText}>View All</Text>
-                <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            </View>
 
-            {products.length > 0 ? (
-              <View style={styles.productsGrid}>
-                {products.slice(0, 6).map((product) => (
-                  <View key={product._id} style={styles.productItem}>
+            {filteredProducts.length > 0 ? (
+              <View style={styles.productsList}>
+                {filteredProducts.map((product) => (
+                  <View key={product._id} style={styles.productItemFull}>
                     <ProductCard product={product} onPress={handleProductPress} />
                   </View>
                 ))}
@@ -446,10 +434,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  header: {
+  headerPlain: {
     paddingTop: Platform.OS === 'ios' ? 60 : 45,
     paddingBottom: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
+    backgroundColor: 'transparent',
   },
   headerContent: {
     flexDirection: 'row',
@@ -457,27 +446,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerBackButton: {
-    width: 52,
-    height: 52,
-    paddingTop: 12,
-  },
-  headerTitleContainer: {
-    flex: 1,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: 'transparent',
   },
+  headerCenter: { flex: 1, paddingHorizontal: 8 },
+  headerIdentityRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  storeAvatar: { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', backgroundColor: Colors.backgroundSecondary },
+  storeAvatarImage: { width: '100%', height: '100%' },
+  storeAvatarPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
-    letterSpacing: -0.5,
-    textAlign: 'center',
+    textAlign: 'left',
   },
-  shareButton: {
-    width: 52,
-    height: 52,
-    paddingTop: 12,
-  },
+  headerRight: { width: 64, alignItems: 'flex-end' },
+  ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  ratingPillText: { fontSize: 12, fontWeight: '700', color: '#111' },
   scrollView: {
     flex: 1,
   },
@@ -592,7 +581,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFD700',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -600,42 +589,28 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontWeight: '700',
+    color: '#000000',
+    textAlign: 'center',
   },
   productsSection: {
-    padding: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 0,
     backgroundColor: Colors.background,
   },
-  productsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  productsTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  viewAllButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  productsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  /* products header removed per requirement */
+  productsList: {
+    flexDirection: 'column',
     gap: 12,
+    alignItems: 'stretch',
   },
-  productItem: {
-    width: '48%',
+  productItemFull: {
+    width: '100%',
   },
+  categoryIconsWrap: { paddingHorizontal: 0, paddingTop: 0 },
+  categoryToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  categoryToggleTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
   noProductsContainer: {
     alignItems: 'center',
     paddingVertical: 40,

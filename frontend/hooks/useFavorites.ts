@@ -9,7 +9,12 @@ export interface FavoriteItem {
   createdAt: string;
 }
 
-export const useFavorites = () => {
+type UseFavoritesOptions = {
+  autoLoad?: boolean;
+};
+
+export const useFavorites = (options: UseFavoritesOptions = {}) => {
+  const { autoLoad = true } = options;
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,14 +132,15 @@ export const useFavorites = () => {
     }
   }, [user]);
 
-  // Load favorites on mount
+  // Load favorites on mount (can be disabled with autoLoad)
   useEffect(() => {
+    if (!autoLoad) return;
     if (user) {
       loadFavorites();
     } else {
       setFavorites([]);
     }
-  }, [user]); // Only depend on user, not loadFavorites, since loadFavorites already depends on user
+  }, [user, autoLoad]); // Only depend on user and autoLoad
 
   return {
     favorites,

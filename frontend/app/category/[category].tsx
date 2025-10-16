@@ -24,6 +24,7 @@ import FilterButtons from '@/components/user/FilterButtons';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
+import CartBar from '@/components/user/CartBar';
 
 export default function CategoryScreen() {
   const router = useRouter();
@@ -497,6 +498,7 @@ export default function CategoryScreen() {
           }
           ListEmptyComponent={productsLoading ? renderLoadingState : renderEmptyState}
         />
+        <CartBar />
 
         {/* Filter Modal */}
         <FilterModal
@@ -558,7 +560,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   flatListContent: {
-    paddingBottom: 120, // Extra padding for tab bar
+    paddingBottom: 120, // Extra padding for tab bar and CartBar
   },
   listHeaderContainer: {
     backgroundColor: Colors.background,

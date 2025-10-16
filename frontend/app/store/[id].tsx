@@ -25,6 +25,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import type { Store } from '@/types/store';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
+import CartBar from '@/components/user/CartBar';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -263,7 +264,7 @@ export default function StoreDetailScreen() {
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -383,6 +384,7 @@ export default function StoreDetailScreen() {
             )}
           </View>
         </ScrollView>
+        <CartBar />
       </SafeAreaView>
     </View>
   );

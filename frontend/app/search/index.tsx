@@ -22,6 +22,7 @@ import SearchBar from '@/components/user/SearchBar';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Store } from '@/types/store';
 import apiClient from '@/api/client';
+import CartBar from '@/components/user/CartBar';
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -207,7 +208,7 @@ export default function SearchScreen() {
           data={stores as any}
           renderItem={renderStoreItem as any}
           keyExtractor={(item) => item.store?._id}
-          contentContainerStyle={styles.flatListContent}
+          contentContainerStyle={[styles.flatListContent, { paddingBottom: 120 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -219,6 +220,7 @@ export default function SearchScreen() {
           }
           ListEmptyComponent={renderEmptyState}
         />
+        <CartBar />
       </SafeAreaView>
     </View>
   );

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import type { Product } from '@/types/product';
 import { useFavorites } from '@/hooks/useFavorites';
 import { Colors } from '@/constants/colors';
+import { useCart } from '@/contexts/CartContext';
 
 interface ProductCardProps {
   product: Product;
@@ -34,6 +35,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const effectiveIsFavorite = isFavorite ?? favoritesHook.isFavorite;
   const effectiveToggle = onToggleFavorite ?? favoritesHook.toggleFavorite;
   const effectiveLoading = favoritesLoading ?? favoritesHook.isLoading;
+  const { addItem, updateQty, getQty } = useCart();
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN');
@@ -61,18 +63,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
     }
   };
 
+  const qty = getQty(product._id);
+
   const handleAddToCart = () => {
-    router.push({
-      pathname: '/(tabs)/cart',
-      params: {
-        productId: product._id,
-        productName: product.name,
-        productPrice: product.price.toString(),
-        productImage: product.images?.[0] || '',
-        storeId: product.storeId._id,
-        storeName: product.storeId.storeName || 'Store'
-      }
-    });
+    addItem(product, 1);
+  };
+
+  const handleIncrease = () => {
+    updateQty(product._id, qty + 1);
+  };
+
+  const handleDecrease = () => {
+    const next = qty - 1;
+    updateQty(product._id, next);
   };
 
   // Check if product is available
@@ -207,22 +210,54 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
               )}
             </View>
             
-            {/* Add to Cart Button */}
-            <TouchableOpacity 
-              style={styles.addToCartButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleAddToCart();
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.addToCartContent}>
-                <Text style={styles.addToCartText}>ADD</Text>
-                <View style={styles.addIconContainer}>
-                  <Ionicons name="add" size={16} color="#000000" />
+            {/* Add to Cart / Stepper */}
+            {qty <= 0 ? (
+              <TouchableOpacity 
+                style={styles.addToCartButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleAddToCart();
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.addToCartContent}>
+                  <Text style={styles.addToCartText}>ADD</Text>
+                  <View style={styles.addIconContainer}>
+                    <Ionicons name="add" size={16} color="#000000" />
+                  </View>
                 </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.stepperContainer}>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={(e) => { e.stopPropagation(); handleDecrease(); }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="remove" size={16} color="#000000" />
+                </TouchableOpacity>
+                <Text style={styles.stepperQty}>{qty}</Text>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={(e) => { e.stopPropagation(); handleIncrease(); }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={16} color="#000000" />
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            )}
+            {qty > 0 && (
+              <TouchableOpacity
+                style={styles.viewCartButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  router.push('/(tabs)/cart' as any);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.viewCartText}>View Cart</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -407,6 +442,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 2,
+  },
+  stepperContainer: {
+    position: 'absolute',
+    bottom: -12,
+    left: '50%',
+    transform: [{ translateX: -(imageWidth * 0.4) }],
+    width: imageWidth * 0.8,
+    backgroundColor: '#FFD700',
+    paddingVertical: 8,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 2,
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+  },
+  stepperBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperQty: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  viewCartButton: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewCartText: {
+    fontSize: 14,
+    color: '#000000',
+    fontWeight: '600',
   },
   // Discount styles
   discountedPriceContainer: {

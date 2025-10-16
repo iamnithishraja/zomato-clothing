@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -7,99 +7,146 @@ import {
   TouchableOpacity, 
   Image, 
   Alert,
-  TextInput
+  TextInput,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
+import { useCart } from '@/contexts/CartContext';
+import type { CartItem as CartItemType } from '@/contexts/CartContext';
 
-interface CartItem {
-  productId: string;
-  productName: string;
-  productPrice: number;
-  productImage: string;
-  storeId: string;
-  storeName: string;
-  quantity: number;
-  selectedSizes?: string[];
-}
+// Helper: format INR without decimals across the app UI
+const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartItemType; updateQuantity: (productId: string, qty: number) => void; removeItem: (productId: string) => void }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [showDelete, setShowDelete] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0 && gestureState.dx > -100) {
+          translateX.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -50) {
+          Animated.spring(translateX, {
+            toValue: -80,
+            useNativeDriver: true,
+          }).start();
+          setShowDelete(true);
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+          setShowDelete(false);
+        }
+      },
+    })
+  ).current;
+
+  const handleDelete = () => {
+    Animated.timing(translateX, {
+      toValue: -400,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      removeItem(item.productId);
+    });
+  };
+
+  return (
+    <View style={styles.swipeContainer}>
+      <View style={styles.deleteButtonContainer}>
+        <TouchableOpacity 
+          style={styles.deleteButton}
+          onPress={handleDelete}
+        >
+          <Ionicons name="trash" size={24} color="#FFFFFF" />
+          <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Animated.View
+        style={[
+          styles.cartItem,
+          {
+            transform: [{ translateX }],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.itemImageContainer}>
+          <Image 
+            source={{ uri: item.product.images?.[0] || 'https://via.placeholder.com/80' }} 
+            style={styles.itemImage}
+            resizeMode="cover"
+          />
+        </View>
+        
+        <View style={styles.itemDetails}>
+          <Text style={styles.itemName} numberOfLines={2}>
+            {item.product.name}
+          </Text>
+          <Text style={styles.itemStore}>
+            {typeof item.product.storeId === 'object' 
+              ? ((item.product.storeId as any).storeName || 'Store') 
+              : 'Store'}
+          </Text>
+          <View style={styles.priceQuantityRow}>
+            <Text style={styles.itemPrice}>₹{formatINR(item.price)}</Text>
+            <View style={styles.quantityControls}>
+              <TouchableOpacity 
+                style={styles.quantityButton}
+                onPress={() => updateQuantity(item.productId, item.qty - 1)}
+              >
+                <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+              </TouchableOpacity>
+              
+              <Text style={styles.quantityText}>{item.qty}</Text>
+              
+              <TouchableOpacity 
+                style={styles.quantityButton}
+                onPress={() => updateQuantity(item.productId, item.qty + 1)}
+              >
+                <Ionicons name="add" size={18} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={styles.itemTotal}>Total: ₹{formatINR(item.price * item.qty)}</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
 
 export default function CartScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const params = useLocalSearchParams();
-  
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const { items, updateQty, removeItem } = useCart();
   const [shippingAddress, setShippingAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const hasProcessedParams = useRef(false);
-
-  useEffect(() => {
-    // If product data is passed from product card, add it to cart (only once)
-    if (params.productId && !hasProcessedParams.current) {
-      const newItem: CartItem = {
-        productId: params.productId as string,
-        productName: params.productName as string,
-        productPrice: parseFloat(params.productPrice as string),
-        productImage: params.productImage as string,
-        storeId: params.storeId as string,
-        storeName: params.storeName as string,
-        quantity: 1,
-        selectedSizes: params.selectedSizes ? (params.selectedSizes as string).split(',') : []
-      };
-      
-      // Check if item already exists in cart
-      const existingItemIndex = cartItems.findIndex(item => 
-        item.productId === newItem.productId && 
-        JSON.stringify(item.selectedSizes) === JSON.stringify(newItem.selectedSizes)
-      );
-      
-      if (existingItemIndex >= 0) {
-        // Update quantity of existing item
-        setCartItems(items => 
-          items.map((item, index) => 
-            index === existingItemIndex 
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-        );
-      } else {
-        // Add new item
-        setCartItems(prev => [...prev, newItem]);
-      }
-      
-      hasProcessedParams.current = true;
-    }
-  }, [params.productId, params.productName, params.productPrice, params.productImage, params.storeId, params.storeName, params.selectedSizes, cartItems]);
-
+  
   const updateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    
-    setCartItems(items => 
-      items.map(item => 
-        item.productId === productId 
-          ? { ...item, quantity: newQuantity }
-          : item
-      )
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCartItems(items => items.filter(item => item.productId !== productId));
+    updateQty(productId, newQuantity);
   };
 
   const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.productPrice * item.quantity), 0);
+    return items.reduce((total, item) => total + (item.price * item.qty), 0);
   };
 
   const calculateDeliveryFee = () => {
-    return cartItems.length > 0 ? 50 : 0; // Fixed delivery fee
+    return items.length > 0 ? 50 : 0;
   };
 
   const calculateGrandTotal = () => {
@@ -112,7 +159,7 @@ export default function CartScreen() {
       return;
     }
 
-    if (cartItems.length === 0) {
+    if (items.length === 0) {
       Alert.alert('Error', 'Your cart is empty');
       return;
     }
@@ -125,24 +172,24 @@ export default function CartScreen() {
     try {
       setIsLoading(true);
 
-      // Group items by store
-      const ordersByStore = cartItems.reduce((acc, item) => {
-        if (!acc[item.storeId]) {
-          acc[item.storeId] = {
-            storeId: item.storeId,
-            storeName: item.storeName,
-            items: []
+      const ordersByStore = items.reduce((acc, item) => {
+        const storeId = typeof item.product.storeId === 'object' ? (item.product.storeId as any)._id : (item.product.storeId as any);
+        const storeName = typeof item.product.storeId === 'object' ? ((item.product.storeId as any).storeName || 'Store') : 'Store';
+        if (!acc[storeId]) {
+          acc[storeId] = {
+            storeId,
+            storeName,
+            items: [] as any[],
           };
         }
-        acc[item.storeId].items.push({
+        acc[storeId].items.push({
           product: item.productId,
-          quantity: item.quantity,
-          price: item.productPrice
+          quantity: item.qty,
+          price: item.price,
         });
         return acc;
       }, {} as Record<string, any>);
 
-      // Create orders for each store
       const orderPromises = Object.values(ordersByStore).map(async (storeOrder: any) => {
         const orderData = {
           store: storeOrder.storeId,
@@ -164,7 +211,6 @@ export default function CartScreen() {
           {
             text: 'OK',
             onPress: () => {
-              setCartItems([]);
               setShippingAddress('');
               router.push('/(tabs)/order');
             }
@@ -180,32 +226,42 @@ export default function CartScreen() {
     }
   };
 
-  if (cartItems.length === 0) {
+  if (items.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
           colors={Colors.gradients.primary as [string, string]}
-          style={styles.header}
+          style={styles.headerEmpty}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
         >
-          <Text style={styles.headerTitle}>Shopping Cart</Text>
+          <Text style={styles.headerTitleBlack}>Shopping Cart</Text>
         </LinearGradient>
         
         <View style={styles.emptyContainer}>
-          <Ionicons name="cart-outline" size={80} color={Colors.textSecondary} />
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="cart-outline" size={64} color="#CCCCCC" />
+          </View>
           <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
           <Text style={styles.emptySubtitle}>
-            Add some products to get started
+            Looks like you haven't added anything to your cart yet
           </Text>
           <TouchableOpacity 
             style={styles.shopButton}
             onPress={() => router.push('/')}
           >
-            <Text style={styles.shopButtonText}>Continue Shopping</Text>
+            <LinearGradient
+              colors={Colors.gradients.primary as [string, string]}
+              style={styles.shopButtonGradient}
+            >
+              <Ionicons name="bag-handle-outline" size={20} color="#000000" style={{ marginRight: 8 }} />
+              <Text style={styles.shopButtonText}>Start Shopping</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
     );
-  }
+}
 
   return (
     <View style={styles.container}>
@@ -213,117 +269,112 @@ export default function CartScreen() {
       <LinearGradient
         colors={Colors.gradients.primary as [string, string]}
         style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
       >
-        <Text style={styles.headerTitle}>Shopping Cart</Text>
-        <Text style={styles.headerSubtitle}>{cartItems.length} item{cartItems.length > 1 ? 's' : ''}</Text>
+        <Text style={styles.headerTitleBlack}>Shopping Cart</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      >
         {/* Cart Items */}
         <View style={styles.itemsSection}>
-          <Text style={styles.sectionTitle}>Items in Cart</Text>
-          {cartItems.map((item) => (
-            <View key={item.productId} style={styles.cartItem}>
-              <Image 
-                source={{ uri: item.productImage || 'https://via.placeholder.com/80' }} 
-                style={styles.itemImage}
-                resizeMode="cover"
-              />
-              
-              <View style={styles.itemDetails}>
-                <Text style={styles.itemName} numberOfLines={2}>
-                  {item.productName}
-                </Text>
-                <Text style={styles.itemStore}>{item.storeName}</Text>
-                {item.selectedSizes && item.selectedSizes.length > 0 && (
-                  <Text style={styles.itemSizes}>Size: {item.selectedSizes.join(', ')}</Text>
-                )}
-                <Text style={styles.itemPrice}>₹{item.productPrice}</Text>
-              </View>
-
-              <View style={styles.quantityControls}>
-                <TouchableOpacity 
-                  style={styles.quantityButton}
-                  onPress={() => updateQuantity(item.productId, item.quantity - 1)}
-                >
-                  <Ionicons name="remove" size={16} color={Colors.textPrimary} />
-                </TouchableOpacity>
-                
-                <Text style={styles.quantityText}>{item.quantity}</Text>
-                
-                <TouchableOpacity 
-                  style={styles.quantityButton}
-                  onPress={() => updateQuantity(item.productId, item.quantity + 1)}
-                >
-                  <Ionicons name="add" size={16} color={Colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.removeButton}
-                onPress={() => removeFromCart(item.productId)}
-              >
-                <Ionicons name="trash-outline" size={20} color={Colors.error} />
-              </TouchableOpacity>
-            </View>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="bag-handle-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.sectionTitle}>Your Items</Text>
+          </View>
+          <Text style={styles.swipeHint}>← Swipe left to delete</Text>
+          {items.map((item) => (
+            <SwipeableCartItem
+              key={item.productId}
+              item={item}
+              updateQuantity={updateQuantity}
+              removeItem={removeItem}
+            />
           ))}
         </View>
 
         {/* Shipping Address */}
         <View style={styles.addressSection}>
-          <Text style={styles.sectionTitle}>Shipping Address</Text>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
+          </View>
           <TextInput
             style={styles.addressInput}
-            placeholder="Enter your complete address"
+            placeholder="Enter your complete delivery address"
             value={shippingAddress}
             onChangeText={setShippingAddress}
             multiline
-            numberOfLines={3}
+            numberOfLines={4}
             placeholderTextColor={Colors.textSecondary}
           />
         </View>
 
         {/* Order Summary */}
         <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>₹{calculateTotal()}</Text>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="receipt-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.sectionTitle}>Bill Details</Text>
           </View>
           
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            <Text style={styles.summaryValue}>₹{calculateDeliveryFee()}</Text>
-          </View>
-          
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{calculateGrandTotal()}</Text>
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Item Total</Text>
+              <Text style={styles.summaryValue}>₹{formatINR(calculateTotal())}</Text>
+            </View>
+            
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryLabelWithIcon}>
+                <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                <Ionicons name="bicycle" size={16} color={Colors.textSecondary} style={{ marginLeft: 4 }} />
+              </View>
+              <Text style={styles.summaryValue}>₹{formatINR(calculateDeliveryFee())}</Text>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>To Pay</Text>
+              <Text style={styles.totalValue}>₹{formatINR(calculateGrandTotal())}</Text>
+            </View>
           </View>
         </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Place Order Button */}
+      {/* Fixed Footer */}
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.placeOrderButton, isLoading && styles.placeOrderButtonDisabled]}
-          onPress={handlePlaceOrder}
-          disabled={isLoading}
-        >
-          <LinearGradient
-            colors={isLoading ? [Colors.textSecondary, Colors.textSecondary] : Colors.gradients.primary as [string, string]}
-            style={styles.placeOrderGradient}
+        <View style={styles.footerContent}>
+          <View style={styles.footerLeft}>
+            <Text style={styles.footerTotal}>₹{formatINR(calculateGrandTotal())}</Text>
+            <Text style={styles.footerSubtext}>Total Amount</Text>
+          </View>
+          <TouchableOpacity 
+            style={[styles.placeOrderButton, isLoading && styles.placeOrderButtonDisabled]}
+            onPress={handlePlaceOrder}
+            disabled={isLoading}
           >
-            <Text style={styles.placeOrderText}>
-              {isLoading ? 'Placing Order...' : `Place Order - ₹${calculateGrandTotal()}`}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={isLoading ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
+              style={styles.placeOrderGradient}
+            >
+              <Text style={styles.placeOrderText}>
+                {isLoading ? 'Processing...' : 'Place Order'}
+              </Text>
+              {!isLoading && <Ionicons name="arrow-forward" size={20} color={Colors.textPrimary} style={{ marginLeft: 8 }} />}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -331,24 +382,50 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 20,
+    backgroundColor: Colors.background,
+    paddingTop: 25,
+    paddingBottom: 6,
     paddingHorizontal: 20,
   },
-  headerTitle: {
-    fontSize: 24,
+  headerEmpty: {
+    backgroundColor: Colors.background,
+    paddingTop: 60,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitleBlack: {
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
-  headerSubtitle: {
+  itemBadge: {
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  itemBadgeText: {
     fontSize: 14,
-    color: Colors.textPrimary,
-    opacity: 0.8,
-    marginTop: 4,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerSubtitleBlack: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 6,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -356,61 +433,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
+  emptyIconCircle: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   emptyTitle: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
-    marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 16,
-    color: Colors.textSecondary,
+    fontSize: 15,
+    color: '#666666',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
+    lineHeight: 22,
   },
   shopButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  shopButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
   },
   shopButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
   itemsSection: {
-    marginTop: 20,
+    marginTop: 10,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
+    marginLeft: 8,
+  },
+  swipeHint: {
+    fontSize: 12,
+    color: '#999999',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  swipeContainer: {
     marginBottom: 16,
+    height: 120,
+    position: 'relative',
+  },
+  deleteButtonContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    backgroundColor: Colors.error,
+    width: 70,
+    height: 100,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
   cartItem: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
+    height: 120,
+  },
+  itemImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5',
+    marginRight: 16,
   },
   itemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 12,
+    width: '100%',
+    height: '100%',
   },
   itemDetails: {
     flex: 1,
-    marginRight: 12,
+    justifyContent: 'space-between',
   },
   itemName: {
     fontSize: 16,
@@ -421,91 +560,104 @@ const styles = StyleSheet.create({
   itemStore: {
     fontSize: 12,
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  itemSizes: {
-    fontSize: 12,
-    color: Colors.primary,
-    marginBottom: 4,
-    fontWeight: '500',
+  priceQuantityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   itemPrice: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.textPrimary,
   },
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
     padding: 4,
-    marginRight: 12,
   },
   quantityButton: {
     width: 28,
     height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
   },
   quantityText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
     marginHorizontal: 12,
     minWidth: 20,
     textAlign: 'center',
   },
-  removeButton: {
-    padding: 8,
+  itemTotal: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   addressSection: {
-    marginTop: 20,
+    marginTop: 24,
   },
   addressInput: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.textPrimary,
     borderWidth: 1,
     borderColor: Colors.backgroundSecondary,
     textAlignVertical: 'top',
-  },
-  summarySection: {
-    marginTop: 20,
-    marginBottom: 20,
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
+    minHeight: 100,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  summarySection: {
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   summaryLabel: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.textSecondary,
+  },
+  summaryLabelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   summaryValue: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.backgroundSecondary,
+    marginVertical: 8,
+  },
   totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.backgroundSecondary,
-    paddingTop: 12,
-    marginTop: 8,
     marginBottom: 0,
   },
   totalLabel: {
@@ -514,27 +666,53 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   totalValue: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.textPrimary,
   },
   footer: {
-    padding: 20,
-    paddingBottom: 40,
+    backgroundColor: Colors.background,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  footerLeft: {
+    flex: 1,
+  },
+  footerTotal: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   placeOrderButton: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   placeOrderButtonDisabled: {
     opacity: 0.6,
   },
   placeOrderGradient: {
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 28,
   },
   placeOrderText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,
   },

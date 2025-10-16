@@ -30,7 +30,7 @@ const { width: screenWidth } = Dimensions.get('window');
 
 export default function StoreDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, subcategory } = useLocalSearchParams();
   const { checkMultipleFavorites } = useFavorites();
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,11 +62,10 @@ export default function StoreDetailScreen() {
       // Get store details and products in parallel
       const [storeResponse, productsResponse] = await Promise.all([
         apiClient.get(`/api/v1/store/${id}`),
-        apiClient.get('/api/v1/product/all', {
+        apiClient.get(`/api/v1/product/store/${id}`, {
           params: {
             page: 1,
             limit: 20,
-            storeId: id,
           }
         })
       ]);
@@ -156,6 +155,19 @@ export default function StoreDetailScreen() {
     loadStoreData();
   }, [loadStoreData]);
 
+  // Apply incoming subcategory from route
+  useEffect(() => {
+    if (typeof subcategory === 'string' && subcategory.trim()) {
+      setSelectedCategory(subcategory);
+      setShowStoreCategories(true);
+      // apply filter once products are loaded
+      setFilteredProducts((prev) => {
+        const source = products.length ? products : prev;
+        return source.filter(p => p.subcategory === subcategory);
+      });
+    }
+  }, [subcategory, products]);
+
   // Render loading state
   if (isLoading) {
     return (
@@ -236,7 +248,15 @@ export default function StoreDetailScreen() {
               </View>
             </View>
 
-            <View style={styles.headerRight} />
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push('/search' as any)}
+                style={styles.headerSearchBtn}
+              >
+                <Ionicons name="search" size={18} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -267,14 +287,7 @@ export default function StoreDetailScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-                <View style={styles.statusContainer}>
-                  <View style={[styles.statusDot,{ backgroundColor: store.isActive ? Colors.success : Colors.error }]} />
-                  <Text style={[styles.statusText,{ color: store.isActive ? Colors.success : Colors.error }]}>
-                    {store.isActive ? 'Open' : 'Closed'}
-                  </Text>
-                </View>
-              </View>
+              {/* status pill removed per requirement */}
             </View>
 
             {store.description && (
@@ -288,10 +301,7 @@ export default function StoreDetailScreen() {
                 <Text style={styles.contactText}>{store.address}</Text>
               </View>
               
-              <View style={styles.contactItem}>
-                <Ionicons name="time-outline" size={20} color={Colors.textSecondary} />
-                <Text style={styles.contactText}>{getWorkingDaysText()}</Text>
-              </View>
+              {/* working days row removed per requirement */}
 
               {/* Phone row removed per requirement */}
 
@@ -465,6 +475,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   headerRight: { width: 64, alignItems: 'flex-end' },
+  headerSearchBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
   ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   ratingPillText: { fontSize: 12, fontWeight: '700', color: '#111' },
   scrollView: {
@@ -589,7 +600,6 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 14,
-    fontWeight: '700',
     color: '#000000',
     textAlign: 'center',
   },

@@ -15,11 +15,13 @@ import type { Store } from '@/types/store';
 const { width } = Dimensions.get('window');
 
 export default function StoreDetailsScreen() {
-  const { storeId } = useLocalSearchParams<{ storeId: string }>();
+  const { storeId, subcategory } = useLocalSearchParams<{ storeId: string; subcategory?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -57,7 +59,7 @@ export default function StoreDetailsScreen() {
     if (res.data?.success) setStore(res.data.store);
   }, [storeId]);
 
-  const loadProducts = useCallback(async (pageNum: number, replace = false) => {
+  const loadProducts = useCallback(async (pageNum = 1, reset = false) => {
     if (!storeId || loadingPage) return;
     setLoadingPage(true);
     const res = await apiClient.get('/api/v1/product', {
@@ -65,7 +67,6 @@ export default function StoreDetailsScreen() {
         page: pageNum,
         limit: 20,
         storeId,
-        // Map specification filters to API expected params if needed
         materials: filters.materials,
         fits: filters.fits,
         patterns: filters.patterns,
@@ -73,12 +74,19 @@ export default function StoreDetailsScreen() {
       },
     });
     if (res.data?.success) {
-      const list: Product[] = res.data.products || [];
-      setHasMore(list.length === 20);
-      setProducts((prev) => (replace ? list : [...prev, ...list]));
+      const items: Product[] = res.data.products || [];
+      if (pageNum === 1 || reset) {
+        setProducts(items);
+        setFilteredProducts(items);
+      } else {
+        const merged = [...products, ...items];
+        setProducts(merged);
+        setFilteredProducts(prev => selectedSubcategory ? merged.filter(p => p.subcategory === selectedSubcategory) : merged);
+      }
+      setHasMore(items.length === 20);
     }
     setLoadingPage(false);
-  }, [storeId, filters, loadingPage]);
+  }, [storeId, filters, loadingPage, hasMore]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -106,6 +114,11 @@ export default function StoreDetailsScreen() {
     loadProducts(1, true);
   }, [loadProducts]);
 
+  const handleCategoryIconPress = useCallback((sc: string) => {
+    const next = selectedSubcategory === sc ? null : sc;
+    setSelectedSubcategory(next);
+  }, [selectedSubcategory]);
+
   const header = useMemo(() => (
     <View style={{ paddingTop: insets.top + 8 }}>
       {/* Top Bar with back, avatar+name (no rating pill in header) */}
@@ -125,7 +138,13 @@ export default function StoreDetailsScreen() {
           </View>
           <Text style={styles.storeName} numberOfLines={1}>{store?.storeName || 'Store'}</Text>
         </View>
-        <View />
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push('/search' as any)}
+          style={styles.headerSearchBtn}
+        >
+          <Ionicons name="search" size={18} color={Colors.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       {/* Address */}
@@ -160,11 +179,13 @@ export default function StoreDetailsScreen() {
       <View style={{ paddingHorizontal: 0, paddingTop: 0 }}>
         <CategoryIcons 
           showHeader 
-          headerTitle="Products On Store" 
+          headerTitle="products on store" 
           showSeeAll={false}
           subcategories={storeSubcategories}
           noMargin
           screenType="category" 
+          selectedSubcategory={selectedSubcategory || undefined}
+          onCategoryPress={handleCategoryIconPress}
         />
       </View>
 
@@ -182,6 +203,12 @@ export default function StoreDetailsScreen() {
     handleRefresh();
   }, [storeId]);
 
+  useEffect(() => {
+    if (subcategory && typeof subcategory === 'string' && subcategory.trim()) {
+      setSelectedSubcategory(subcategory);
+    }
+  }, [subcategory]);
+
   const handleProductPress = useCallback((product: Product) => {
     router.push(`/product/${product._id}`);
   }, [router]);
@@ -194,7 +221,7 @@ export default function StoreDetailsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={(item) => item._id}
         renderItem={renderProduct}
         ListHeaderComponent={header}
@@ -225,6 +252,7 @@ const styles = StyleSheet.create({
   storeName: { flexShrink: 1, textAlign: 'left', fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
   ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   ratingText: { fontSize: 12, fontWeight: '700', color: '#111' },
+  headerSearchBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingTop: 6 },
   addressText: { flex: 1, fontSize: 13, color: Colors.textSecondary },
   carouselContainer: { width, overflow: 'hidden' },
@@ -234,7 +262,7 @@ const styles = StyleSheet.create({
   toggleText: { fontSize: 13, color: Colors.textSecondary },
   actionsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFD700', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
-  actionText: { fontSize: 13, color: '#000', fontWeight: '700', textAlign: 'center' },
+  actionText: { fontSize: 13, color: '#000', fontWeight: '600', textAlign: 'center' },
   productRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12 },
   productInfo: { flex: 1, paddingRight: 12 },
   productName: { fontSize: 18, fontWeight: '600', color: Colors.textPrimary, marginBottom: 6 },

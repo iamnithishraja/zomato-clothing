@@ -1,5 +1,7 @@
 import StoreModel from "../Models/storeModel";
 import UserModel from "../Models/userModel";
+import ProductModel from "../Models/productModel";
+
 import type { Response, Request } from "express";
 import { 
   validateMerchantRole, 
@@ -479,4 +481,168 @@ async function getStoreById(req: Request, res: Response) {
   }
 }
 
-export { createStore, updateStore, getStoreDetails, deleteStoreDetails, getAllStores, getBestSellerStores, getStoreById };
+// Search stores based on product query and rank by relevance and rating (public endpoint)
+async function searchStoresByProductQuery(req: Request, res: Response) {
+  try {
+    const q = (req.query.q as string) || (req.query.search as string) || "";
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // If no query provided, fallback to top rated stores
+    if (!q.trim()) {
+      const skip = (page - 1) * limit;
+      const stores = await StoreModel.find({ isActive: true })
+        .sort({ 'rating.average': -1, 'rating.totalReviews': -1 })
+        .skip(skip)
+        .limit(limit);
+      const totalStores = await StoreModel.countDocuments({ isActive: true });
+      return res.status(200).json({
+        success: true,
+        message: "Stores retrieved successfully",
+        stores: stores.map(s => ({ store: s, matchedSubcategory: undefined })),
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(totalStores / limit),
+          totalStores,
+          hasNextPage: page < Math.ceil(totalStores / limit),
+          hasPrevPage: page > 1
+        }
+      });
+    }
+
+    const searchRegex = new RegExp(q.trim(), 'i');
+
+    // Aggregate products matching the query to find relevant stores (no pagination here)
+    const productAgg: any[] = [
+      { $match: {
+          isActive: true,
+          $or: [
+            { name: { $regex: searchRegex } },
+            { description: { $regex: searchRegex } },
+            { category: { $regex: searchRegex } },
+            { subcategory: { $regex: searchRegex } },
+            { 'specifications.material': { $regex: searchRegex } },
+            { 'specifications.fit': { $regex: searchRegex } },
+            { 'specifications.pattern': { $regex: searchRegex } },
+          ]
+        }
+      },
+      // Group by store and collect subcategories
+      { $group: {
+          _id: "$storeId",
+          matchCount: { $sum: 1 },
+          subcategories: { $push: "$subcategory" }
+        }
+      },
+      // Join store details
+      { $lookup: {
+          from: "stores",
+          localField: "_id",
+          foreignField: "_id",
+          as: "store"
+        }
+      },
+      { $unwind: "$store" },
+      { $match: { "store.isActive": true } },
+      // Compute a simple score combining matches and rating
+      { $addFields: {
+          ratingAvg: "$store.rating.average",
+          score: { $add: [ { $multiply: ["$matchCount", 2] }, { $ifNull: ["$store.rating.average", 0] } ] }
+        }
+      },
+      { $sort: { score: -1, ratingAvg: -1, "store.createdAt": -1 } },
+      // Shape output
+      { $project: {
+          _id: 0,
+          store: "$store",
+          matchCount: 1,
+          subcategories: 1,
+          score: 1,
+          ratingAvg: 1
+        }
+      }
+    ];
+
+    const productResults = await ProductModel.aggregate(productAgg);
+
+    // Determine matched subcategory per store by frequency and keep initial score
+    const productRanked = productResults.map((r: any) => {
+      const freq: Record<string, number> = {};
+      (r.subcategories || []).forEach((s: string) => {
+        if (!s) return;
+        freq[s] = (freq[s] || 0) + 1;
+      });
+      let matchedSubcategory: string | undefined = undefined;
+      let max = 0;
+      Object.keys(freq).forEach(k => {
+        const val = freq[k] ?? 0;
+        if (val > max) {
+          max = val;
+          matchedSubcategory = k;
+        }
+      });
+      return { store: r.store, matchedSubcategory, score: r.score, ratingAvg: r.ratingAvg };
+    });
+
+    // Also match stores directly by their fields
+    const storeFieldMatches = await StoreModel.find({
+      isActive: true,
+      $or: [
+        { storeName: { $regex: searchRegex } },
+        { description: { $regex: searchRegex } },
+        { address: { $regex: searchRegex } }
+      ]
+    });
+
+    // Merge product-driven and store-field matches, dedupe by store._id
+    const byId: Record<string, { store: any; matchedSubcategory?: string; score: number; ratingAvg: number } > = {};
+    productRanked.forEach((p) => {
+      const id = String(p.store._id);
+      byId[id] = { store: p.store, matchedSubcategory: p.matchedSubcategory, score: p.score, ratingAvg: p.ratingAvg ?? (p.store?.rating?.average || 0) };
+    });
+    storeFieldMatches.forEach((s: any) => {
+      const id = String(s._id);
+      const ratingAvg = s?.rating?.average || 0;
+      // base score for store match; small boost
+      const baseScore = ratingAvg + 1;
+      if (!byId[id]) {
+        byId[id] = { store: s, matchedSubcategory: undefined, score: baseScore, ratingAvg };
+      } else {
+        // If already present from product matches, keep the higher score
+        byId[id].score = Math.max(byId[id].score, baseScore);
+        byId[id].ratingAvg = Math.max(byId[id].ratingAvg, ratingAvg);
+      }
+    });
+
+    // Rank and paginate
+    const mergedList = Object.values(byId).sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.ratingAvg !== a.ratingAvg) return b.ratingAvg - a.ratingAvg;
+      const aTime = new Date(a.store?.createdAt || 0).getTime();
+      const bTime = new Date(b.store?.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+    const totalStores = mergedList.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const paged = mergedList.slice(start, end).map(({ store, matchedSubcategory }) => ({ store, matchedSubcategory }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Stores ranked for query",
+      stores: paged,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalStores / limit),
+        totalStores,
+        hasNextPage: page < Math.ceil(totalStores / limit),
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error("Error searching stores by product query:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+}
+
+export { createStore, updateStore, getStoreDetails, deleteStoreDetails, getAllStores, getBestSellerStores, getStoreById, searchStoresByProductQuery };

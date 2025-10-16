@@ -17,11 +17,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
-import ProductCard from '@/components/user/ProductCard';
 import ModernStoreCard from '@/components/user/ModernStoreCard';
 import SearchBar from '@/components/user/SearchBar';
 import { useFavorites } from '@/hooks/useFavorites';
-import type { Product } from '@/types/product';
 import type { Store } from '@/types/store';
 import apiClient from '@/api/client';
 
@@ -30,69 +28,32 @@ export default function SearchScreen() {
   const { query } = useLocalSearchParams();
   const { checkMultipleFavorites } = useFavorites();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{
-    stores: Store[];
-    products: Product[];
-  }>({ stores: [], products: [] });
+  const [stores, setStores] = useState<Array<{ store: Store; matchedSubcategory?: string }>>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Unified search function for both products and stores
+  // Search stores ranked for query (backend ranks by product relevance + rating)
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
-      setSearchResults({ stores: [], products: [] });
+      setStores([]);
       return;
     }
 
     setIsLoading(true);
     try {
-      const searchRegex = new RegExp(query.trim(), 'i');
-      
-      // Search stores and products in parallel
-      const [storesResponse, productsResponse] = await Promise.all([
-        apiClient.get('/api/v1/store/all', {
-          params: {
-            page: 1,
-            limit: 50,
-            search: query.trim(),
-          }
-        }),
-        apiClient.get('/api/v1/product/all', {
-          params: {
-            page: 1,
-            limit: 50,
-            search: query.trim(),
-          }
-        })
-      ]);
+      const resp = await apiClient.get('/api/v1/store/search', {
+        params: {
+          q: query.trim(),
+          page: 1,
+          limit: 50,
+        }
+      });
 
-      let stores: Store[] = [];
-      let products: Product[] = [];
-
-      if (storesResponse.data.success) {
-        stores = storesResponse.data.stores.filter((store: Store) => 
-          searchRegex.test(store.storeName) || 
-          searchRegex.test(store.description) ||
-          searchRegex.test(store.address)
-        );
-      }
-
-      if (productsResponse.data.success) {
-        products = productsResponse.data.products.filter((product: Product) =>
-          searchRegex.test(product.name) ||
-          searchRegex.test(product.description) ||
-          searchRegex.test(product.category) ||
-          searchRegex.test(product.subcategory)
-        );
-      }
-
-      setSearchResults({ stores, products });
-      
-      // Check favorites for all products
-      if (products.length > 0) {
-        const productIds = products.map(p => p._id);
-        checkMultipleFavorites(productIds);
+      if (resp.data?.success) {
+        setStores(resp.data.stores || []);
+      } else {
+        setStores([]);
       }
       
     } catch (error) {
@@ -101,7 +62,7 @@ export default function SearchScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [checkMultipleFavorites]);
+  }, []);
 
   // Handle URL query on mount
   useEffect(() => {
@@ -124,18 +85,16 @@ export default function SearchScreen() {
         performSearch(query);
       }, 300) as any; // 300ms debounce
     } else {
-      setSearchResults({ stores: [], products: [] });
+      setStores([]);
     }
   }, [performSearch]);
 
-  // Handle product press
-  const handleProductPress = (product: Product) => {
-    router.push(`/product/${product._id}` as any);
-  };
-
   // Handle store press
-  const handleStorePress = (store: Store) => {
-    router.push(`/store/${store._id}` as any);
+  const handleStorePress = (store: Store, matchedSubcategory?: string) => {
+    const path = matchedSubcategory
+      ? `/store/${store._id}?subcategory=${encodeURIComponent(matchedSubcategory)}`
+      : `/store/${store._id}`;
+    router.push(path as any);
   };
 
   // Handle refresh
@@ -147,23 +106,19 @@ export default function SearchScreen() {
     setIsRefreshing(false);
   }, [searchQuery, performSearch]);
 
-  // Get combined results (stores first, then products)
-  const getCombinedResults = useCallback(() => {
-    return [...searchResults.stores, ...searchResults.products];
-  }, [searchResults]);
-
   // Get total count
   const getTotalCount = useCallback(() => {
-    return searchResults.stores.length + searchResults.products.length;
-  }, [searchResults.stores.length, searchResults.products.length]);
+    return stores.length;
+  }, [stores.length]);
 
   // Render mixed item (stores and products combined)
-  const renderMixedItem: ListRenderItem<Store | Product> = ({ item }) => {
-    if ('storeName' in item) {
-      return <ModernStoreCard store={item as Store} onPress={handleStorePress} />;
-    } else {
-      return <ProductCard product={item as Product} onPress={handleProductPress} />;
-    }
+  const renderStoreItem: ListRenderItem<{ store: Store; matchedSubcategory?: string }> = ({ item }) => {
+    return (
+      <ModernStoreCard 
+        store={item.store} 
+        onPress={(s: Store) => handleStorePress(s, item.matchedSubcategory)} 
+      />
+    );
   };
 
   // Render empty state
@@ -182,7 +137,7 @@ export default function SearchScreen() {
     </View>
   ), [searchQuery]);
 
-  const combinedResults = getCombinedResults();
+  // Stores are the only results now (ranked by backend)
 
   return (
     <View style={styles.container}>
@@ -242,18 +197,16 @@ export default function SearchScreen() {
               )}
             </View>
             {getTotalCount() > 0 && !isLoading && (
-              <Text style={styles.resultsBreakdown}>
-                {searchResults.products.length} products
-              </Text>
+              <Text style={styles.resultsBreakdown}>Top stores for your search</Text>
             )}
           </View>
         )}
 
         {/* Results */}
         <FlatList
-          data={combinedResults as any}
-          renderItem={renderMixedItem as any}
-          keyExtractor={(item) => item._id}
+          data={stores as any}
+          renderItem={renderStoreItem as any}
+          keyExtractor={(item) => item.store?._id}
           contentContainerStyle={styles.flatListContent}
           showsVerticalScrollIndicator={false}
           refreshControl={

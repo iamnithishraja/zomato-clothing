@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Platform,
   Dimensions,
@@ -14,9 +13,11 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
@@ -32,6 +33,8 @@ export default function ProductDetailsScreen() {
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [showCharacteristics, setShowCharacteristics] = useState(false);
   const { isFavorite, toggleFavorite, isLoading: isFavoriteLoading } = useFavorites();
+  const { addItem } = useCart();
+
   const scrollViewRef = useRef<ScrollView>(null);
   const imageScrollViewRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -84,27 +87,15 @@ export default function ProductDetailsScreen() {
       Alert.alert('Size Required', 'Please select at least one size before adding to cart');
       return;
     }
-    
     if (product && product.availableQuantity <= 0) {
       Alert.alert('Out of Stock', 'This product is currently out of stock');
       return;
     }
-    
     if (product) {
-      router.push({
-        pathname: '/(tabs)/cart',
-        params: {
-          productId: product._id,
-          productName: product.name,
-          productPrice: product.price.toString(),
-          productImage: product.images?.[0] || '',
-          storeId: product.storeId?._id || '',
-          storeName: product.storeId?.storeName || '',
-          selectedSizes: selectedSizes.join(','),
-        }
-      });
+      selectedSizes.forEach((sz) => addItem(product, 1, sz));
+      router.push('/(tabs)/cart' as any);
     }
-  }, [selectedSizes, product, router]);
+  }, [selectedSizes, product, addItem, router]);
 
   const handleFavoriteToggle = useCallback(async () => {
     if (product?._id) {

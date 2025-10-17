@@ -19,10 +19,13 @@ import ProductCard from '@/components/user/ProductCard';
 import FilterModal from '@/components/user/FilterModal';
 import type { ProductFilters } from '@/types/filters';
 import SearchBar from '@/components/user/SearchBar';
+// Removed legacy header filters in favor of Stores + Best Sellers structure
 import CategoryIcons from '@/components/user/CategoryIcons';
 import FilterButtons from '@/components/user/FilterButtons';
+import ModernStoreCard from '@/components/user/ModernStoreCard';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
+import type { Store } from '@/types/store';
 import apiClient from '@/api/client';
 import CartBar from '@/components/user/CartBar';
 
@@ -32,6 +35,8 @@ export default function CategoryScreen() {
   const { checkMultipleFavorites, isFavorite, toggleFavorite, isLoading: favLoading } = useFavorites();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storesLoading, setStoresLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -55,6 +60,19 @@ export default function CategoryScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecification, setSelectedSpecification] = useState<{ value: string; category: string } | null>(null);
+
+  // Compute featured best sellers subset (random/featured from products of this category)
+  const bestSellerProducts = useMemo(() => {
+    const base = (filteredProducts && filteredProducts.length > 0) ? filteredProducts : products;
+    if (!base || base.length === 0) return [] as Product[];
+    const pool = [...base];
+    // Simple shuffle
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, Math.min(12, pool.length));
+  }, [products, filteredProducts]);
 
   // Helper function to convert category slug to subcategory name
   const convertCategorySlug = useCallback((categorySlug: string) => {
@@ -202,12 +220,41 @@ export default function CategoryScreen() {
     }
   }, [subcategoryName, checkMultipleFavorites]);
 
+  // Load stores that sell this subcategory via search endpoint
+  const loadStores = useCallback(async () => {
+    if (!subcategoryName) {
+      setStores([]);
+      setStoresLoading(false);
+      return;
+    }
+    try {
+      setStoresLoading(true);
+      const response = await apiClient.get('/api/v1/store/search', {
+        params: { q: subcategoryName, page: 1, limit: 20, _t: Date.now() },
+      });
+      if (response.data?.success) {
+        // API returns stores as array of { store, matchedSubcategory }
+        const items = (response.data.stores || []).map((s: any) => s.store || s);
+        // sort by rating average desc
+        const sorted = items.sort((a: any, b: any) => (b?.rating?.average || 0) - (a?.rating?.average || 0));
+        setStores(sorted);
+      } else {
+        setStores([]);
+      }
+    } catch (err) {
+      console.error('Error loading stores:', err);
+      setStores([]);
+    } finally {
+      setStoresLoading(false);
+    }
+  }, [subcategoryName]);
+
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadProducts();
+    await Promise.all([loadProducts(), loadStores()]);
     setIsRefreshing(false);
-  }, [loadProducts]);
+  }, [loadProducts, loadStores]);
 
   // Handle product press
   const handleProductPress = useCallback((product: Product) => {
@@ -357,8 +404,9 @@ export default function CategoryScreen() {
   useEffect(() => {
     if (subcategoryName) {
       loadProducts();
+      loadStores();
     }
-  }, [subcategoryName, loadProducts]);
+  }, [subcategoryName, loadProducts, loadStores]);
 
   // Use the same subcategory name for display
   const formattedCategoryName = subcategoryName || 'Category';
@@ -445,19 +493,50 @@ export default function CategoryScreen() {
         </View>
       </View>
 
-      {/* Category Icons Section (replaces specification icons) */}
+      {/* Category Icons Section */}
       <View style={styles.specificationsSection}>
         <View style={styles.filtersContainer}>
           <CategoryIcons
             showHeader={false}
             screenType="category"
             selectedSubcategory={selectedCategory}
-            onCategoryPress={(sc) => setSelectedCategory(sc)}
+            onCategoryPress={(sc: string) => setSelectedCategory(sc)}
           />
         </View>
       </View>
+
+      {/* Stores Section */}
+      <View style={styles.sectionHeader}>
+        <Ionicons name="storefront-outline" size={18} color={Colors.buttonPrimary} />
+        <Text style={styles.sectionTitle}>Stores selling {formattedCategoryName}</Text>
+      </View>
+      <View style={styles.storesGrid}>
+        {storesLoading && (
+          <Text style={styles.loadingInline}>Loading stores...</Text>
+        )}
+        {!storesLoading && stores.length === 0 && (
+          <Text style={styles.emptyInline}>No stores found for this category</Text>
+        )}
+        {!storesLoading && stores.length > 0 && (
+          <>
+            {stores.map((store) => (
+              <ModernStoreCard
+                key={String(store._id)}
+                store={store as any}
+                onPress={(s) => router.push(`/store/${s._id}?subcategory=${encodeURIComponent(selectedCategory || formattedCategoryName)}` as any)}
+              />
+            ))}
+          </>
+        )}
+      </View>
+
+      {/* Best Sellers Section Title */}
+      <View style={[styles.sectionHeader, { marginTop: 8 }]}>
+        <Ionicons name="flame-outline" size={20} color={Colors.buttonPrimary} />
+        <Text style={styles.sectionTitle}>Best Selling {formattedCategoryName}</Text>
+      </View>
     </View>
-  ), [handleSearch, searchQuery, selectedFilter, handleFilterSelect, selectedCategory]);
+  ), [stores, storesLoading, formattedCategoryName, router, selectedFilter, selectedCategory]);
 
   return (
     <View style={styles.container}>
@@ -480,7 +559,7 @@ export default function CategoryScreen() {
         </View>
         
         <FlatList
-          data={filteredProducts}
+          data={bestSellerProducts}
           renderItem={renderProduct}
           keyExtractor={(item) => item._id}
           numColumns={1}
@@ -528,7 +607,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'space-evenly',
   },  
   backButton: {
     width: 52,
@@ -584,7 +663,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
     gap: 6,
@@ -595,6 +674,68 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  storesGrid: {
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  storesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  storeCard: {
+    width: '48%',
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  storeImageWrap: {
+    height: 90,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  storeImageBg: {
+    flex: 1,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  storeImagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storeInfoBox: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  storeName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  storeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  storeMetaText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  loadingInline: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  emptyInline: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   filtersContainer: {
     backgroundColor: Colors.background,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import type { Product } from '@/types/product';
 import { useFavorites } from '@/hooks/useFavorites';
 import { Colors } from '@/constants/colors';
 import { useCart } from '@/contexts/CartContext';
+import SizeSelectorModal from '@/components/ui/SizeSelectorModal';
 
 interface ProductCardProps {
   product: Product;
@@ -36,6 +37,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const effectiveToggle = onToggleFavorite ?? favoritesHook.toggleFavorite;
   const effectiveLoading = favoritesLoading ?? favoritesHook.isLoading;
   const { addItem, updateQty, getQty } = useCart();
+  const [sizeModalVisible, setSizeModalVisible] = useState(false);
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN');
@@ -66,7 +68,25 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const qty = getQty(product._id);
 
   const handleAddToCart = () => {
+    const sizes = product.sizes || [];
+    if (sizes.length > 1) {
+      setSizeModalVisible(true);
+      return;
+    }
+    if (sizes.length === 1) {
+      addItem(product, 1, sizes[0]);
+      return;
+    }
     addItem(product, 1);
+  };
+
+  const handleConfirmSizes = (selectedSizes: string[]) => {
+    if (!selectedSizes || selectedSizes.length === 0) {
+      setSizeModalVisible(false);
+      return;
+    }
+    selectedSizes.forEach(sz => addItem(product, 1, sz));
+    setSizeModalVisible(false);
   };
 
   const handleIncrease = () => {
@@ -82,6 +102,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const isAvailable = product.isActive && product.availableQuantity > 0;
 
   return (
+    <>
     <TouchableOpacity 
       style={[styles.container, { width: cardWidth, height: cardHeight }]}
       onPress={() => onPress(product)}
@@ -262,6 +283,17 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
         </View>
       </View>
     </TouchableOpacity>
+    {/* Size Selector Modal */}
+    <SizeSelectorModal
+      key="size-modal"
+      visible={sizeModalVisible}
+      product={product}
+      multiple
+      initialSelected={[]}
+      onConfirm={handleConfirmSizes}
+      onClose={() => setSizeModalVisible(false)}
+    />
+    </>
   );
 };
 

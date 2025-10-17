@@ -19,13 +19,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
 import { useCart } from '@/contexts/CartContext';
 import type { CartItem as CartItemType } from '@/contexts/CartContext';
+import SizeSelectorModal from '@/components/ui/SizeSelectorModal';
 
 // Helper: format INR without decimals across the app UI
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartItemType; updateQuantity: (productId: string, qty: number) => void; removeItem: (productId: string) => void }) => {
+const SwipeableCartItem = ({ item, updateQuantity, removeItem, onEdit }: { item: CartItemType; updateQuantity: (productId: string, qty: number, size?: string) => void; removeItem: (productId: string, size?: string) => void; onEdit: (item: CartItemType) => void }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [showDelete, setShowDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -33,7 +35,10 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
         return Math.abs(gestureState.dx) > 10;
       },
       onPanResponderMove: (_, gestureState) => {
+        // allow left swipe up to -100 and right swipe up to +100
         if (gestureState.dx < 0 && gestureState.dx > -100) {
+          translateX.setValue(gestureState.dx);
+        } else if (gestureState.dx > 0 && gestureState.dx < 100) {
           translateX.setValue(gestureState.dx);
         }
       },
@@ -44,12 +49,21 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
             useNativeDriver: true,
           }).start();
           setShowDelete(true);
+          setShowEdit(false);
+        } else if (gestureState.dx > 50) {
+          Animated.spring(translateX, {
+            toValue: 80,
+            useNativeDriver: true,
+          }).start();
+          setShowEdit(true);
+          setShowDelete(false);
         } else {
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
           }).start();
           setShowDelete(false);
+          setShowEdit(false);
         }
       },
     })
@@ -61,12 +75,24 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
-      removeItem(item.productId);
+      removeItem(item.productId, item.size);
     });
   };
 
   return (
     <View style={styles.swipeContainer}>
+      {/* Left Edit Button (shown on right swipe) */}
+      <View style={styles.editButtonContainer}>
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={() => onEdit(item)}
+        >
+          <Ionicons name="pencil" size={24} color="#FFFFFF" />
+          <Text style={styles.editButtonText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Right Delete Button (shown on left swipe) */}
       <View style={styles.deleteButtonContainer}>
         <TouchableOpacity 
           style={styles.deleteButton}
@@ -98,6 +124,9 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
           <Text style={styles.itemName} numberOfLines={2}>
             {item.product.name}
           </Text>
+          {!!item.size && (
+            <Text style={styles.itemSize}>Size: {item.size}</Text>
+          )}
           <Text style={styles.itemStore}>
             {typeof item.product.storeId === 'object' 
               ? ((item.product.storeId as any).storeName || 'Store') 
@@ -108,7 +137,7 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
             <View style={styles.quantityControls}>
               <TouchableOpacity 
                 style={styles.quantityButton}
-                onPress={() => updateQuantity(item.productId, item.qty - 1)}
+                onPress={() => updateQuantity(item.productId, item.qty - 1, item.size)}
               >
                 <Ionicons name="remove" size={18} color={Colors.textPrimary} />
               </TouchableOpacity>
@@ -117,7 +146,7 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
               
               <TouchableOpacity 
                 style={styles.quantityButton}
-                onPress={() => updateQuantity(item.productId, item.qty + 1)}
+                onPress={() => updateQuantity(item.productId, item.qty + 1, item.size)}
               >
                 <Ionicons name="add" size={18} color={Colors.textPrimary} />
               </TouchableOpacity>
@@ -133,12 +162,14 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem }: { item: CartIte
 export default function CartScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { items, updateQty, removeItem } = useCart();
+  const { items, updateQty, removeItem, addItem } = useCart();
   const [shippingAddress, setShippingAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<CartItemType | null>(null);
   
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    updateQty(productId, newQuantity);
+  const updateQuantity = (productId: string, newQuantity: number, size?: string) => {
+    updateQty(productId, newQuantity, size);
   };
 
   const calculateTotal = () => {
@@ -146,7 +177,8 @@ export default function CartScreen() {
   };
 
   const calculateDeliveryFee = () => {
-    return items.length > 0 ? 50 : 0;
+    // Flat fee per cart line item
+    return items.length * 50;
   };
 
   const calculateGrandTotal = () => {
@@ -235,7 +267,7 @@ export default function CartScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <Text style={styles.headerTitleBlack}>Shopping Cart</Text>
+          <Text style={styles.headerTitleBlack}>My Cart</Text>
         </LinearGradient>
         
         <View style={styles.emptyContainer}>
@@ -264,6 +296,7 @@ export default function CartScreen() {
 }
 
   return (
+    <>
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
@@ -272,7 +305,7 @@ export default function CartScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <Text style={styles.headerTitleBlack}>Shopping Cart</Text>
+        <Text style={styles.headerTitleBlack}>My Cart</Text>
       </LinearGradient>
 
       <ScrollView 
@@ -283,16 +316,17 @@ export default function CartScreen() {
         {/* Cart Items */}
         <View style={styles.itemsSection}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="bag-handle-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="bag-handle-outline" size={20} color={Colors.buttonPrimary} />
             <Text style={styles.sectionTitle}>Your Items</Text>
           </View>
           <Text style={styles.swipeHint}>← Swipe left to delete</Text>
           {items.map((item) => (
             <SwipeableCartItem
-              key={item.productId}
+              key={`${item.productId}-${item.size || 'nosize'}`}
               item={item}
               updateQuantity={updateQuantity}
               removeItem={removeItem}
+              onEdit={(it) => { setEditingItem(it); setEditModalVisible(true); }}
             />
           ))}
         </View>
@@ -300,7 +334,7 @@ export default function CartScreen() {
         {/* Shipping Address */}
         <View style={styles.addressSection}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="location-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="location-outline" size={20} color={Colors.buttonPrimary} />
             <Text style={styles.sectionTitle}>Delivery Address</Text>
           </View>
           <TextInput
@@ -317,7 +351,7 @@ export default function CartScreen() {
         {/* Order Summary */}
         <View style={styles.summarySection}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="receipt-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="receipt-outline" size={20} color={Colors.buttonPrimary} />
             <Text style={styles.sectionTitle}>Bill Details</Text>
           </View>
           
@@ -372,6 +406,26 @@ export default function CartScreen() {
         </View>
       </View>
     </View>
+    {/* Size Edit Modal */}
+    <SizeSelectorModal
+      visible={editModalVisible}
+      product={editingItem ? editingItem.product : null}
+      multiple={false}
+      initialSelected={editingItem && editingItem.size ? [editingItem.size] : []}
+      onConfirm={(sel) => {
+        const newSize = sel && sel.length > 0 ? sel[0] : undefined;
+        if (editingItem && newSize) {
+          // move qty to new size line
+          removeItem(editingItem.productId, editingItem.size);
+          addItem(editingItem.product, editingItem.qty, newSize);
+        }
+        setEditModalVisible(false);
+        setEditingItem(null);
+      }}
+      onClose={() => { setEditModalVisible(false); setEditingItem(null); }}
+      title={`Edit Size${editingItem && editingItem.size ? ` (current: ${editingItem.size})` : ''}`}
+    />
+    </>
   );
 }
 
@@ -383,7 +437,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.background,
-    paddingTop: 25,
+    paddingTop: 40,
     paddingBottom: 6,
     paddingHorizontal: 20,
   },
@@ -497,7 +551,7 @@ const styles = StyleSheet.create({
   },
   swipeContainer: {
     marginBottom: 16,
-    height: 120,
+    height: 150,
     position: 'relative',
   },
   deleteButtonContainer: {
@@ -509,16 +563,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  editButtonContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   deleteButton: {
     backgroundColor: Colors.error,
     width: 70,
-    height: 100,
+    height: 120,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editButton: {
+    backgroundColor: Colors.primary,
+    width: 70,
+    height: 120,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   deleteButtonText: {
     color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  editButtonText: {
+    color: '#000000',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
@@ -533,15 +610,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
-    height: 120,
+    height: 140,
+    paddingBottom: 8,
+    alignItems: 'center',
   },
   itemImageContainer: {
-    width: 80,
-    height: 80,
+    width: 96,
+    height: '100%',
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F5F5F5',
     marginRight: 16,
+    alignSelf: 'stretch',
   },
   itemImage: {
     width: '100%',
@@ -557,6 +637,11 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 4,
   },
+  itemSize: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
   itemStore: {
     fontSize: 12,
     color: Colors.textSecondary,
@@ -566,6 +651,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   itemPrice: {
     fontSize: 18,
@@ -599,6 +685,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  itemDelivery: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   addressSection: {
     marginTop: 24,

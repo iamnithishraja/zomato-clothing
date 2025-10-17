@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -114,6 +114,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
   const router = useRouter();
   const { user } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
+  const navigatingRef = useRef(false);
   
   // Get subcategories based on user gender
   const DEFAULT_SUBCATEGORIES = getAllSubcategories(user?.gender);
@@ -134,6 +135,10 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
     } else {
       // On home screen, navigate to category screen
       try {
+        if (navigatingRef.current) {
+          return;
+        }
+        navigatingRef.current = true;
         let categorySlug = subcategory.toLowerCase().replace(/\s+/g, '-');
         
         // Handle special cases
@@ -146,8 +151,13 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
         InteractionManager.runAfterInteractions(() => {
           router.push(`/category/${categorySlug}` as any);
         });
+        // Release lock shortly after to avoid rapid double navigations
+        setTimeout(() => {
+          navigatingRef.current = false;
+        }, 800);
       } catch (error) {
         console.error(`Error navigating to category ${subcategory}:`, error);
+        navigatingRef.current = false;
       }
     }
   };

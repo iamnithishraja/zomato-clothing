@@ -30,7 +30,7 @@ import apiClient from '@/api/client';
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  // Location context available if needed
+
   // const { selectedCity, currentLocation } = useLocation();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string | null>('all');
@@ -40,41 +40,33 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasLoadedData, setHasLoadedData] = useState(false);
 
-  // Scroll/animation values
+  // --- Scroll animation values ---
   const scrollY = useRef(new Animated.Value(0)).current;
-  const bannerHeight = 320; // PromotionalBanner visual height
-  const categoryIconsHeight = 160; // Height of category icons section within header
-  const triggerPoint = bannerHeight + categoryIconsHeight; // When sticky elements should appear
+  const clampedScrollY = Animated.diffClamp(scrollY, 0, 300);
+  const bannerHeight = 320;
+
+  // --- Load data ---
   const loadData = useCallback(async () => {
-    if (hasLoadedData) {
-      console.log('Data already loaded, skipping...');
-      return;
-    }
-    
+    if (hasLoadedData) return;
     try {
-      console.log('Loading initial store data...');
-      
-      // Load best seller stores
       const bestSellerResponse = await apiClient.get('/api/v1/store/bestsellers', {
-        params: { limit: 4 }
+        params: { limit: 4 },
       });
       if (bestSellerResponse.data.success) {
         setBestSellerStores(bestSellerResponse.data.stores);
       }
 
-      // Load all stores
       const storesResponse = await apiClient.get('/api/v1/store/all', {
         params: {
           page: 1,
           limit: 20,
           location: selectedLocation?.name,
-        }
+        },
       });
-      
+
       if (storesResponse.data.success) {
         setStores(storesResponse.data.stores);
       }
-      
       setHasLoadedData(true);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -82,182 +74,194 @@ export default function HomeScreen() {
     }
   }, [selectedLocation, hasLoadedData]);
 
-  // Handle refresh
+  // --- Refresh handler ---
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    setHasLoadedData(false); // Reset flag to allow reload
+    setHasLoadedData(false);
     await loadData();
     setIsRefreshing(false);
   }, [loadData]);
 
-  // Handle search
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
-    try {
-      // Only search stores for now (products will be handled by category screens)
-      const storesResponse = await apiClient.get('/api/v1/store/all', {
-        params: {
-          page: 1,
-          limit: 20,
-          search: query,
-          location: selectedLocation?.name,
+  // --- Search handler ---
+  const handleSearch = useCallback(
+    async (query: string) => {
+      setSearchQuery(query);
+      try {
+        const storesResponse = await apiClient.get('/api/v1/store/all', {
+          params: {
+            page: 1,
+            limit: 20,
+            search: query,
+            location: selectedLocation?.name,
+          },
+        });
+
+        if (storesResponse.data.success) {
+          setStores(storesResponse.data.stores);
         }
-      });
-      
-      if (storesResponse.data.success) {
-        setStores(storesResponse.data.stores);
+      } catch (error) {
+        console.error('Error searching:', error);
       }
-    } catch (error) {
-      console.error('Error searching:', error);
-    }
-  }, [selectedLocation]);
+    },
+    [selectedLocation]
+  );
 
-  // Handle filter change
-  const handleFilterChange = useCallback(async (filterId: string) => {
-    setSelectedFilter(filterId);
-    try {
-      const response = await apiClient.get('/api/v1/store/all', {
-        params: {
-          page: 1,
-          limit: 20,
-          search: searchQuery,
-          location: selectedLocation?.name,
+  // --- Filter handler ---
+  const handleFilterChange = useCallback(
+    async (filterId: string) => {
+      setSelectedFilter(filterId);
+      try {
+        const response = await apiClient.get('/api/v1/store/all', {
+          params: {
+            page: 1,
+            limit: 20,
+            search: searchQuery,
+            location: selectedLocation?.name,
+          },
+        });
+
+        if (response.data.success) {
+          setStores(response.data.stores);
         }
-      });
-      
-      if (response.data.success) {
-        setStores(response.data.stores);
+      } catch (error) {
+        console.error('Error filtering:', error);
       }
-    } catch (error) {
-      console.error('Error filtering:', error);
-    }
-  }, [searchQuery, selectedLocation]);
+    },
+    [searchQuery, selectedLocation]
+  );
 
+  // --- Store press handler ---
+  const handleStorePress = useCallback(
+    (store: Store) => {
+      router.push({ pathname: '/store/[storeId]', params: { storeId: store._id } });
+    },
+    [router]
+  );
 
-  // Handle store press
-  const handleStorePress = useCallback((store: Store) => {
-    router.push({ pathname: '/store/[storeId]', params: { storeId: store._id } });
-  }, [router]);
-
-  // Handle order press
   const handleOrderPress = useCallback(() => {
     console.log('Order now pressed');
   }, []);
 
-  // Load data only once on mount
   useEffect(() => {
     loadData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - run only once
+  }, []);
 
-  // Simplified animated values
-  const bannerTranslateY = scrollY.interpolate({
+  // --- Scroll animations ---
+  const bannerTranslateY = clampedScrollY.interpolate({
     inputRange: [0, bannerHeight],
     outputRange: [0, -bannerHeight],
     extrapolate: 'clamp',
   });
 
-  // Sticky elements - simple opacity and translate
-  const stickySearchOpacity = scrollY.interpolate({
-    inputRange: [triggerPoint - 50, triggerPoint],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  
-  const stickyIconsOpacity = scrollY.interpolate({
-    inputRange: [triggerPoint - 50, triggerPoint],
+  const stickySearchOpacity = clampedScrollY.interpolate({
+    inputRange: [0, 80],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
-  // State to track if sticky elements should be interactive
-  const [isScrolledPastTrigger, setIsScrolledPastTrigger] = useState(false);
+  const stickyIconsOpacity = clampedScrollY.interpolate({
+    inputRange: [50, 150],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
-  // Handle scroll event
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // --- Fixed scroll event ---
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { 
+    {
       useNativeDriver: true,
-      listener: (event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        const shouldBeInteractive = offsetY > triggerPoint - 50;
-        if (shouldBeInteractive !== isScrolledPastTrigger) {
-          setIsScrolledPastTrigger(shouldBeInteractive);
-        }
-      }
+      listener: (e: any) => {
+        const offsetY = e.nativeEvent.contentOffset.y;
+        if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+        scrollTimeout.current = setTimeout(() => {
+          setIsScrolled(offsetY > 80);
+        }, 50);
+      },
     }
   );
 
-  const renderStoreCard: ListRenderItem<Store> = useCallback(({ item }) => (
-    <View style={styles.storeCardContainer}>
-      <ModernStoreCard store={item} onPress={handleStorePress} />
-    </View>
-  ), [handleStorePress]);
-
-  const renderHeader = useCallback(() => (
-    <>
-      {/* Promotional Banner (covers status bar) */}
-      <Animated.View
-        style={[
-          styles.bannerContainer,
-          { transform: [{ translateY: bannerTranslateY }] }
-        ]}
-      >
-        <PromotionalBanner
-          onOrderPress={handleOrderPress}
-          selectedLocation={selectedLocation}
-          onLocationSelect={setSelectedLocation}
-          onSearch={handleSearch}
-        />
-      </Animated.View>
-
-      {/* Category Icons - after banner within list header */}
-      <CategoryIcons
-        showHeader={true}
-        screenType="home"
-      />
-
-      {/* Best Seller Carousel */}
-      <SwipeCarousel
-        stores={bestSellerStores}
-        onStorePress={handleStorePress}
-      />
-
-      {/* Filter Buttons */}
-      <FilterButtons
-        selectedFilter={selectedFilter}
-        onFilterSelect={handleFilterChange}
-        screenType="home"
-      />
-
-      {/* Stores Section Header */}
-      <View style={styles.storesSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {searchQuery ? 'Search Results' : 'Nearby Stores'}
-          </Text>
-        </View>
+  const renderStoreCard: ListRenderItem<Store> = useCallback(
+    ({ item }) => (
+      <View style={styles.storeCardContainer}>
+        <ModernStoreCard store={item} onPress={handleStorePress} />
       </View>
-    </>
-  ), [selectedLocation, handleSearch, bestSellerStores, handleStorePress, selectedFilter, handleFilterChange, searchQuery, handleOrderPress, bannerTranslateY]);
+    ),
+    [handleStorePress]
+  );
 
-  // Animated FlatList to support native onScroll driver
+  const renderHeader = useCallback(
+    () => (
+      <>
+        {/* --- Promotional Banner --- */}
+        <Animated.View
+          style={[
+            styles.bannerContainer,
+            { transform: [{ translateY: bannerTranslateY }] },
+          ]}
+        >
+          <PromotionalBanner
+            onOrderPress={handleOrderPress}
+            selectedLocation={selectedLocation}
+            onLocationSelect={setSelectedLocation}
+            onSearch={handleSearch}
+          />
+        </Animated.View>
+
+        {/* --- Category Icons --- */}
+        <CategoryIcons showHeader={true} screenType="home" />
+
+        {/* --- Best Seller Carousel --- */}
+        <SwipeCarousel stores={bestSellerStores} onStorePress={handleStorePress} />
+
+        {/* --- Filter Buttons --- */}
+        <FilterButtons
+          selectedFilter={selectedFilter}
+          onFilterSelect={handleFilterChange}
+          screenType="home"
+        />
+
+        {/* --- Stores Section Header --- */}
+        <View style={styles.storesSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {searchQuery ? 'Search Results' : 'Nearby Stores'}
+            </Text>
+          </View>
+        </View>
+      </>
+    ),
+    [
+      selectedLocation,
+      handleSearch,
+      bestSellerStores,
+      handleStorePress,
+      selectedFilter,
+      handleFilterChange,
+      searchQuery,
+      handleOrderPress,
+      bannerTranslateY,
+    ]
+  );
+
   const AnimatedFlatList: any = Animated.createAnimatedComponent(FlatList as any);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Sticky Search Bar */}
+      {/* --- Sticky Search Bar --- */}
       <Animated.View
         style={[
           styles.stickySearchBar,
           {
             paddingTop: Math.max(insets.top, 14),
             opacity: stickySearchOpacity,
-          }
+          },
         ]}
-        pointerEvents={isScrolledPastTrigger ? "auto" : "none"}
+        pointerEvents={isScrolled ? 'auto' : 'none'}
       >
         <SearchBar
           onSearch={handleSearch}
@@ -267,24 +271,16 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* Sticky Category Icons */}
+      {/* --- Sticky Category Icons --- */}
       <Animated.View
         style={[
           styles.stickyCategoryIcons,
-          {
-            paddingTop: 30,
-            opacity: stickyIconsOpacity,
-          }
+          { paddingTop: 30, opacity: stickyIconsOpacity },
         ]}
-        pointerEvents={isScrolledPastTrigger ? "auto" : "none"}
+        pointerEvents={isScrolled ? 'auto' : 'none'}
       >
         <CategoryIcons showHeader={false} screenType="home" />
       </Animated.View>
-
-      {/* Touch blocker to ensure banner components get priority when not scrolled */}
-      {!isScrolledPastTrigger && (
-        <View style={styles.touchBlocker} pointerEvents="box-none" />
-      )}
 
       <AnimatedFlatList
         data={stores}
@@ -314,8 +310,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   bannerContainer: {
-    zIndex: 15,
-    elevation: 15,
+    zIndex: 5,
+    elevation: 5,
   },
   stickySearchBar: {
     position: 'absolute',
@@ -326,8 +322,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
     paddingHorizontal: 16,
-    zIndex: 10,
-    elevation: 10,
+    zIndex: 20,
+    elevation: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -339,35 +335,18 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: Colors.background,
-    zIndex: 9,
-    elevation: 9,
+    zIndex: 19,
+    elevation: 19,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   flatListContent: {
-    paddingBottom: 100, // Extra padding for tab bar
-    paddingTop: 0, // Initial view: banner handles top spacing
+    paddingBottom: 100,
+    paddingTop: 0,
   },
-  storeCardContainer: {
-    // Remove padding - let the card handle its own margins
-  },
-  filterButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  storeCardContainer: {},
   storesSection: {
     marginTop: 14,
     paddingHorizontal: 16,
@@ -384,14 +363,5 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-  },
-  touchBlocker: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 400, // Cover the banner and category area
-    zIndex: 1,
-    elevation: 1,
   },
 });

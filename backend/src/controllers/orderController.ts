@@ -53,10 +53,11 @@ async function createOrder(req: Request, res: Response) {
         return sendErrorResponse(res, 400, `Product is not available: ${product.name}`);
       }
 
+      // Set storeId from the first product (all products should be from same store)
       if (storeId === null) {
         storeId = product.storeId;
       } else if (product.storeId.toString() !== storeId.toString()) {
-        return sendErrorResponse(res, 400, "All products must be from the same store");
+        return sendErrorResponse(res, 400, "All products must be from the same store for a single order");
       }
 
       if (product.availableQuantity < item.quantity) {
@@ -437,8 +438,146 @@ async function getOrderStats(req: Request, res: Response) {
   }
 }
 
+// Create multiple orders for different stores
+async function createMultipleOrders(req: Request, res: Response) {
+  try {
+    // User is already authenticated by middleware
+    const user = (req as any).user;
+    
+    // Check if user is a customer
+    if (!validateUserRole(user, res)) return;
+
+    // Validate request body - array of orders
+    const { orders } = req.body;
+    
+    if (!Array.isArray(orders) || orders.length === 0) {
+      return sendErrorResponse(res, 400, "Orders array is required and must not be empty");
+    }
+
+    const createdOrders = [];
+    const errors = [];
+
+    // Process each order
+    for (let i = 0; i < orders.length; i++) {
+      try {
+        const orderData = orders[i];
+        
+        // Validate each order
+        const validatedData = createOrderSchema.parse(orderData);
+        const { orderItems, shippingAddress, paymentMethod } = validatedData;
+
+        // Calculate total amount and validate product availability
+        let totalAmount = 0;
+        let storeId = null;
+        const validatedOrderItems = [];
+
+        for (const item of orderItems) {
+          const product = await ProductModel.findById(item.product);
+          if (!product) {
+            throw new Error(`Product not found: ${item.product}`);
+          }
+
+          if (!product.isActive) {
+            throw new Error(`Product is not available: ${product.name}`);
+          }
+
+          // Set storeId from the first product (all products should be from same store)
+          if (storeId === null) {
+            storeId = product.storeId;
+          } else if (product.storeId.toString() !== storeId.toString()) {
+            throw new Error("All products must be from the same store for a single order");
+          }
+
+          if (product.availableQuantity < item.quantity) {
+            throw new Error(`Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
+          }
+
+          // Use current product price
+          const itemTotal = item.quantity * product.price;
+          totalAmount += itemTotal;
+
+          validatedOrderItems.push({
+            product: product._id,
+            quantity: item.quantity,
+            price: product.price
+          });
+        }
+
+        // Verify store exists and is active
+        const store = await StoreModel.findById(storeId);
+        if (!store || !store.isActive) {
+          throw new Error("Store is not available");
+        }
+
+        // Create order
+        const order = new OrderModel({
+          user: user._id,
+          store: storeId,
+          orderItems: validatedOrderItems,
+          totalAmount,
+          shippingAddress: shippingAddress.trim(),
+          paymentMethod
+        });
+
+        // Update product quantities (atomically)
+        for (const item of validatedOrderItems) {
+          await ProductModel.findByIdAndUpdate(item.product, {
+            $inc: { availableQuantity: -item.quantity }
+          });
+        }
+
+        await order.save();
+
+        // Populate order details for response
+        const populatedOrder = await OrderModel.findById(order._id)
+          .populate('user', 'name phone email')
+          .populate('store', 'storeName address')
+          .populate('orderItems.product', 'name images price');
+
+        createdOrders.push(populatedOrder);
+
+      } catch (error) {
+        console.error(`Error creating order ${i + 1}:`, error);
+        errors.push({
+          orderIndex: i,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    // Return response
+    if (createdOrders.length === 0) {
+      return sendErrorResponse(res, 400, "No orders were created successfully", { errors });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${createdOrders.length} order${createdOrders.length > 1 ? 's' : ''} created successfully`,
+      orders: createdOrders,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error("Error creating multiple orders:", error);
+    
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.issues.map((err: any) => ({
+          field: err.path.join('.'),
+          message: err.message
+        }))
+      });
+    }
+
+    return sendErrorResponse(res, 500, "Internal server error");
+  }
+}
+
 export { 
   createOrder, 
+  createMultipleOrders,
   getOrderById, 
   getOrdersForUser, 
   updateOrderStatus,

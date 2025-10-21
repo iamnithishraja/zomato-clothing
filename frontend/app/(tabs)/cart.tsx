@@ -7,7 +7,6 @@ import {
   TouchableOpacity, 
   Image, 
   Alert,
-  TextInput,
   Animated,
   PanResponder
 } from 'react-native';
@@ -20,14 +19,13 @@ import apiClient from '@/api/client';
 import { useCart } from '@/contexts/CartContext';
 import type { CartItem as CartItemType } from '@/contexts/CartContext';
 import SizeSelectorModal from '@/components/ui/SizeSelectorModal';
+import AddressSelector from '@/components/user/AddressSelector';
 
 // Helper: format INR without decimals across the app UI
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const SwipeableCartItem = ({ item, updateQuantity, removeItem, onEdit }: { item: CartItemType; updateQuantity: (productId: string, qty: number, size?: string) => void; removeItem: (productId: string, size?: string) => void; onEdit: (item: CartItemType) => void }) => {
   const translateX = useRef(new Animated.Value(0)).current;
-  const [showDelete, setShowDelete] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -48,22 +46,16 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem, onEdit }: { item:
             toValue: -80,
             useNativeDriver: true,
           }).start();
-          setShowDelete(true);
-          setShowEdit(false);
         } else if (gestureState.dx > 50) {
           Animated.spring(translateX, {
             toValue: 80,
             useNativeDriver: true,
           }).start();
-          setShowEdit(true);
-          setShowDelete(false);
         } else {
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
           }).start();
-          setShowDelete(false);
-          setShowEdit(false);
         }
       },
     })
@@ -127,11 +119,14 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem, onEdit }: { item:
           {!!item.size && (
             <Text style={styles.itemSize}>Size: {item.size}</Text>
           )}
-          <Text style={styles.itemStore}>
-            {typeof item.product.storeId === 'object' 
-              ? ((item.product.storeId as any).storeName || 'Store') 
-              : 'Store'}
-          </Text>
+          <View style={styles.storeContainer}>
+            <Ionicons name="storefront-outline" size={12} color={Colors.textSecondary} />
+            <Text style={styles.itemStore}>
+              {typeof item.product.storeId === 'object' 
+                ? ((item.product.storeId as any).storeName || 'Store') 
+                : 'Store'}
+            </Text>
+          </View>
           <View style={styles.priceQuantityRow}>
             <Text style={styles.itemPrice}>₹{formatINR(item.price)}</Text>
             <View style={styles.quantityControls}>
@@ -162,8 +157,8 @@ const SwipeableCartItem = ({ item, updateQuantity, removeItem, onEdit }: { item:
 export default function CartScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { items, updateQty, removeItem, addItem } = useCart();
-  const [shippingAddress, setShippingAddress] = useState('');
+  const { items, updateQty, removeItem, addItem, clearCart } = useCart();
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<CartItemType | null>(null);
@@ -185,6 +180,35 @@ export default function CartScreen() {
     return calculateTotal() + calculateDeliveryFee();
   };
 
+  // Group items by store for display
+  const ordersByStore = items.reduce((acc, item) => {
+    const storeId = typeof item.product.storeId === 'object' 
+      ? (item.product.storeId as any)._id 
+      : (item.product.storeId as any);
+    const storeName = typeof item.product.storeId === 'object' 
+      ? ((item.product.storeId as any).storeName || 'Store') 
+      : 'Store';
+    
+    if (!acc[storeId]) {
+      acc[storeId] = {
+        storeId,
+        storeName,
+        items: [] as any[],
+        totalAmount: 0,
+      };
+    }
+    
+    const itemTotal = item.price * item.qty;
+    acc[storeId].items.push({
+      product: item.productId,
+      quantity: item.qty,
+      price: item.price,
+    });
+    acc[storeId].totalAmount += itemTotal;
+    
+    return acc;
+  }, {} as Record<string, any>);
+
   const handlePlaceOrder = async () => {
     if (!user) {
       Alert.alert('Error', 'Please login to place an order');
@@ -196,59 +220,81 @@ export default function CartScreen() {
       return;
     }
 
-    if (!shippingAddress.trim()) {
-      Alert.alert('Error', 'Please enter your shipping address');
+    if (!selectedAddress) {
+      Alert.alert('Error', 'Please select a delivery address');
       return;
     }
 
     try {
       setIsLoading(true);
 
+      // Group items by store
       const ordersByStore = items.reduce((acc, item) => {
-        const storeId = typeof item.product.storeId === 'object' ? (item.product.storeId as any)._id : (item.product.storeId as any);
-        const storeName = typeof item.product.storeId === 'object' ? ((item.product.storeId as any).storeName || 'Store') : 'Store';
+        const storeId = typeof item.product.storeId === 'object' 
+          ? (item.product.storeId as any)._id 
+          : (item.product.storeId as any);
+        const storeName = typeof item.product.storeId === 'object' 
+          ? ((item.product.storeId as any).storeName || 'Store') 
+          : 'Store';
+        
         if (!acc[storeId]) {
           acc[storeId] = {
             storeId,
             storeName,
             items: [] as any[],
+            totalAmount: 0,
           };
         }
+        
+        const itemTotal = item.price * item.qty;
         acc[storeId].items.push({
           product: item.productId,
           quantity: item.qty,
           price: item.price,
         });
+        acc[storeId].totalAmount += itemTotal;
+        
         return acc;
       }, {} as Record<string, any>);
 
-      const orderPromises = Object.values(ordersByStore).map(async (storeOrder: any) => {
-        const orderData = {
-          store: storeOrder.storeId,
-          orderItems: storeOrder.items,
-          totalAmount: storeOrder.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0),
-          shippingAddress: shippingAddress.trim(),
-          paymentMethod: 'COD' as const
-        };
+      // Create multiple orders using the new endpoint
+      const ordersData = Object.values(ordersByStore).map((storeOrder: any) => ({
+        store: storeOrder.storeId,
+        orderItems: storeOrder.items,
+        totalAmount: storeOrder.totalAmount,
+        shippingAddress: selectedAddress,
+        paymentMethod: 'COD' as const
+      }));
 
-        return apiClient.post('/api/v1/order', orderData);
+      const response = await apiClient.post('/api/v1/order/multiple', {
+        orders: ordersData
       });
 
-      await Promise.all(orderPromises);
+      const successfulOrders = response.data.orders || [];
+      const errors = response.data.errors || [];
 
-      Alert.alert(
-        'Order Placed Successfully!',
-        'Your order has been placed and will be processed soon.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setShippingAddress('');
-              router.push('/(tabs)/order');
+      // Clear cart only if all orders were successful
+      if (errors.length === 0) {
+        clearCart();
+        Alert.alert(
+          'Order Placed Successfully!',
+          `Your ${successfulOrders.length} order${successfulOrders.length > 1 ? 's have' : ' has'} been placed and will be processed soon.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setSelectedAddress(null);
+                router.push('/(tabs)/order');
+              }
             }
-          }
-        ]
-      );
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Partial Success',
+          `${successfulOrders.length} order${successfulOrders.length > 1 ? 's were' : ' was'} placed successfully. ${errors.length} order${errors.length > 1 ? 's failed' : ' failed'}. Please try again for failed orders.`
+        );
+      }
 
     } catch (error) {
       console.error('Error placing order:', error);
@@ -276,7 +322,7 @@ export default function CartScreen() {
           </View>
           <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
           <Text style={styles.emptySubtitle}>
-            Looks like you haven't added anything to your cart yet
+            Looks like you haven&apos;t added anything to your cart yet
           </Text>
           <TouchableOpacity 
             style={styles.shopButton}
@@ -337,14 +383,10 @@ export default function CartScreen() {
             <Ionicons name="location-outline" size={20} color={Colors.buttonPrimary} />
             <Text style={styles.sectionTitle}>Delivery Address</Text>
           </View>
-          <TextInput
-            style={styles.addressInput}
-            placeholder="Enter your complete delivery address"
-            value={shippingAddress}
-            onChangeText={setShippingAddress}
-            multiline
-            numberOfLines={4}
-            placeholderTextColor={Colors.textSecondary}
+          <AddressSelector
+            selectedAddress={selectedAddress}
+            onAddressSelect={setSelectedAddress}
+            onAddNewAddress={setSelectedAddress}
           />
         </View>
 
@@ -354,6 +396,25 @@ export default function CartScreen() {
             <Ionicons name="receipt-outline" size={20} color={Colors.buttonPrimary} />
             <Text style={styles.sectionTitle}>Bill Details</Text>
           </View>
+          
+          {/* Store-wise breakdown */}
+          {Object.keys(ordersByStore).length > 1 && (
+            <View style={styles.storeBreakdown}>
+              <Text style={styles.breakdownTitle}>Orders will be split by store:</Text>
+              {Object.values(ordersByStore).map((storeOrder: any, index: number) => (
+                <View key={index} style={styles.storeOrder}>
+                  <View style={styles.storeOrderHeader}>
+                    <Ionicons name="storefront-outline" size={16} color={Colors.buttonPrimary} />
+                    <Text style={styles.storeOrderName}>{storeOrder.storeName}</Text>
+                    <Text style={styles.storeOrderAmount}>₹{formatINR(storeOrder.totalAmount)}</Text>
+                  </View>
+                  <Text style={styles.storeOrderItems}>
+                    {storeOrder.items.length} item{storeOrder.items.length > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
           
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
@@ -642,10 +703,15 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: 6,
   },
+  storeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   itemStore: {
     fontSize: 12,
     color: Colors.textSecondary,
-    marginBottom: 8,
+    marginLeft: 4,
   },
   priceQuantityRow: {
     flexDirection: 'row',
@@ -806,5 +872,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,
+  },
+  storeBreakdown: {
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  breakdownTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  storeOrder: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  storeOrderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  storeOrderName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginLeft: 6,
+    flex: 1,
+  },
+  storeOrderAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.buttonPrimary,
+  },
+  storeOrderItems: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginLeft: 22,
   },
 });

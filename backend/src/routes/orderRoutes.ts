@@ -1,6 +1,7 @@
 import express from "express";
 import {
     createOrder,
+    createMultipleOrders,
     getOrderById,
     getOrdersForUser,
     updateOrderStatus,
@@ -13,6 +14,9 @@ const router = express.Router();
 
 // Order creation - only for customers
 router.post("/", isAuthenticated, requireRole(['User']), createOrder);
+
+// Multiple orders creation - for different stores
+router.post("/multiple", isAuthenticated, requireRole(['User']), createMultipleOrders);
 
 // Get order by ID - accessible by all authenticated users with proper permissions
 router.get("/:orderId", isAuthenticated, getOrderById);

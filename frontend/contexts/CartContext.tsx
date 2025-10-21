@@ -17,6 +17,7 @@ export type CartContextType = {
   addItem: (product: Product, qty?: number, size?: string) => void;
   updateQty: (productId: string, qty: number, size?: string) => void;
   removeItem: (productId: string, size?: string) => void;
+  clearCart: () => void;
   getQty: (productId: string) => number;
   getSizeQty: (productId: string, size: string) => number;
 };
@@ -51,6 +52,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.filter(i => !(i.productId === productId && (size ? i.size === size : true))));
   }, []);
 
+  const clearCart = useCallback(() => {
+    setItems([]);
+  }, []);
+
   const getQty = useCallback((productId: string) => {
     return items.filter(i => i.productId === productId).reduce((acc, it) => acc + it.qty, 0);
   }, [items]);
@@ -63,7 +68,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const count = useMemo(() => items.reduce((acc, i) => acc + i.qty, 0), [items]);
   const total = useMemo(() => items.reduce((acc, i) => acc + i.qty * i.price, 0), [items]);
 
-  const value = useMemo(() => ({ items, count, total, addItem, updateQty, removeItem, getQty, getSizeQty }), [items, count, total, addItem, updateQty, removeItem, getQty, getSizeQty]);
+  const value = useMemo(() => ({ items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty }), [items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty]);
 
   return (
     <CartContext.Provider value={value}>

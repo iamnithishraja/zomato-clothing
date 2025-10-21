@@ -14,6 +14,7 @@ import type { ListRenderItem } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
+// import { useLocation } from '@/contexts/LocationContext';
 
 import CategoryIcons from '@/components/user/CategoryIcons';
 import SwipeCarousel from '@/components/user/SwipeCarousel';
@@ -29,6 +30,8 @@ import apiClient from '@/api/client';
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Location context available if needed
+  // const { selectedCity, currentLocation } = useLocation();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string | null>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,39 +150,42 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - run only once
 
-  // Animated values
+  // Simplified animated values
   const bannerTranslateY = scrollY.interpolate({
     inputRange: [0, bannerHeight],
     outputRange: [0, -bannerHeight],
     extrapolate: 'clamp',
   });
 
-  // Sticky visibility (appear only after triggerPoint)
+  // Sticky elements - simple opacity and translate
   const stickySearchOpacity = scrollY.interpolate({
-    inputRange: [0, triggerPoint - 40, triggerPoint],
-    outputRange: [0, 0, 1],
+    inputRange: [triggerPoint - 50, triggerPoint],
+    outputRange: [0, 1],
     extrapolate: 'clamp',
   });
-  const stickySearchTranslateY = scrollY.interpolate({
-    inputRange: [0, triggerPoint - 40, triggerPoint],
-    outputRange: [-80, -80, 0],
-    extrapolate: 'clamp',
-  });
+  
   const stickyIconsOpacity = scrollY.interpolate({
-    inputRange: [0, triggerPoint - 40, triggerPoint],
-    outputRange: [0, 0, 1],
+    inputRange: [triggerPoint - 50, triggerPoint],
+    outputRange: [0, 1],
     extrapolate: 'clamp',
   });
-  const stickyIconsTranslateY = scrollY.interpolate({
-    inputRange: [0, triggerPoint - 40, triggerPoint],
-    outputRange: [-80, -80, 0],
-    extrapolate: 'clamp',
-  });
+
+  // State to track if sticky elements should be interactive
+  const [isScrolledPastTrigger, setIsScrolledPastTrigger] = useState(false);
 
   // Handle scroll event
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { useNativeDriver: true }
+    { 
+      useNativeDriver: true,
+      listener: (event: any) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const shouldBeInteractive = offsetY > triggerPoint - 50;
+        if (shouldBeInteractive !== isScrolledPastTrigger) {
+          setIsScrolledPastTrigger(shouldBeInteractive);
+        }
+      }
+    }
   );
 
   const renderStoreCard: ListRenderItem<Store> = useCallback(({ item }) => (
@@ -242,17 +248,16 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Sticky Search Bar (always mounted; smooth animation) */}
+      {/* Sticky Search Bar */}
       <Animated.View
         style={[
           styles.stickySearchBar,
           {
             paddingTop: Math.max(insets.top, 14),
             opacity: stickySearchOpacity,
-            transform: [{ translateY: stickySearchTranslateY }]
           }
         ]}
-        pointerEvents="box-none"
+        pointerEvents={isScrolledPastTrigger ? "auto" : "none"}
       >
         <SearchBar
           onSearch={handleSearch}
@@ -262,25 +267,29 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* Sticky Category Icons (always mounted; smooth animation) */}
+      {/* Sticky Category Icons */}
       <Animated.View
         style={[
           styles.stickyCategoryIcons,
           {
             paddingTop: 30,
             opacity: stickyIconsOpacity,
-            transform: [{ translateY: stickyIconsTranslateY }]
           }
         ]}
-        pointerEvents="box-none"
+        pointerEvents={isScrolledPastTrigger ? "auto" : "none"}
       >
         <CategoryIcons showHeader={false} screenType="home" />
       </Animated.View>
 
+      {/* Touch blocker to ensure banner components get priority when not scrolled */}
+      {!isScrolledPastTrigger && (
+        <View style={styles.touchBlocker} pointerEvents="box-none" />
+      )}
+
       <AnimatedFlatList
         data={stores}
         renderItem={renderStoreCard}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item: Store) => item._id}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.flatListContent}
         showsVerticalScrollIndicator={false}
@@ -305,7 +314,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   bannerContainer: {
-    zIndex: 1,
+    zIndex: 15,
+    elevation: 15,
   },
   stickySearchBar: {
     position: 'absolute',
@@ -317,7 +327,11 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     paddingHorizontal: 16,
     zIndex: 10,
-    // Clean top: no shadow/elevation
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   stickyCategoryIcons: {
     position: 'absolute',
@@ -326,7 +340,11 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: Colors.background,
     zIndex: 9,
-    // Clean: no elevation
+    elevation: 9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   flatListContent: {
     paddingBottom: 100, // Extra padding for tab bar
@@ -366,5 +384,14 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
+  },
+  touchBlocker: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 400, // Cover the banner and category area
+    zIndex: 1,
+    elevation: 1,
   },
 });

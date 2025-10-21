@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import LocationSelector from './LocationSelector';
 import SearchBar from './SearchBar';
+import { useLocation } from '@/contexts/LocationContext';
 
 const { width } = Dimensions.get('window');
 
@@ -86,6 +87,7 @@ const PromotionalBanner: React.FC<PromotionalBannerProps> = ({
   onLocationSelect, 
   onSearch 
 }) => {
+  const { selectedCity, currentLocation } = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const intervalRef = useRef<number | null>(null);

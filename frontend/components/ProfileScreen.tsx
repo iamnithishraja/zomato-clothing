@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View, Text, StatusBar, TouchableOpacity, Alert, ScrollView, TextInput, Modal, Image } from 'react-native';
+import { StyleSheet, View, Text, StatusBar, TouchableOpacity, Alert, ScrollView, TextInput, Modal, Image, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from '../contexts/LocationContext';
 import { useRouter } from 'expo-router';
 import apiClient from '../api/client';
+import * as ImagePicker from 'expo-image-picker';
 
 const ProfileScreen = () => {
   const { user, logout, isAuthenticated, updateUser } = useAuth();
+  const { getCurrentLocation } = useLocation();
   const router = useRouter();
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editData, setEditData] = useState({
@@ -19,15 +22,25 @@ const ProfileScreen = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Avatar state
-  const [avatarUrlInput, setAvatarUrlInput] = useState(user?.avatar || '');
-  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Addresses state
   const initialAddresses = useMemo(() => user?.addresses || [], [user?.addresses]);
   const [addresses, setAddresses] = useState<string[]>(initialAddresses);
-  const [addressInput, setAddressInput] = useState('');
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isSavingAddresses, setIsSavingAddresses] = useState(false);
+
+  // Address modal state
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [addressFormData, setAddressFormData] = useState({
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    country: 'India',
+    pincode: ''
+  });
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [editingAddressIndex, setEditingAddressIndex] = useState<number | null>(null);
 
   const handleLogout = () => {
     Alert.alert(
@@ -44,7 +57,6 @@ const ProfileScreen = () => {
           onPress: async () => {
             try {
               await logout();
-              // Navigate to auth screen after logout
               router.replace('/auth/Auth');
             } catch (error) {
               console.error('Logout error:', error);
@@ -117,8 +129,7 @@ const ProfileScreen = () => {
       const resp = await apiClient.put('/api/v1/user/profile', { avatar: nextAvatar });
       if (resp.data?.success) {
         await updateUser(resp.data.user);
-        setAvatarUrlInput(resp.data.user.avatar || '');
-        setAvatarModalVisible(false);
+        Alert.alert('Success', 'Avatar updated successfully!');
       } else {
         Alert.alert('Error', resp.data?.message || 'Failed to update avatar');
       }
@@ -127,6 +138,117 @@ const ProfileScreen = () => {
       Alert.alert('Error', e.response?.data?.message || 'Failed to update avatar');
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  // Image picker functionality
+  const handleImagePicker = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload images!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatarImage(result.assets[0]);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const uploadAvatarImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      setIsUploadingAvatar(true);
+      
+      // Derive proper filename like ImageUploader does
+      const deriveFileName = (fileName?: string, uri?: string, mimeType?: string) => {
+        if (fileName) return fileName;
+        if (uri) {
+          const parts = uri.split("/");
+          const last = parts[parts.length - 1] || "";
+          if (last && last.includes(".")) return last;
+        }
+        const timestamp = Date.now();
+        const ext = mimeType?.includes('png') ? 'png' : 'jpg';
+        return `avatar_${timestamp}.${ext}`;
+      };
+
+      const fileName = deriveFileName(asset.fileName || undefined, asset.uri, asset.mimeType);
+      const fileType = asset.mimeType || 'image/jpeg';
+      
+      console.log('Uploading avatar:', { fileType, fileName, assetUri: asset.uri });
+      
+      // Get upload URL from backend
+      const uploadResponse = await apiClient.post('/api/v1/upload/url', {
+        fileType,
+        fileName,
+        role: 'User',
+        isPermanent: true,
+      });
+
+      console.log('Upload URL response:', uploadResponse.data);
+
+      if (!uploadResponse.data.success) {
+        throw new Error(uploadResponse.data.message || 'Failed to get upload URL');
+      }
+
+      const { uploadUrl, publicUrl } = uploadResponse.data;
+
+      // Upload file to R2
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      
+      const uploadResult = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: {
+          'Content-Type': fileType,
+        },
+      });
+
+      if (!uploadResult.ok) {
+        throw new Error('Failed to upload file to storage');
+      }
+
+      console.log('Avatar uploaded successfully to R2');
+      // Update user avatar
+      await saveAvatar(publicUrl);
+      
+    } catch (error: any) {
+      console.error('Avatar upload error:', error);
+      
+      let errorMessage = 'Failed to upload avatar. Please try again.';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 400) {
+          errorMessage = data?.message || 'Invalid image format. Please try a different image.';
+        } else if (status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to upload images.';
+        } else if (status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      Alert.alert('Upload Error', errorMessage);
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -149,34 +271,6 @@ const ProfileScreen = () => {
     }
   };
 
-  const addAddress = async () => {
-    const text = addressInput.trim();
-    if (text.length < 3) {
-      Alert.alert('Validation', 'Please enter a valid address');
-      return;
-    }
-    const next = [...addresses, text].slice(0, 10);
-    await persistAddresses(next);
-    setAddressInput('');
-  };
-
-  const startEditAddress = (index: number) => {
-    setEditingIndex(index);
-    setAddressInput(addresses[index] || '');
-  };
-
-  const saveEditedAddress = async () => {
-    if (editingIndex === null) return;
-    const text = addressInput.trim();
-    if (text.length < 3) {
-      Alert.alert('Validation', 'Please enter a valid address');
-      return;
-    }
-    const next = addresses.map((a, i) => (i === editingIndex ? text : a));
-    await persistAddresses(next);
-    setEditingIndex(null);
-    setAddressInput('');
-  };
 
   const deleteAddress = async (index: number) => {
     Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
@@ -188,15 +282,130 @@ const ProfileScreen = () => {
     ]);
   };
 
+  // Address modal functions
+  const openAddressModal = (index?: number) => {
+    if (index !== undefined) {
+      // Editing existing address
+      const address = addresses[index];
+      const parts = address.split(', ');
+      setAddressFormData({
+        line1: parts[0] || '',
+        line2: parts[1] || '',
+        city: parts[2] || '',
+        state: parts[3] || '',
+        country: parts[4] || 'India',
+        pincode: parts[5] || ''
+      });
+      setIsEditingAddress(true);
+      setEditingAddressIndex(index);
+    } else {
+      // Adding new address
+      setAddressFormData({
+        line1: '',
+        line2: '',
+        city: '',
+        state: '',
+        country: 'India',
+        pincode: ''
+      });
+      setIsEditingAddress(false);
+      setEditingAddressIndex(null);
+    }
+    setAddressModalVisible(true);
+  };
+
+  const closeAddressModal = () => {
+    setAddressModalVisible(false);
+    setAddressFormData({
+      line1: '',
+      line2: '',
+      city: '',
+      state: '',
+      country: 'India',
+      pincode: ''
+    });
+    setIsEditingAddress(false);
+    setEditingAddressIndex(null);
+  };
+
+  const handleGetAddressFromLocation = async () => {
+    try {
+      setIsSavingAddresses(true);
+      const locationData = await getCurrentLocation();
+      
+      if (locationData) {
+        setAddressFormData({
+          line1: locationData.landmark || locationData.street || '',
+          line2: locationData.street && locationData.street !== locationData.landmark ? locationData.street : '',
+          city: locationData.city,
+          state: locationData.state,
+          country: locationData.country,
+          pincode: locationData.pincode || ''
+        });
+        
+        // Address fields filled from current location
+      }
+    } catch (error) {
+      console.error('Error getting address from location:', error);
+    } finally {
+      setIsSavingAddresses(false);
+    }
+  };
+
+  const saveAddressFromModal = async () => {
+    const { line1, line2, city, state, country, pincode } = addressFormData;
+    
+    if (!line1.trim() || !city.trim() || !state.trim() || !pincode.trim()) {
+      Alert.alert('Validation Error', 'Please fill in all required fields (Line 1, City, State, Pincode)');
+      return;
+    }
+
+    // Create formatted address string
+    const addressParts = [line1.trim()];
+    if (line2.trim()) addressParts.push(line2.trim());
+    addressParts.push(city.trim(), state.trim(), country.trim(), pincode.trim());
+    const formattedAddress = addressParts.join(', ');
+
+    try {
+      setIsSavingAddresses(true);
+      
+      let updatedAddresses;
+      if (isEditingAddress && editingAddressIndex !== null) {
+        // Update existing address
+        updatedAddresses = addresses.map((addr, i) => 
+          i === editingAddressIndex ? formattedAddress : addr
+        );
+      } else {
+        // Add new address
+        if (addresses.length >= 5) {
+          Alert.alert('Limit Reached', 'You can only have up to 5 addresses');
+          return;
+        }
+        updatedAddresses = [...addresses, formattedAddress];
+      }
+
+      await persistAddresses(updatedAddresses);
+      closeAddressModal();
+      
+    } catch (error) {
+      console.error('Error saving address:', error);
+      Alert.alert('Error', 'Failed to save address. Please try again.');
+    } finally {
+      setIsSavingAddresses(false);
+    }
+  };
+
   if (!isAuthenticated || !user) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-        <View style={styles.content}>
-          <Ionicons name="person-outline" size={80} color={Colors.primary} />
-          <Text style={styles.title}>Not Logged In</Text>
-          <Text style={styles.description}>
-            Please log in to view your profile.
+        <View style={styles.emptyStateContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="person-outline" size={64} color={Colors.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Not Logged In</Text>
+          <Text style={styles.emptyDescription}>
+            Please log in to view your profile and manage your account.
           </Text>
         </View>
       </View>
@@ -207,189 +416,233 @@ const ProfileScreen = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* Header */}
-      <LinearGradient
-        colors={Colors.gradients.primary as [string, string]}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.profileIconContainer}>
-            {user.avatar ? (
-              <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
-            ) : (
-              <Ionicons
-                name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
-                size={48}
-                color={Colors.textPrimary}
-              />
-            )}
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user.name || 'User'}</Text>
-            <Text style={styles.userRole}>{getRoleDisplayName(user.role)}</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity onPress={() => { setAvatarUrlInput(user.avatar || ''); setAvatarModalVisible(true); }}>
-                <Text style={styles.headerLink}>{user.avatar ? 'Change Avatar' : 'Set Avatar'}</Text>
-              </TouchableOpacity>
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Hero Header */}
+        <LinearGradient
+          colors={Colors.gradients.primary as [string, string]}
+          style={styles.heroHeader}
+        >
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarWrapper}>
               {user.avatar ? (
-                <TouchableOpacity onPress={() => saveAvatar(null)} style={{ marginLeft: 16 }}>
-                  <Text style={styles.headerLinkDanger}>Remove</Text>
-                </TouchableOpacity>
-              ) : null}
+                <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons
+                    name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                    size={50}
+                    color={Colors.textPrimary}
+                  />
+                </View>
+              )}
+              <TouchableOpacity 
+                style={styles.editAvatarButton}
+                onPress={handleImagePicker}
+                disabled={isUploadingAvatar}
+              >
+                {isUploadingAvatar ? (
+                  <ActivityIndicator size={16} color={Colors.textPrimary} />
+                ) : (
+                  <Ionicons name="camera" size={16} color={Colors.textPrimary} />
+                )}
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.userInfoContainer}>
+              <Text style={styles.heroName}>{user.name || 'User'}</Text>
+              <View style={styles.roleChip}>
+                <Ionicons name={getRoleIcon(user.role)} size={12} color={Colors.textPrimary} />
+                <Text style={styles.roleText}>{getRoleDisplayName(user.role)}</Text>
+              </View>
             </View>
           </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Profile Information */}
+          {/* Quick Stats */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <View style={[styles.statIconContainer, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="checkmark-circle" size={24} color="#2196F3" />
+              </View>
+              <Text style={styles.statLabel}>Profile</Text>
+              <Text style={[styles.statValue, user.isProfileComplete ? { color: Colors.success } : { color: Colors.warning }]}>
+                {user.isProfileComplete ? 'Complete' : 'Incomplete'}
+              </Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <View style={[styles.statIconContainer, { backgroundColor: '#F3E5F5' }]}>
+                <Ionicons name="location" size={24} color="#9C27B0" />
+              </View>
+              <Text style={styles.statLabel}>Addresses</Text>
+              <Text style={styles.statValue}>{addresses.length}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="shield-checkmark" size={24} color="#4CAF50" />
+              </View>
+              <Text style={styles.statLabel}>Verified</Text>
+              <Text style={styles.statValue}>
+                {(user.isEmailVerified ? 1 : 0) + (user.isPhoneVerified ? 1 : 0)}/2
+              </Text>
+            </View>
+          </View>
+
+          {/* Personal Information */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Profile Information</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Personal Information</Text>
+              <TouchableOpacity onPress={handleEditProfile}>
+                <Ionicons name="create-outline" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
             
-            <View style={styles.infoCard}>
-              <View style={styles.infoRow}>
-                <Ionicons name="person" size={20} color={Colors.primary} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Name</Text>
+            <View style={styles.card}>
+              <View style={styles.infoItem}>
+                <View style={styles.infoIconBox}>
+                  <Ionicons name="person-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.infoTextContainer}>
+                  <Text style={styles.infoLabel}>Full Name</Text>
                   <Text style={styles.infoValue}>{user.name || 'Not provided'}</Text>
                 </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <Ionicons name="mail" size={20} color={Colors.primary} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Email</Text>
-                  <Text style={styles.infoValue}>
-                    {user.email || 'Not provided'}
+              <View style={styles.divider} />
+
+              <View style={styles.infoItem}>
+                <View style={styles.infoIconBox}>
+                  <Ionicons name="mail-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.infoTextContainer}>
+                  <Text style={styles.infoLabel}>Email Address</Text>
+                  <View style={styles.verifiedRow}>
+                    <Text style={styles.infoValue}>{user.email || 'Not provided'}</Text>
                     {user.isEmailVerified && (
-                      <Text style={styles.verifiedText}> ✓ Verified</Text>
+                      <View style={styles.verifiedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                        <Text style={styles.verifiedBadgeText}>Verified</Text>
+                      </View>
                     )}
-                  </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <Ionicons name="call" size={20} color={Colors.primary} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Phone</Text>
-                  <Text style={styles.infoValue}>
-                    {user.phone || 'Not provided'}
+              <View style={styles.divider} />
+
+              <View style={styles.infoItem}>
+                <View style={styles.infoIconBox}>
+                  <Ionicons name="call-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.infoTextContainer}>
+                  <Text style={styles.infoLabel}>Phone Number</Text>
+                  <View style={styles.verifiedRow}>
+                    <Text style={styles.infoValue}>{user.phone || 'Not provided'}</Text>
                     {user.isPhoneVerified && (
-                      <Text style={styles.verifiedText}> ✓ Verified</Text>
+                      <View style={styles.verifiedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                        <Text style={styles.verifiedBadgeText}>Verified</Text>
+                      </View>
                     )}
-                  </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <Ionicons name="transgender" size={20} color={Colors.primary} />
-                <View style={styles.infoContent}>
+              <View style={styles.divider} />
+
+              <View style={styles.infoItem}>
+                <View style={styles.infoIconBox}>
+                  <Ionicons name="transgender-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.infoTextContainer}>
                   <Text style={styles.infoLabel}>Gender</Text>
                   <Text style={styles.infoValue}>{user.gender || 'Not specified'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Profile Status</Text>
-                  <Text style={[
-                    styles.infoValue,
-                    user.isProfileComplete ? styles.completeText : styles.incompleteText
-                  ]}>
-                    {user.isProfileComplete ? 'Complete' : 'Incomplete'}
-                  </Text>
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Addresses */}
+          {/* Saved Addresses */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Addresses</Text>
-            <View style={styles.infoCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Saved Addresses</Text>
+              <View style={styles.sectionHeaderRight}>
+                <Text style={styles.sectionSubtitle}>{addresses.length}/5</Text>
+                {addresses.length < 5 && (
+                  <TouchableOpacity 
+                    style={styles.addAddressButton}
+                    onPress={() => openAddressModal()}
+                  >
+                    <LinearGradient
+                      colors={Colors.gradients.primary as [string, string]}
+                      style={styles.addAddressButtonGradient}
+                    >
+                      <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                      <Text style={styles.addAddressButtonText}>Add New Address</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.card}>
               {addresses.length === 0 ? (
-                <Text style={[styles.infoValue, { opacity: 0.7 }]}>No addresses added</Text>
+                <View style={styles.emptyAddressContainer}>
+                  <Ionicons name="location-outline" size={48} color={Colors.textSecondary} />
+                  <Text style={styles.emptyAddressText}>No addresses saved yet</Text>
+                  <Text style={styles.emptyAddressSubtext}>Add your delivery addresses below</Text>
+                </View>
               ) : (
                 addresses.map((addr, idx) => (
-                  <View key={`${addr}-${idx}`} style={[styles.infoRow, { alignItems: 'flex-start' }]}>
-                    <Ionicons name="location" size={20} color={Colors.primary} />
-                    <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center' }]}>
-                      <Text style={[styles.infoValue, { flex: 1 }]} numberOfLines={2}>{addr}</Text>
-                      <TouchableOpacity onPress={() => startEditAddress(idx)}>
-                        <Text style={styles.smallLink}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => deleteAddress(idx)} style={{ marginLeft: 12 }}>
-                        <Text style={styles.smallLinkDanger}>Delete</Text>
-                      </TouchableOpacity>
+                  <View key={`${addr}-${idx}`}>
+                    {idx > 0 && <View style={styles.divider} />}
+                    <View style={styles.addressItem}>
+                      <View style={styles.addressIconBox}>
+                        <Ionicons name="location" size={20} color={Colors.primary} />
+                      </View>
+                      <View style={styles.addressContent}>
+                        <Text style={styles.addressText} numberOfLines={2}>{addr}</Text>
+                        <View style={styles.addressActions}>
+                          <TouchableOpacity 
+                            style={styles.addressActionButton}
+                            onPress={() => openAddressModal(idx)}
+                          >
+                            <Ionicons name="create-outline" size={16} color={Colors.primary} />
+                            <Text style={styles.addressActionText}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.addressActionButton, { marginLeft: 16 }]}
+                            onPress={() => deleteAddress(idx)}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                            <Text style={[styles.addressActionText, { color: Colors.error }]}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     </View>
                   </View>
                 ))
               )}
 
-              {/* Add/Edit input */}
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.inputLabel}>{editingIndex !== null ? 'Edit Address' : 'Add Address'}</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={addressInput}
-                  onChangeText={setAddressInput}
-                  placeholder="Flat/Street, Area, City, State - Pincode, Country"
-                  multiline
-                />
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                  {editingIndex !== null ? (
-                    <>
-                      <TouchableOpacity onPress={() => { setEditingIndex(null); setAddressInput(''); }}>
-                        <Text style={styles.smallLink}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={saveEditedAddress} disabled={isSavingAddresses} style={{ marginLeft: 16 }}>
-                        <Text style={[styles.smallLinkPrimary, isSavingAddresses && styles.disabledText]}>{isSavingAddresses ? 'Saving...' : 'Save'}</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity onPress={addAddress} disabled={isSavingAddresses}>
-                      <Text style={[styles.smallLinkPrimary, isSavingAddresses && styles.disabledText]}>{isSavingAddresses ? 'Saving...' : 'Add'}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
             </View>
           </View>
 
-          {/* Account Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account Actions</Text>
-            
-            <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
+          {/* Action Buttons */}
+          <View style={styles.actionsSection}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <LinearGradient
-                colors={Colors.gradients.primary as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.actionButtonGradient}
+                colors={['#EF5350', '#E53935']}
+                style={styles.logoutGradient}
               >
-                <View style={styles.actionButtonContent}>
-                  <Ionicons name="create" size={24} color={Colors.textPrimary} />
-                  <Text style={styles.actionButtonText}>Edit Profile</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
-              <LinearGradient
-                colors={[Colors.error, '#B71C1C']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.actionButtonGradient}
-              >
-                <View style={styles.actionButtonContent}>
-                  <Ionicons name="log-out" size={24} color={Colors.textPrimary} />
-                  <Text style={styles.actionButtonText}>Logout</Text>
-                </View>
+                <Ionicons name="log-out-outline" size={22} color={Colors.textPrimary} />
+                <Text style={styles.logoutText}>Logout</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
+
+          <View style={{ height: 32 }} />
         </View>
       </ScrollView>
 
@@ -397,39 +650,39 @@ const ProfileScreen = () => {
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        transparent
+        onRequestClose={() => setIsEditModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleUpdateProfile} disabled={isUpdating}>
-              <Text style={[styles.modalSaveText, isUpdating && styles.disabledText]}>
-                {isUpdating ? 'Saving...' : 'Save'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setIsEditModalVisible(false)} activeOpacity={0.7}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalDivider} />
 
-          <ScrollView style={styles.modalContent}>
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Name</Text>
+              <Text style={styles.inputLabel}>Full Name</Text>
               <TextInput
                 style={styles.textInput}
                 value={editData.name}
                 onChangeText={(text) => setEditData({ ...editData, name: text })}
-                placeholder="Enter your name"
+                placeholder="Enter your full name"
+                placeholderTextColor={Colors.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>Email Address</Text>
               <TextInput
                 style={styles.textInput}
                 value={editData.email}
                 onChangeText={(text) => setEditData({ ...editData, email: text })}
                 placeholder="Enter your email"
+                placeholderTextColor={Colors.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -441,40 +694,151 @@ const ProfileScreen = () => {
                 style={styles.textInput}
                 value={editData.gender}
                 onChangeText={(text) => setEditData({ ...editData, gender: text })}
-                placeholder="Enter your gender"
+                placeholder="Male, Female, or Other"
+                placeholderTextColor={Colors.textSecondary}
               />
             </View>
-          </ScrollView>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalSaveButton} activeOpacity={0.85} onPress={handleUpdateProfile} disabled={isUpdating}>
+                <Text style={styles.modalSaveButtonText}>
+                  {isUpdating ? 'Saving...' : 'Save Profile'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
-      {/* Avatar URL Modal */}
-      <Modal visible={avatarModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setAvatarModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Update Avatar</Text>
-            <TouchableOpacity onPress={() => saveAvatar(avatarUrlInput.trim() || null)} disabled={isUpdating}>
-              <Text style={[styles.modalSaveText, isUpdating && styles.disabledText]}>
-                {isUpdating ? 'Saving...' : 'Save'}
+      {/* Address Modal */}
+      <Modal visible={addressModalVisible} animationType="slide" transparent onRequestClose={closeAddressModal}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isEditingAddress ? 'Edit Address' : 'Add New Address'}
               </Text>
+              <TouchableOpacity onPress={closeAddressModal} activeOpacity={0.7}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalDivider} />
+
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {/* Get Address from Location Button */}
+            <TouchableOpacity
+              style={styles.getLocationButton}
+              onPress={handleGetAddressFromLocation}
+              disabled={isSavingAddresses}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={Colors.gradients.primary as [string, string]}
+                style={styles.getLocationButtonGradient}
+              >
+                {isSavingAddresses ? (
+                  <ActivityIndicator size="small" color={Colors.textPrimary} />
+                ) : (
+                  <Ionicons name="locate" size={18} color={Colors.textPrimary} />
+                )}
+                <Text style={styles.getLocationButtonText}>
+                  {isSavingAddresses ? 'Getting Location...' : 'Get Address from Current Location'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
-          <View style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Avatar Image URL</Text>
-            <TextInput
-              style={styles.textInput}
-              value={avatarUrlInput}
-              onChangeText={setAvatarUrlInput}
-              placeholder="https://..."
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={[styles.description, { textAlign: 'left', marginTop: 8 }]}>
-              Tip: You can paste any public image URL. To remove avatar, leave empty and press Save.
-            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Address Line 1 *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={addressFormData.line1}
+                onChangeText={(text) => setAddressFormData({ ...addressFormData, line1: text })}
+                placeholder="House/Flat number, Street name"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Address Line 2</Text>
+              <TextInput
+                style={styles.textInput}
+                value={addressFormData.line2}
+                onChangeText={(text) => setAddressFormData({ ...addressFormData, line2: text })}
+                placeholder="Landmark, Area (optional)"
+                placeholderTextColor={Colors.textSecondary}
+              />
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.inputLabel}>City *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={addressFormData.city}
+                  onChangeText={(text) => setAddressFormData({ ...addressFormData, city: text })}
+                  placeholder="City"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.inputLabel}>State *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={addressFormData.state}
+                  onChangeText={(text) => setAddressFormData({ ...addressFormData, state: text })}
+                  placeholder="State"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.inputLabel}>Country</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={addressFormData.country}
+                  onChangeText={(text) => setAddressFormData({ ...addressFormData, country: text })}
+                  placeholder="Country"
+                  placeholderTextColor={Colors.textSecondary}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.inputLabel}>Pincode *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={addressFormData.pincode}
+                  onChangeText={(text) => setAddressFormData({ ...addressFormData, pincode: text })}
+                  placeholder="Pincode"
+                  placeholderTextColor={Colors.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={6}
+                />
+              </View>
+            </View>
+
+            <View style={styles.addressPreview}>
+              <Text style={styles.previewLabel}>Address Preview:</Text>
+              <Text style={styles.previewText}>
+                {(() => {
+                  const { line1, line2, city, state, country, pincode } = addressFormData;
+                  const parts = [line1];
+                  if (line2) parts.push(line2);
+                  parts.push(city, state, country, pincode);
+                  return parts.filter(p => p.trim()).join(', ') || 'Enter address details above';
+                })()}
+              </Text>
+            </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalSaveButton} activeOpacity={0.85} onPress={saveAddressFromModal} disabled={isSavingAddresses}>
+                <Text style={styles.modalSaveButtonText}>
+                  {isSavingAddresses ? 'Saving...' : 'Save Address'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -485,226 +849,547 @@ const ProfileScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    resizeMode: 'cover',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  userRole: {
-    fontSize: 16,
-    color: Colors.textPrimary,
-    opacity: 0.8,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
-  headerLink: {
-    color: Colors.textPrimary,
-    textDecorationLine: 'underline',
-    fontWeight: '600',
-  },
-  headerLinkDanger: {
-    color: Colors.error,
-    textDecorationLine: 'underline',
-    fontWeight: '600',
+    backgroundColor: '#F5F5F5',
   },
   scrollContainer: {
     flex: 1,
   },
+  heroHeader: {
+    paddingTop: 60,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  avatarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  avatarPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: Colors.textPrimary,
+  },
+  userInfoContainer: {
+    flex: 1,
+  },
+  heroName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 6,
+  },
+  roleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  roleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   content: {
     padding: 20,
+    marginTop: -12,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   section: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  addAddressButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addAddressButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  addAddressButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 16,
   },
-  infoCard: {
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  card: {
     backgroundColor: Colors.background,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  infoRow: {
+  infoItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'flex-start',
   },
-  infoContent: {
+  infoIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  infoTextContainer: {
     flex: 1,
-    marginLeft: 16,
   },
   infoLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
     marginBottom: 4,
   },
   infoValue: {
     fontSize: 16,
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
-  verifiedText: {
-    color: Colors.success,
-    fontWeight: '600',
-  },
-  completeText: {
-    color: Colors.success,
-    fontWeight: '600',
-  },
-  incompleteText: {
-    color: Colors.warning,
-    fontWeight: '600',
-  },
-  actionButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: Colors.error,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  actionButtonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-  },
-  actionButtonContent: {
+  verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
-  actionButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  verifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.success,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 16,
+  },
+  emptyAddressContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyAddressText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.textPrimary,
-    marginLeft: 12,
-  },
-  logoutButton: {
     marginTop: 12,
   },
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  modalCancelText: {
-    fontSize: 16,
+  emptyAddressSubtext: {
+    fontSize: 14,
     color: Colors.textSecondary,
+    marginTop: 4,
   },
-  modalSaveText: {
-    fontSize: 16,
+  addressItem: {
+    flexDirection: 'row',
+  },
+  addressIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  addressContent: {
+    flex: 1,
+  },
+  addressText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  addressActions: {
+    flexDirection: 'row',
+  },
+  addressActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addressActionText: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.primary,
   },
-  disabledText: {
+  addAddressContainer: {
+    marginTop: 8,
+  },
+  addAddressLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  addressInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    backgroundColor: '#FAFAFA',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  addAddressActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  cancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.textSecondary,
   },
-  modalContent: {
+  saveAddressButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveAddressGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  saveAddressText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  actionsSection: {
+    marginTop: 8,
+  },
+  logoutButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: Colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+  },
+  logoutText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  // Modal Styles
+  modalBackdrop: {
     flex: 1,
-    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 16,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  modalCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  modalContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  modalSaveButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+  },
+  getLocationButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  getLocationButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  getLocationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E0E0E0',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
     color: Colors.textPrimary,
     backgroundColor: Colors.background,
   },
-  // Fallback styles for not logged in state
-  title: {
-    fontSize: 32,
+  inputHint: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  avatarPreviewContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: '#E0E0E0',
+  },
+  avatarPreviewPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  removeAvatarButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#FFEBEE',
+    alignItems: 'center',
+  },
+  removeAvatarText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.error,
+  },
+  // Empty State
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginTop: 24,
     marginBottom: 8,
   },
-  description: {
+  emptyDescription: {
     fontSize: 16,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
-  smallLink: {
-    color: Colors.textSecondary,
-    textDecorationLine: 'underline',
+  // Address Modal Styles
+  inputRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  addressPreview: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  previewLabel: {
+    fontSize: 14,
     fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 8,
   },
-  smallLinkPrimary: {
-    color: Colors.primary,
-    textDecorationLine: 'underline',
-    fontWeight: '700',
-  },
-  smallLinkDanger: {
-    color: Colors.error,
-    textDecorationLine: 'underline',
-    fontWeight: '700',
+  previewText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    lineHeight: 22,
   },
 });
 
-export default ProfileScreen;
+export default ProfileScreen; 

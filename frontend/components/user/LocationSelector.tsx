@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,13 @@ import {
   TextInput,
   Pressable,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { useLocation } from '@/contexts/LocationContext';
 
 interface Location {
   id: string;
@@ -45,17 +48,63 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  
+  const { getCurrentLocation, currentLocation, setSelectedCity } = useLocation();
 
-  const filteredLocations = MOCK_LOCATIONS.filter(location =>
-    location.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    location.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    location.state.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredLocations = (() => {
+    const filtered = MOCK_LOCATIONS.filter(location =>
+      location.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      location.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      location.state.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // If we have a current location and it matches the search, show it at the top
+    if (currentLocation && currentLocation.city) {
+      const currentCityMatch = currentLocation.city.toLowerCase().includes(searchQuery.toLowerCase());
+      if (currentCityMatch) {
+        const currentLocationItem: Location = {
+          id: 'current',
+          name: currentLocation.city,
+          city: currentLocation.city,
+          state: currentLocation.state,
+          country: currentLocation.country,
+        };
+        return [currentLocationItem, ...filtered.filter(item => item.id !== 'current')];
+      }
+    }
+
+    return filtered;
+  })();
 
   const handleLocationSelect = (location: Location) => {
     onLocationSelect(location);
+    setSelectedCity(location.city);
     setIsModalVisible(false);
     setSearchQuery('');
+  };
+
+  const handleUseCurrentLocation = async () => {
+    try {
+      setIsGettingLocation(true);
+      const locationData = await getCurrentLocation();
+      
+      if (locationData) {
+        const currentLocationItem: Location = {
+          id: 'current',
+          name: locationData.city,
+          city: locationData.city,
+          state: locationData.state,
+          country: locationData.country,
+        };
+        
+        handleLocationSelect(currentLocationItem);
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+    } finally {
+      setIsGettingLocation(false);
+    }
   };
 
   return (
@@ -111,6 +160,28 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                     autoFocus
                   />
                 </View>
+                
+                {/* Use Current Location Button */}
+                <TouchableOpacity
+                  style={styles.currentLocationButton}
+                  onPress={handleUseCurrentLocation}
+                  disabled={isGettingLocation}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={Colors.gradients.primary as [string, string]}
+                    style={styles.currentLocationGradient}
+                  >
+                    {isGettingLocation ? (
+                      <ActivityIndicator size="small" color={Colors.textPrimary} />
+                    ) : (
+                      <Ionicons name="locate" size={18} color={Colors.textPrimary} />
+                    )}
+                    <Text style={styles.currentLocationText}>
+                      {isGettingLocation ? 'Getting Location...' : 'Use My Current Location'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
 
               <FlatList
@@ -226,6 +297,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
@@ -233,6 +305,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: Colors.textPrimary,
     fontSize: 16,
+  },
+  currentLocationButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  currentLocationGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  currentLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   locationsList: {
     flex: 1,

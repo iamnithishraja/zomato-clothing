@@ -105,7 +105,6 @@ export const emailRegisterSchema = z.object({
     password: passwordRegisterSchema,
 });
 
-
 // Profile completion schema
 export const profileCompletionSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters long").trim(),

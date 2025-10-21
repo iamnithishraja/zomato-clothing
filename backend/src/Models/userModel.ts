@@ -30,6 +30,12 @@ const userSchema = new mongoose.Schema({
     enum: ["Male", "Female", "Other"],
   },
 
+  // Addresses list (Zomato-like)
+  addresses: {
+    type: [String],
+    default: [],
+  },
+
   // Role management
   role: {
     type: String,

@@ -9,6 +9,7 @@ interface User {
   email?: string;
   gender?: 'Male' | 'Female' | 'Other';
   avatar?: string;
+  addresses?: string[];
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
   isProfileComplete: boolean;

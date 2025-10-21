@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, StatusBar, TouchableOpacity, Alert, ScrollView, TextInput, Modal } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { StyleSheet, View, Text, StatusBar, TouchableOpacity, Alert, ScrollView, TextInput, Modal, Image } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +17,17 @@ const ProfileScreen = () => {
     gender: user?.gender || ''
   });
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Avatar state
+  const [avatarUrlInput, setAvatarUrlInput] = useState(user?.avatar || '');
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
+
+  // Addresses state
+  const initialAddresses = useMemo(() => user?.addresses || [], [user?.addresses]);
+  const [addresses, setAddresses] = useState<string[]>(initialAddresses);
+  const [addressInput, setAddressInput] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [isSavingAddresses, setIsSavingAddresses] = useState(false);
 
   const handleLogout = () => {
     Alert.alert(
@@ -99,6 +110,84 @@ const ProfileScreen = () => {
     }
   };
 
+  // Avatar actions
+  const saveAvatar = async (nextAvatar: string | null) => {
+    try {
+      setIsUpdating(true);
+      const resp = await apiClient.put('/api/v1/user/profile', { avatar: nextAvatar });
+      if (resp.data?.success) {
+        await updateUser(resp.data.user);
+        setAvatarUrlInput(resp.data.user.avatar || '');
+        setAvatarModalVisible(false);
+      } else {
+        Alert.alert('Error', resp.data?.message || 'Failed to update avatar');
+      }
+    } catch (e: any) {
+      console.error('Avatar update error:', e);
+      Alert.alert('Error', e.response?.data?.message || 'Failed to update avatar');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Addresses actions
+  const persistAddresses = async (next: string[]) => {
+    try {
+      setIsSavingAddresses(true);
+      const resp = await apiClient.put('/api/v1/user/profile', { addresses: next });
+      if (resp.data?.success) {
+        setAddresses(resp.data.user.addresses || []);
+        await updateUser(resp.data.user);
+      } else {
+        Alert.alert('Error', resp.data?.message || 'Failed to save addresses');
+      }
+    } catch (e: any) {
+      console.error('Addresses update error:', e);
+      Alert.alert('Error', e.response?.data?.message || 'Failed to save addresses');
+    } finally {
+      setIsSavingAddresses(false);
+    }
+  };
+
+  const addAddress = async () => {
+    const text = addressInput.trim();
+    if (text.length < 3) {
+      Alert.alert('Validation', 'Please enter a valid address');
+      return;
+    }
+    const next = [...addresses, text].slice(0, 10);
+    await persistAddresses(next);
+    setAddressInput('');
+  };
+
+  const startEditAddress = (index: number) => {
+    setEditingIndex(index);
+    setAddressInput(addresses[index] || '');
+  };
+
+  const saveEditedAddress = async () => {
+    if (editingIndex === null) return;
+    const text = addressInput.trim();
+    if (text.length < 3) {
+      Alert.alert('Validation', 'Please enter a valid address');
+      return;
+    }
+    const next = addresses.map((a, i) => (i === editingIndex ? text : a));
+    await persistAddresses(next);
+    setEditingIndex(null);
+    setAddressInput('');
+  };
+
+  const deleteAddress = async (index: number) => {
+    Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const next = addresses.filter((_, i) => i !== index);
+        await persistAddresses(next);
+      }}
+    ]);
+  };
+
   if (!isAuthenticated || !user) {
     return (
       <View style={styles.container}>
@@ -125,15 +214,29 @@ const ProfileScreen = () => {
       >
         <View style={styles.headerContent}>
           <View style={styles.profileIconContainer}>
-            <Ionicons 
-              name={getRoleIcon(user.role)} 
-              size={40} 
-              color={Colors.textPrimary} 
-            />
+            {user.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons
+                name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                size={48}
+                color={Colors.textPrimary}
+              />
+            )}
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{user.name || 'User'}</Text>
             <Text style={styles.userRole}>{getRoleDisplayName(user.role)}</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={() => { setAvatarUrlInput(user.avatar || ''); setAvatarModalVisible(true); }}>
+                <Text style={styles.headerLink}>{user.avatar ? 'Change Avatar' : 'Set Avatar'}</Text>
+              </TouchableOpacity>
+              {user.avatar ? (
+                <TouchableOpacity onPress={() => saveAvatar(null)} style={{ marginLeft: 16 }}>
+                  <Text style={styles.headerLinkDanger}>Remove</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         </View>
       </LinearGradient>
@@ -197,6 +300,59 @@ const ProfileScreen = () => {
                   ]}>
                     {user.isProfileComplete ? 'Complete' : 'Incomplete'}
                   </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Addresses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Addresses</Text>
+            <View style={styles.infoCard}>
+              {addresses.length === 0 ? (
+                <Text style={[styles.infoValue, { opacity: 0.7 }]}>No addresses added</Text>
+              ) : (
+                addresses.map((addr, idx) => (
+                  <View key={`${addr}-${idx}`} style={[styles.infoRow, { alignItems: 'flex-start' }]}>
+                    <Ionicons name="location" size={20} color={Colors.primary} />
+                    <View style={[styles.infoContent, { flexDirection: 'row', alignItems: 'center' }]}>
+                      <Text style={[styles.infoValue, { flex: 1 }]} numberOfLines={2}>{addr}</Text>
+                      <TouchableOpacity onPress={() => startEditAddress(idx)}>
+                        <Text style={styles.smallLink}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deleteAddress(idx)} style={{ marginLeft: 12 }}>
+                        <Text style={styles.smallLinkDanger}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+
+              {/* Add/Edit input */}
+              <View style={{ marginTop: 8 }}>
+                <Text style={styles.inputLabel}>{editingIndex !== null ? 'Edit Address' : 'Add Address'}</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={addressInput}
+                  onChangeText={setAddressInput}
+                  placeholder="Flat/Street, Area, City, State - Pincode, Country"
+                  multiline
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+                  {editingIndex !== null ? (
+                    <>
+                      <TouchableOpacity onPress={() => { setEditingIndex(null); setAddressInput(''); }}>
+                        <Text style={styles.smallLink}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={saveEditedAddress} disabled={isSavingAddresses} style={{ marginLeft: 16 }}>
+                        <Text style={[styles.smallLinkPrimary, isSavingAddresses && styles.disabledText]}>{isSavingAddresses ? 'Saving...' : 'Save'}</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity onPress={addAddress} disabled={isSavingAddresses}>
+                      <Text style={[styles.smallLinkPrimary, isSavingAddresses && styles.disabledText]}>{isSavingAddresses ? 'Saving...' : 'Add'}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             </View>
@@ -291,6 +447,37 @@ const ProfileScreen = () => {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Avatar URL Modal */}
+      <Modal visible={avatarModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setAvatarModalVisible(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Update Avatar</Text>
+            <TouchableOpacity onPress={() => saveAvatar(avatarUrlInput.trim() || null)} disabled={isUpdating}>
+              <Text style={[styles.modalSaveText, isUpdating && styles.disabledText]}>
+                {isUpdating ? 'Saving...' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.inputLabel}>Avatar Image URL</Text>
+            <TextInput
+              style={styles.textInput}
+              value={avatarUrlInput}
+              onChangeText={setAvatarUrlInput}
+              placeholder="https://..."
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={[styles.description, { textAlign: 'left', marginTop: 8 }]}>
+              Tip: You can paste any public image URL. To remove avatar, leave empty and press Save.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -318,6 +505,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 20,
   },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    resizeMode: 'cover',
+  },
   userInfo: {
     flex: 1,
   },
@@ -331,6 +524,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textPrimary,
     opacity: 0.8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  headerLink: {
+    color: Colors.textPrimary,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  headerLinkDanger: {
+    color: Colors.error,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   scrollContainer: {
     flex: 1,
@@ -482,6 +689,21 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  smallLink: {
+    color: Colors.textSecondary,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  smallLinkPrimary: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
+    fontWeight: '700',
+  },
+  smallLinkDanger: {
+    color: Colors.error,
+    textDecorationLine: 'underline',
+    fontWeight: '700',
   },
 });
 

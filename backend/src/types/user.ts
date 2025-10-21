@@ -8,6 +8,8 @@ export interface User {
     email?: string | null;
     password?: string;
     gender?: string;
+    avatar?: string | null;
+    addresses?: string[];
     isPhoneVerified: boolean;
     isEmailVerified: boolean;
     isProfileComplete: boolean;

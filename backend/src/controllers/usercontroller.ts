@@ -270,6 +270,7 @@
                 email: user.email,
                 gender: user.gender,
                 avatar: user.avatar,
+                addresses: user.addresses,
                 isPhoneVerified: user.isPhoneVerified,
                 isEmailVerified: user.isEmailVerified,
                 isProfileComplete: user.isProfileComplete,
@@ -581,8 +582,9 @@ async function completeProfile(req: Request, res: Response) {
         // User is already authenticated by middleware
         const user = (req as any).user;
         
-        // Validate request body
+        // Validate request body (addresses handled outside Zod)
         const { name, gender, role, avatar } = profileCompletionSchema.parse(req.body);
+        const addresses = (req.body as any).addresses;
         
         // Check if user already has a complete profile
         if (user.isProfileComplete) {
@@ -596,7 +598,7 @@ async function completeProfile(req: Request, res: Response) {
         // For merchants, profile is not complete until store details are filled
         const isProfileComplete = role === 'Merchant' ? false : true;
         
-        const updateData = {
+        const updateData: any = {
             name: name.trim(),
             gender,
             role,
@@ -604,6 +606,11 @@ async function completeProfile(req: Request, res: Response) {
             isProfileComplete,
             updatedAt: new Date()
         };
+        if (Array.isArray(addresses)) {
+            // Minimal checks only; no Zod validation as requested
+            const validAddresses = addresses.filter((a: any) => typeof a === 'string' && a.trim().length >= 3);
+            updateData.addresses = validAddresses.slice(0, 10);
+        }
         
         // Update user profile
         const updatedUser = await UserModel.findByIdAndUpdate(
@@ -629,6 +636,7 @@ async function completeProfile(req: Request, res: Response) {
                 email: updatedUser.email,
                 gender: updatedUser.gender,
                 avatar: updatedUser.avatar,
+                addresses: updatedUser.addresses,
                 isPhoneVerified: updatedUser.isPhoneVerified,
                 isEmailVerified: updatedUser.isEmailVerified,
                 isProfileComplete: updatedUser.isProfileComplete,
@@ -663,7 +671,7 @@ async function updateProfile(req: Request, res: Response) {
         const user = (req as any).user;
         
         // Get update data from request body
-        const { name, email, gender } = req.body;
+        const { name, email, gender, addresses, avatar } = req.body;
         
         // Validate input data
         const updateData: any = {};
@@ -696,6 +704,39 @@ async function updateProfile(req: Request, res: Response) {
                 });
             }
             updateData.gender = gender;
+        }
+
+        if (avatar !== undefined) {
+            if (avatar !== null && typeof avatar !== 'string') {
+                return res.status(400).json({
+                    success: false,
+                    message: "Avatar must be a URL string or null"
+                });
+            }
+            updateData.avatar = avatar || null;
+        }
+        
+        if (addresses !== undefined) {
+            if (!Array.isArray(addresses)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Addresses must be an array of strings"
+                });
+            }
+            const invalid = addresses.some((a: any) => typeof a !== 'string' || a.trim().length < 3);
+            if (invalid) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Each address must be a non-empty string with at least 3 characters"
+                });
+            }
+            if (addresses.length > 10) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Too many addresses (max 10)"
+                });
+            }
+            updateData.addresses = addresses;
         }
         
         // Add updatedAt timestamp
@@ -739,6 +780,8 @@ async function updateProfile(req: Request, res: Response) {
                 phone: updatedUser.phone,
                 email: updatedUser.email,
                 gender: updatedUser.gender,
+                avatar: updatedUser.avatar,
+                addresses: updatedUser.addresses,
                 isPhoneVerified: updatedUser.isPhoneVerified,
                 isEmailVerified: updatedUser.isEmailVerified,
                 isProfileComplete: updatedUser.isProfileComplete,

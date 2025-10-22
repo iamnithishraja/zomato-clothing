@@ -18,16 +18,17 @@ router.post("/", isAuthenticated, requireRole(['User']), createOrder);
 // Multiple orders creation - for different stores
 router.post("/multiple", isAuthenticated, requireRole(['User']), createMultipleOrders);
 
-// Get order by ID - accessible by all authenticated users with proper permissions
-router.get("/:orderId", isAuthenticated, getOrderById);
+// IMPORTANT: Specific routes must come BEFORE parametric routes
+// Get order statistics - accessible by all authenticated users
+router.get("/stats/overview", isAuthenticated, getOrderStats);
 
 // Get orders list - accessible by all authenticated users with proper permissions
 router.get("/", isAuthenticated, getOrdersForUser);
 
+// Get order by ID - accessible by all authenticated users with proper permissions
+router.get("/:orderId", isAuthenticated, getOrderById);
+
 // Update order status - accessible by all authenticated users with proper permissions
 router.put("/:orderId/status", isAuthenticated, updateOrderStatus);
-
-// Get order statistics - accessible by all authenticated users
-router.get("/stats/overview", isAuthenticated, getOrderStats);
 
 export default router;

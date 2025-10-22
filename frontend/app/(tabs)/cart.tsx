@@ -20,6 +20,8 @@ import { useCart } from '@/contexts/CartContext';
 import type { CartItem as CartItemType } from '@/contexts/CartContext';
 import SizeSelectorModal from '@/components/ui/SizeSelectorModal';
 import AddressSelector from '@/components/user/AddressSelector';
+import PaymentMethodModal from '@/components/user/PaymentMethodModal';
+import RazorpayCheckout from 'react-native-razorpay';
 
 // Helper: format INR without decimals across the app UI
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -159,9 +161,10 @@ export default function CartScreen() {
   const router = useRouter();
   const { items, updateQty, removeItem, addItem, clearCart } = useCart();
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<CartItemType | null>(null);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   
   const updateQuantity = (productId: string, newQuantity: number, size?: string) => {
     updateQty(productId, newQuantity, size);
@@ -225,9 +228,15 @@ export default function CartScreen() {
       return;
     }
 
-    try {
-      setIsLoading(true);
+    // Show payment method selection modal
+    setPaymentModalVisible(true);
+  };
 
+  const handlePaymentMethodSelected = async (paymentMethod: 'COD' | 'Online') => {
+    setPaymentModalVisible(false);
+    setProcessingPayment(true);
+
+    try {
       // Group items by store
       const ordersByStore = items.reduce((acc, item) => {
         const storeId = typeof item.product.storeId === 'object' 
@@ -259,11 +268,9 @@ export default function CartScreen() {
 
       // Create multiple orders using the new endpoint
       const ordersData = Object.values(ordersByStore).map((storeOrder: any) => ({
-        store: storeOrder.storeId,
         orderItems: storeOrder.items,
-        totalAmount: storeOrder.totalAmount,
         shippingAddress: selectedAddress,
-        paymentMethod: 'COD' as const
+        paymentMethod: paymentMethod
       }));
 
       const response = await apiClient.post('/api/v1/order/multiple', {
@@ -273,15 +280,30 @@ export default function CartScreen() {
       const successfulOrders = response.data.orders || [];
       const errors = response.data.errors || [];
 
-      // Clear cart only if all orders were successful
-      if (errors.length === 0) {
+      if (errors.length > 0) {
+        Alert.alert(
+          'Some Orders Failed',
+          `${successfulOrders.length} order${successfulOrders.length > 1 ? 's were' : ' was'} created, but ${errors.length} failed. Please try again.`
+        );
+        setProcessingPayment(false);
+        return;
+      }
+
+      // Handle payment based on method
+      if (paymentMethod === 'Online' && successfulOrders.length > 0) {
+        // For online payment, process Razorpay for the first order
+        // In production, you'd handle multiple orders differently
+        await handleOnlinePayment(successfulOrders[0]);
+      } else {
+        // COD order - show success message
         clearCart();
+        setProcessingPayment(false);
         Alert.alert(
           'Order Placed Successfully!',
-          `Your ${successfulOrders.length} order${successfulOrders.length > 1 ? 's have' : ' has'} been placed and will be processed soon.`,
+          `Your ${successfulOrders.length} order${successfulOrders.length > 1 ? 's have' : ' has'} been placed with Cash on Delivery. You can track your order status in the Orders section.`,
           [
             {
-              text: 'OK',
+              text: 'View Orders',
               onPress: () => {
                 setSelectedAddress(null);
                 router.push('/(tabs)/order');
@@ -289,18 +311,134 @@ export default function CartScreen() {
             }
           ]
         );
-      } else {
-        Alert.alert(
-          'Partial Success',
-          `${successfulOrders.length} order${successfulOrders.length > 1 ? 's were' : ' was'} placed successfully. ${errors.length} order${errors.length > 1 ? 's failed' : ' failed'}. Please try again for failed orders.`
-        );
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error placing order:', error);
-      Alert.alert('Error', 'Failed to place order. Please try again.');
-    } finally {
-      setIsLoading(false);
+      setProcessingPayment(false);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to place order. Please try again.');
+    }
+  };
+
+  const handleOnlinePayment = async (order: any) => {
+    try {
+      // Create Razorpay order
+      const paymentResponse = await apiClient.post('/api/v1/payment/create-order', {
+        orderId: order._id
+      });
+
+      if (!paymentResponse.data.success) {
+        throw new Error('Failed to create payment order');
+      }
+
+      const { razorpayOrder, paymentId } = paymentResponse.data;
+
+      // Open Razorpay checkout
+      const options = {
+        description: `Order #${order.orderNumber || order._id.slice(-8)}`,
+        image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
+        currency: razorpayOrder.currency,
+        key: 'rzp_test_your_key_here', // Replace with your Razorpay key
+        amount: razorpayOrder.amount,
+        name: 'Locals',
+        order_id: razorpayOrder.id,
+        prefill: {
+          email: user?.email || '',
+          contact: user?.phone || '',
+          name: user?.name || '',
+        },
+        theme: { color: Colors.primary }
+      };
+
+      RazorpayCheckout.open(options)
+        .then(async (data: any) => {
+          // Payment successful - verify it
+          try {
+            await apiClient.post('/api/v1/payment/verify', {
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_signature: data.razorpay_signature,
+              paymentId: paymentId
+            });
+
+            clearCart();
+            setProcessingPayment(false);
+            Alert.alert(
+              'Payment Successful!',
+              'Your order has been placed and payment received successfully.',
+              [
+                {
+                  text: 'View Order',
+                  onPress: () => {
+                    setSelectedAddress(null);
+                    router.push('/(tabs)/order');
+                  }
+                }
+              ]
+            );
+          } catch (verifyError: any) {
+            console.error('Payment verification failed:', verifyError);
+            setProcessingPayment(false);
+            Alert.alert(
+              'Payment Verification Failed',
+              'There was an issue verifying your payment. Please contact support with order ID.',
+            );
+          }
+        })
+        .catch((error: any) => {
+          setProcessingPayment(false);
+          
+          // Parse error to determine if it was a cancellation
+          let errorReason = 'unknown';
+          let errorDescription = 'Payment failed';
+          
+          try {
+            if (error.error && error.error.reason) {
+              errorReason = error.error.reason;
+              errorDescription = error.error.description || error.description;
+            } else if (error.code === 2) {
+              errorReason = 'network_error';
+            }
+          } catch (e) {
+            console.error('Error parsing Razorpay error:', e);
+          }
+
+          console.log('Payment error reason:', errorReason);
+
+          // Handle different error types
+          if (errorReason === 'payment_cancelled') {
+            // User cancelled - don't show error, just info
+            Alert.alert(
+              'Payment Cancelled',
+              'You cancelled the payment. Your order has been created but is pending payment. You can try again from the Orders section.',
+              [
+                {
+                  text: 'View Orders',
+                  onPress: () => {
+                    setSelectedAddress(null);
+                    router.push('/(tabs)/order');
+                  }
+                },
+                { text: 'OK', style: 'cancel' }
+              ]
+            );
+          } else if (errorReason === 'network_error') {
+            Alert.alert(
+              'Network Error',
+              'There was a network issue. Please check your connection and try again.',
+            );
+          } else {
+            Alert.alert(
+              'Payment Failed',
+              errorDescription || 'Your payment could not be processed. Please try again or use a different payment method.',
+            );
+          }
+        });
+
+    } catch (error: any) {
+      console.error('Error processing online payment:', error);
+      setProcessingPayment(false);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to process payment. Please try again.');
     }
   };
 
@@ -450,42 +588,51 @@ export default function CartScreen() {
             <Text style={styles.footerSubtext}>Total Amount</Text>
           </View>
           <TouchableOpacity 
-            style={[styles.placeOrderButton, isLoading && styles.placeOrderButtonDisabled]}
+            style={[styles.placeOrderButton, processingPayment && styles.placeOrderButtonDisabled]}
             onPress={handlePlaceOrder}
-            disabled={isLoading}
+            disabled={processingPayment}
           >
             <LinearGradient
-              colors={isLoading ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
+              colors={processingPayment ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
               style={styles.placeOrderGradient}
             >
               <Text style={styles.placeOrderText}>
-                {isLoading ? 'Processing...' : 'Place Order'}
+                {processingPayment ? 'Processing...' : 'Place Order'}
               </Text>
-              {!isLoading && <Ionicons name="arrow-forward" size={20} color={Colors.textPrimary} style={{ marginLeft: 8 }} />}
+              {!processingPayment && <Ionicons name="arrow-forward" size={20} color={Colors.textPrimary} style={{ marginLeft: 8 }} />}
             </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
     </View>
-    {/* Size Edit Modal */}
-    <SizeSelectorModal
-      visible={editModalVisible}
-      product={editingItem ? editingItem.product : null}
-      multiple={false}
-      initialSelected={editingItem && editingItem.size ? [editingItem.size] : []}
-      onConfirm={(sel) => {
-        const newSize = sel && sel.length > 0 ? sel[0] : undefined;
-        if (editingItem && newSize) {
-          // move qty to new size line
-          removeItem(editingItem.productId, editingItem.size);
-          addItem(editingItem.product, editingItem.qty, newSize);
-        }
-        setEditModalVisible(false);
-        setEditingItem(null);
-      }}
-      onClose={() => { setEditModalVisible(false); setEditingItem(null); }}
-      title={`Edit Size${editingItem && editingItem.size ? ` (current: ${editingItem.size})` : ''}`}
-    />
+      {/* Size Edit Modal */}
+      <SizeSelectorModal
+        visible={editModalVisible}
+        product={editingItem ? editingItem.product : null}
+        multiple={false}
+        initialSelected={editingItem && editingItem.size ? [editingItem.size] : []}
+        onConfirm={(sel) => {
+          const newSize = sel && sel.length > 0 ? sel[0] : undefined;
+          if (editingItem && newSize) {
+            // move qty to new size line
+            removeItem(editingItem.productId, editingItem.size);
+            addItem(editingItem.product, editingItem.qty, newSize);
+          }
+          setEditModalVisible(false);
+          setEditingItem(null);
+        }}
+        onClose={() => { setEditModalVisible(false); setEditingItem(null); }}
+        title={`Edit Size${editingItem && editingItem.size ? ` (current: ${editingItem.size})` : ''}`}
+      />
+
+      {/* Payment Method Modal */}
+      <PaymentMethodModal
+        visible={paymentModalVisible}
+        totalAmount={calculateGrandTotal()}
+        onSelectPayment={handlePaymentMethodSelected}
+        onClose={() => setPaymentModalVisible(false)}
+        isProcessing={processingPayment}
+      />
     </>
   );
 }

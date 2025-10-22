@@ -7,9 +7,11 @@ export interface IDelivery {
   status: "Pending" | "Accepted" | "PickedUp" | "Delivered" | "Cancelled";
   pickupAddress: string;
   deliveryAddress: string;
-  deliveryTime: Date;
-  rating: number;
-  review: string;
+  estimatedDeliveryTime: Date;
+  actualDeliveryTime?: Date;
+  deliveryFee: number;
+  rating?: number;
+  review?: string;
   createdAt: Date;
   updatedAt: Date;
 }

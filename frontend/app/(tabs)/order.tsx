@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import apiClient from '@/api/client';
 import { Order, OrdersResponse } from '@/types/order';
+import OrderDetails from '@/components/user/OrderDetails';
 
 export default function OrderScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderDetailsVisible, setOrderDetailsVisible] = useState(false);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -159,7 +162,14 @@ export default function OrderScreen() {
         ) : (
           <View style={styles.ordersList}>
             {orders.map((order) => (
-              <TouchableOpacity key={order._id} style={styles.orderCard}>
+              <TouchableOpacity 
+                key={order._id} 
+                style={styles.orderCard}
+                onPress={() => {
+                  setSelectedOrderId(order._id);
+                  setOrderDetailsVisible(true);
+                }}
+              >
                 {/* Order Header */}
                 <View style={styles.orderHeader}>
                   <View style={styles.orderInfo}>
@@ -212,7 +222,13 @@ export default function OrderScreen() {
                     <Text style={styles.totalLabel}>Total</Text>
                     <Text style={styles.totalAmount}>₹{order.totalAmount.toLocaleString('en-IN')}</Text>
                   </View>
-                  <TouchableOpacity style={styles.viewButton}>
+                  <TouchableOpacity 
+                    style={styles.viewButton}
+                    onPress={() => {
+                      setSelectedOrderId(order._id);
+                      setOrderDetailsVisible(true);
+                    }}
+                  >
                     <Text style={styles.viewButtonText}>View Details</Text>
                     <Ionicons name="chevron-forward-outline" size={16} color={Colors.primary} />
                   </TouchableOpacity>
@@ -222,6 +238,31 @@ export default function OrderScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Order Details Modal */}
+      <Modal
+        visible={orderDetailsVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setOrderDetailsVisible(false);
+          setSelectedOrderId(null);
+          loadOrders(); // Refresh orders when modal closes
+        }}
+      >
+        <View style={styles.modalContainer}>
+          {selectedOrderId && (
+            <OrderDetails 
+              orderId={selectedOrderId} 
+              onClose={() => {
+                setOrderDetailsVisible(false);
+                setSelectedOrderId(null);
+                loadOrders(); // Refresh orders when closing
+              }} 
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -435,5 +476,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
     marginRight: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
 });

@@ -1,9 +1,13 @@
 import OrderModel from "../Models/orderModel";
 import ProductModel from "../Models/productModel";
 import StoreModel from "../Models/storeModel";
+import PaymentModel from "../Models/paymentModel";
 import type { Response, Request } from "express";
 import { validateUserRole, sendErrorResponse } from "../utils/validation";
+import { generateOrderNumber, calculateDeliveryFee, releaseInventory } from "../utils/orderUtils";
+import { notifyOrderPlaced } from "../utils/notificationUtils";
 import z from "zod";
+import type { Types } from "mongoose";
 
 // Validation schema for order creation
 const createOrderSchema = z.object({
@@ -20,7 +24,7 @@ const createOrderSchema = z.object({
 
 // Validation schema for order status update
 const updateOrderStatusSchema = z.object({
-  status: z.enum(["Pending", "Processing", "Shipped", "Delivered", "Cancelled"], {
+  status: z.enum(["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Shipped", "Delivered", "Cancelled"], {
     message: "Invalid order status"
   }),
   cancellationReason: z.string().optional()
@@ -30,7 +34,7 @@ async function createOrder(req: Request, res: Response) {
   try {
     // User is already authenticated by middleware
     const user = (req as any).user;
-    
+
     // Check if user is a customer
     if (!validateUserRole(user, res)) return;
 
@@ -39,10 +43,11 @@ async function createOrder(req: Request, res: Response) {
     const { orderItems, shippingAddress, paymentMethod } = validatedData;
 
     // Calculate total amount and validate product availability
-    let totalAmount = 0;
-    let storeId = null;
-    const validatedOrderItems = [];
+    let itemsTotal = 0;
+    let storeId: any = null;
+    const validatedOrderItems: any[] = [];
 
+    // Check all products and quantities up front and ensure all from the same store
     for (const item of orderItems) {
       const product = await ProductModel.findById(item.product);
       if (!product) {
@@ -66,7 +71,7 @@ async function createOrder(req: Request, res: Response) {
 
       // Use current product price
       const itemTotal = item.quantity * product.price;
-      totalAmount += itemTotal;
+      itemsTotal += itemTotal;
 
       validatedOrderItems.push({
         product: product._id,
@@ -81,24 +86,86 @@ async function createOrder(req: Request, res: Response) {
       return sendErrorResponse(res, 400, "Store is not available");
     }
 
-    // Create order
+    if (!storeId) {
+      return sendErrorResponse(res, 400, "Store ID is required");
+    }
+
+    // Calculate delivery fee
+    const deliveryFee = calculateDeliveryFee(itemsTotal);
+
+    // Calculate total amount
+    const totalAmount = itemsTotal + deliveryFee;
+
+    // Generate unique order number
+    const orderNumber = await generateOrderNumber(storeId);
+
+    // To help avoid race conditions where multiple orders could oversell inventory,
+    // we should update stocks with an atomic check. We'll use update with $inc + a filter.
+
+    // For each product: try to decrement quantity, but only if enough are available.
+    for (const item of validatedOrderItems) {
+      const productUpdate = await ProductModel.findOneAndUpdate(
+        { _id: item.product, availableQuantity: { $gte: item.quantity } },
+        { $inc: { availableQuantity: -item.quantity } },
+        { new: true }
+      );
+      if (!productUpdate) {
+        // Rollback previous decrements
+        for (const prevItem of validatedOrderItems) {
+          if (prevItem.product.equals(item.product)) break;
+          await ProductModel.findByIdAndUpdate(prevItem.product, { $inc: { availableQuantity: prevItem.quantity } });
+        }
+        return sendErrorResponse(res, 400, `Failed to reserve stock for product: ${item.product}`);
+      }
+    }
+
+    // Now create order
     const order = new OrderModel({
+      orderNumber,
       user: user._id,
       store: storeId,
       orderItems: validatedOrderItems,
+      itemsTotal,
+      deliveryFee,
       totalAmount,
       shippingAddress: shippingAddress.trim(),
-      paymentMethod
+      paymentMethod,
+      paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
+      statusHistory: [{
+        status: "Pending",
+        timestamp: new Date(),
+        updatedBy: user._id,
+        note: "Order created"
+      }]
     });
 
-    // Update product quantities (atomically)
-    for (const item of validatedOrderItems) {
-      await ProductModel.findByIdAndUpdate(item.product, {
-        $inc: { availableQuantity: -item.quantity }
+    await order.save();
+
+    // Create payment record for COD
+    if (paymentMethod === "COD") {
+      const payment = new PaymentModel({
+        order: order._id,
+        user: user._id,
+        store: storeId,
+        amount: totalAmount,
+        paymentMethod: "COD",
+        paymentStatus: "Pending"
       });
+      await payment.save();
+      order.paymentId = payment._id as any;
+      await order.save();
     }
 
-    await order.save();
+    // Send notifications
+    await notifyOrderPlaced(
+      order._id,
+      orderNumber,
+      user._id,
+      store.merchantId,
+      store._id,
+      store.storeName,
+      totalAmount
+    );
 
     // Populate order details for response
     const populatedOrder = await OrderModel.findById(order._id)
@@ -109,12 +176,13 @@ async function createOrder(req: Request, res: Response) {
     return res.status(201).json({
       success: true,
       message: "Order created successfully",
-      order: populatedOrder
+      order: populatedOrder,
+      requiresPayment: paymentMethod === "Online"
     });
 
   } catch (error) {
     console.error("Error creating order:", error);
-    
+
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
@@ -155,7 +223,10 @@ async function getOrderById(req: Request, res: Response) {
     }
 
     // Check if user has permission to view this order
-    if (user.role === 'User' && order.user.toString() !== user._id.toString()) {
+    const orderUserId = typeof order.user === 'object' ? (order.user as any)._id : order.user;
+    const orderStoreId = typeof order.store === 'object' ? (order.store as any)._id : order.store;
+
+    if (user.role === 'User' && orderUserId.toString() !== user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Access denied. You can only view your own orders"
@@ -164,7 +235,7 @@ async function getOrderById(req: Request, res: Response) {
 
     if (user.role === 'Merchant') {
       const store = await StoreModel.findOne({ merchantId: user._id });
-      if (!store || order.store.toString() !== store._id.toString()) {
+      if (!store || orderStoreId.toString() !== store._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "Access denied. You can only view orders from your store"
@@ -187,7 +258,7 @@ async function getOrderById(req: Request, res: Response) {
 async function getOrdersForUser(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    
+
     // Get query parameters for pagination and filtering
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -280,8 +351,11 @@ async function updateOrderStatus(req: Request, res: Response) {
     }
 
     // Check permissions based on user role
+    const orderUserId = typeof order.user === 'object' ? (order.user as any)._id : order.user;
+    const orderStoreId = typeof order.store === 'object' ? (order.store as any)._id : order.store;
+
     if (user.role === 'User') {
-      if (order.user.toString() !== user._id.toString()) {
+      if (orderUserId.toString() !== user._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "Access denied. You can only update your own orders"
@@ -296,7 +370,7 @@ async function updateOrderStatus(req: Request, res: Response) {
       }
     } else if (user.role === 'Merchant') {
       const store = await StoreModel.findOne({ merchantId: user._id });
-      if (!store || order.store.toString() !== store._id.toString()) {
+      if (!store || orderStoreId.toString() !== store._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "Access denied. You can only update orders from your store"
@@ -314,8 +388,11 @@ async function updateOrderStatus(req: Request, res: Response) {
 
     // Validate status transitions
     const validTransitions: { [key: string]: string[] } = {
-      'Pending': ['Processing', 'Cancelled'],
-      'Processing': ['Shipped', 'Cancelled'],
+      'Pending': ['Accepted', 'Rejected', 'Cancelled'],
+      'Accepted': ['Processing', 'Cancelled'],
+      'Rejected': [],
+      'Processing': ['ReadyForPickup', 'Cancelled'],
+      'ReadyForPickup': ['Shipped', 'Cancelled'],
       'Shipped': ['Delivered', 'Cancelled'],
       'Delivered': [],
       'Cancelled': []
@@ -328,11 +405,29 @@ async function updateOrderStatus(req: Request, res: Response) {
       });
     }
 
-    // Update order
-    const updateData: any = { status };
-    if (status === 'Cancelled' && cancellationReason) {
-      updateData.cancellationReason = cancellationReason;
+    // Update order with status history
+    const updateData: any = {
+      status,
+      $push: {
+        statusHistory: {
+          status,
+          timestamp: new Date(),
+          updatedBy: user._id,
+          note: cancellationReason || `Status updated to ${status}`
+        }
+      }
+    };
+
+    if (status === 'Cancelled') {
+      if (cancellationReason) {
+        updateData.cancellationReason = cancellationReason;
+      }
+      updateData.cancelledAt = new Date();
+
+      // Release inventory on cancellation
+      await releaseInventory(order.orderItems);
     }
+
     if (status === 'Delivered') {
       updateData.deliveryDate = new Date();
     }
@@ -353,7 +448,7 @@ async function updateOrderStatus(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error updating order status:", error);
-    
+
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
@@ -372,7 +467,7 @@ async function updateOrderStatus(req: Request, res: Response) {
 async function getOrderStats(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    
+
     let stats: any = {};
 
     if (user.role === 'User') {
@@ -443,13 +538,13 @@ async function createMultipleOrders(req: Request, res: Response) {
   try {
     // User is already authenticated by middleware
     const user = (req as any).user;
-    
+
     // Check if user is a customer
     if (!validateUserRole(user, res)) return;
 
     // Validate request body - array of orders
     const { orders } = req.body;
-    
+
     if (!Array.isArray(orders) || orders.length === 0) {
       return sendErrorResponse(res, 400, "Orders array is required and must not be empty");
     }
@@ -461,15 +556,14 @@ async function createMultipleOrders(req: Request, res: Response) {
     for (let i = 0; i < orders.length; i++) {
       try {
         const orderData = orders[i];
-        
+
         // Validate each order
         const validatedData = createOrderSchema.parse(orderData);
         const { orderItems, shippingAddress, paymentMethod } = validatedData;
 
-        // Calculate total amount and validate product availability
-        let totalAmount = 0;
-        let storeId = null;
-        const validatedOrderItems = [];
+        let itemsTotal = 0;
+        let storeId: any = null;
+        const validatedOrderItems: any[] = [];
 
         for (const item of orderItems) {
           const product = await ProductModel.findById(item.product);
@@ -481,7 +575,6 @@ async function createMultipleOrders(req: Request, res: Response) {
             throw new Error(`Product is not available: ${product.name}`);
           }
 
-          // Set storeId from the first product (all products should be from same store)
           if (storeId === null) {
             storeId = product.storeId;
           } else if (product.storeId.toString() !== storeId.toString()) {
@@ -492,9 +585,8 @@ async function createMultipleOrders(req: Request, res: Response) {
             throw new Error(`Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
           }
 
-          // Use current product price
           const itemTotal = item.quantity * product.price;
-          totalAmount += itemTotal;
+          itemsTotal += itemTotal;
 
           validatedOrderItems.push({
             product: product._id,
@@ -503,30 +595,77 @@ async function createMultipleOrders(req: Request, res: Response) {
           });
         }
 
-        // Verify store exists and is active
         const store = await StoreModel.findById(storeId);
         if (!store || !store.isActive) {
           throw new Error("Store is not available");
         }
 
+        // Calculate delivery fee and total amount as in single order
+        const deliveryFee = calculateDeliveryFee(itemsTotal);
+        const totalAmount = itemsTotal + deliveryFee;
+
+        // Perform atomic stock update for all order items, fail all if any fails (simulate a "transaction")
+        let stockOk = true;
+        for (const item of validatedOrderItems) {
+          const productUpdate = await ProductModel.findOneAndUpdate(
+            { _id: item.product, availableQuantity: { $gte: item.quantity } },
+            { $inc: { availableQuantity: -item.quantity } },
+            { new: true }
+          );
+          if (!productUpdate) {
+            stockOk = false;
+            break;
+          }
+        }
+        if (!stockOk) {
+          // Try to rollback any decremented stock just in case.
+          for (const rollbackItem of validatedOrderItems) {
+            await ProductModel.findByIdAndUpdate(
+              rollbackItem.product,
+              { $inc: { availableQuantity: rollbackItem.quantity } }
+            );
+          }
+          throw new Error(`Failed to reserve stock for some products in order index ${i}`);
+        }
+
+        // Generate order number per store
+        const orderNumber = await generateOrderNumber(storeId);
+
         // Create order
         const order = new OrderModel({
+          orderNumber,
           user: user._id,
           store: storeId,
           orderItems: validatedOrderItems,
+          itemsTotal,
+          deliveryFee,
           totalAmount,
           shippingAddress: shippingAddress.trim(),
-          paymentMethod
+          paymentMethod,
+          statusHistory: [{
+            status: "Pending",
+            timestamp: new Date(),
+            updatedBy: user._id,
+            note: "Order created"
+          }]
         });
 
-        // Update product quantities (atomically)
-        for (const item of validatedOrderItems) {
-          await ProductModel.findByIdAndUpdate(item.product, {
-            $inc: { availableQuantity: -item.quantity }
-          });
-        }
-
         await order.save();
+
+        // Create payment record for COD in batch-created orders as well!
+        if (paymentMethod === "COD") {
+          const payment = new PaymentModel({
+            order: order._id,
+            user: user._id,
+            store: storeId,
+            amount: totalAmount,
+            paymentMethod: "COD",
+            paymentStatus: "Pending"
+          });
+          await payment.save();
+          order.paymentId = payment._id as any;
+          await order.save();
+        }
 
         // Populate order details for response
         const populatedOrder = await OrderModel.findById(order._id)
@@ -547,7 +686,11 @@ async function createMultipleOrders(req: Request, res: Response) {
 
     // Return response
     if (createdOrders.length === 0) {
-      return sendErrorResponse(res, 400, "No orders were created successfully", { errors });
+      return res.status(400).json({
+        success: false,
+        message: "No orders were created successfully",
+        errors
+      });
     }
 
     return res.status(201).json({
@@ -559,7 +702,7 @@ async function createMultipleOrders(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error creating multiple orders:", error);
-    
+
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,

@@ -21,6 +21,11 @@ const orderItemSchema = new Schema({
 
 const orderSchema: Schema = new Schema(
   {
+    orderNumber: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
     user: { 
       type: Schema.Types.ObjectId, 
       ref: "User", 
@@ -35,6 +40,21 @@ const orderSchema: Schema = new Schema(
       type: [orderItemSchema],
       required: true
     },
+    shippingAddress: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    itemsTotal: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    deliveryFee: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     totalAmount: { 
       type: Number, 
       required: true, 
@@ -46,8 +66,15 @@ const orderSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
+      enum: ["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Shipped", "Delivered", "Cancelled"],
       default: "Pending"
+    },
+    merchantAcceptedAt: {
+      type: Date
+    },
+    rejectionReason: {
+      type: String,
+      trim: true
     },
     paymentMethod: {
       type: String,
@@ -56,12 +83,46 @@ const orderSchema: Schema = new Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["Pending", "Completed", "Failed"],
+      enum: ["Pending", "Completed", "Failed", "Refunded"],
       default: "Pending"
+    },
+    paymentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Payment"
+    },
+    deliveryPerson: {
+      type: Schema.Types.ObjectId,
+      ref: "User"
     },
     deliveryDate: { 
       type: Date
-    }
+    },
+    cancellationReason: {
+      type: String,
+      trim: true
+    },
+    cancelledAt: {
+      type: Date
+    },
+    notes: {
+      type: String,
+      trim: true
+    },
+    statusHistory: [{
+      status: {
+        type: String,
+        required: true
+      },
+      timestamp: {
+        type: Date,
+        default: Date.now
+      },
+      updatedBy: {
+        type: Schema.Types.ObjectId,
+        ref: "User"
+      },
+      note: String
+    }]
   },
   { 
     timestamps: true

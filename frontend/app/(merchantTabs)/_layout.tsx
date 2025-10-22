@@ -25,11 +25,29 @@ export default function MerchantTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="orders"
+        options={{
+          title: 'Orders',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="receipt" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="products"
         options={{
           title: 'Products',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="shirt" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settlement"
+        options={{
+          title: 'Settlement',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="wallet" color={color} size={size} />
           ),
         }}
       />

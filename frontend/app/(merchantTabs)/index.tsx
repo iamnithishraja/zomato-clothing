@@ -118,7 +118,7 @@ export default function MerchantHome() {
             <Text style={styles.actionSubtitle}>View and edit your products</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
+          {/* <TouchableOpacity 
             style={styles.actionCard}
             onPress={() => Alert.alert('Coming Soon', 'Analytics feature will be available soon!')}
           >
@@ -127,11 +127,24 @@ export default function MerchantHome() {
             </View>
             <Text style={styles.actionTitle}>Analytics</Text>
             <Text style={styles.actionSubtitle}>View sales and performance</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           
+
+
+           <TouchableOpacity 
+             style={styles.actionCard}
+             onPress={() => router.push('/settlement' as any)}
+          >
+            <View style={styles.actionIcon}>
+              <Ionicons name="wallet" size={28} color={Colors.primary} />
+            </View>
+            <Text style={styles.actionTitle}>Settlements</Text>
+            <Text style={styles.actionSubtitle}>View earnings and payouts</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => Alert.alert('Coming Soon', 'Store settings will be available soon!')}
+            onPress={() => router.push('/(merchantTabs)/profile?openStore=true' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="storefront" size={28} color={Colors.primary} />

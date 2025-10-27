@@ -144,7 +144,7 @@ export default function ProductDetailsScreen() {
           <View style={styles.errorContent}>
             <Ionicons name="alert-circle-outline" size={64} color={Colors.error} />
             <Text style={styles.errorTitle}>Product Not Found</Text>
-            <Text style={styles.errorSubtitle}>The product you're looking for doesn't exist</Text>
+            <Text style={styles.errorSubtitle}>The product you&apos;re looking for doesn&apos;t exist</Text>
             <TouchableOpacity style={styles.errorButton} onPress={() => router.back()}>
               <Text style={styles.errorButtonText}>Go Back</Text>
             </TouchableOpacity>
@@ -157,6 +157,11 @@ export default function ProductDetailsScreen() {
   const formatPrice = (price: number) => {
     return price.toLocaleString('en-IN');
   };
+
+  const isDiscount = !!product?.isOnSale && !!product?.discountPercentage && (product!.discountPercentage as number) > 0;
+  const originalPrice = isDiscount
+    ? Math.round(product!.price / (1 - (product!.discountPercentage as number) / 100))
+    : null;
 
   return (
     <View style={styles.container}>
@@ -205,7 +210,7 @@ export default function ProductDetailsScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* Hero Image Section */}
+          {/* Hero Image Section */}
         <View style={styles.heroSection}>
           {product.images && product.images.length > 0 ? (
             <>
@@ -251,9 +256,9 @@ export default function ProductDetailsScreen() {
             </View>
           )}
 
-          {/* Stock Badge */}
+          {/* Floating Stock Badge */}
           <View style={[
-            styles.stockBadge,
+            styles.floatingStockBadge,
             product.availableQuantity <= 0 && styles.stockBadgeOutOfStock
           ]}>
             <Ionicons 
@@ -287,8 +292,22 @@ export default function ProductDetailsScreen() {
                 </Text>
               </View>
             </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>₹{formatPrice(product.price)}</Text>
+            <View style={styles.priceCard}>
+              {isDiscount ? (
+                <View style={styles.bothPricesRow}>
+                  <View style={styles.originalPriceRow}>
+                    <Text style={styles.originalPrice}>₹{formatPrice(originalPrice as number)}</Text>
+                  </View>
+                  <View style={styles.discountedPriceRow}>
+                    <Text style={styles.discountedPrice}>₹{formatPrice(product.price)}</Text>
+                    <View style={styles.discountBadge}><Text style={styles.discountBadgeText}>{product!.discountPercentage}% off</Text></View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.priceLeft}>
+                  <Text style={styles.price}>₹{formatPrice(product.price)}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -328,6 +347,10 @@ export default function ProductDetailsScreen() {
             <Text style={styles.descriptionText}>
               {product.description || 'Premium quality product with excellent craftsmanship and attention to detail.'}
             </Text>
+            <View style={styles.bullets}>
+              <View style={styles.bulletItem}><Text style={styles.bulletText}>Secure payments</Text></View>
+              <View style={styles.bulletItem}><Text style={styles.bulletText}>Trusted seller</Text></View>
+            </View>
           </View>
 
           {/* Size Selection */}
@@ -625,6 +648,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     gap: 4,
   },
+  floatingStockBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.success,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
   stockBadgeOutOfStock: {
     backgroundColor: Colors.error,
   },
@@ -667,6 +702,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
   },
+  priceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  priceLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  mrp: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textDecorationLine: 'line-through',
+  },
+  discount: {
+    fontSize: 14,
+    color: Colors.success,
+    fontWeight: '700',
+  },
+  // Removed fast delivery pill per request
   sellerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -736,6 +796,62 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 24,
+  },
+  bullets: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  bulletItem: {
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  bulletText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  // New price styles in details screen to mirror card
+  originalPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  originalPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textDecorationLine: 'line-through',
+  },
+  discountedPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  discountedPrice: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  discountBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  discountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bothPricesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   sizeCard: {
     marginBottom: 20,

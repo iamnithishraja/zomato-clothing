@@ -71,6 +71,16 @@ const ImageUploader = ({
     }
   }, [pendingUrlsUpdate, onUploaded]);
 
+  // Sync items when existingUrls prop changes (e.g., when editing existing entity)
+  useEffect(() => {
+    setItems((prev) => {
+      const prevRemote = prev.filter(it => it.remote && !it.uploading && !it.error).map(it => it.uri);
+      const isSame = prevRemote.length === existingUrls.length && prevRemote.every((u, idx) => u === existingUrls[idx]);
+      if (isSame) return prev;
+      return existingUrls.map((u, i) => ({ key: `${i}-${u}`, uri: u, uploading: false, remote: true }));
+    });
+  }, [existingUrls]);
+
   // Request permissions
   const requestPermissions = useCallback(async () => {
     if (Platform.OS !== 'web') {

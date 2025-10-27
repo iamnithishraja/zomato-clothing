@@ -11,7 +11,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Region } from 'react-native-maps';
 import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
 
-const ProfileScreen = () => {
+type ProfileScreenProps = { openStore?: boolean };
+
+const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
   const { user, logout, isAuthenticated, updateUser } = useAuth();
   const { getCurrentLocation } = useLocation();
   const router = useRouter();
@@ -47,6 +49,32 @@ const ProfileScreen = () => {
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   // handled by LocationPickerScreen now
   const [reopenAddressAfterMap, setReopenAddressAfterMap] = useState(false);
+
+  // Auto-open StoreDetails when requested (from merchant Home shortcut)
+  const hasAutoOpenedStoreRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!hasAutoOpenedStoreRef.current && user?.role === 'Merchant' && openStore) {
+      hasAutoOpenedStoreRef.current = true;
+      router.push('/auth/StoreDetails');
+    }
+  }, [openStore, user?.role, router]);
+
+  // Merchant store details preview for profile
+  const [storeDetails, setStoreDetails] = useState<any | null>(null);
+  React.useEffect(() => {
+    const loadStoreDetails = async () => {
+      try {
+        if (user?.role !== 'Merchant') return;
+        const resp = await apiClient.get('/api/v1/store/details');
+        if (resp.data?.success) {
+          setStoreDetails(resp.data.store);
+        }
+      } catch (_err: any) {
+        // If 404, store not created yet – keep null
+      }
+    };
+    loadStoreDetails();
+  }, [user?.role]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -139,9 +167,9 @@ const ProfileScreen = () => {
       } else {
         Alert.alert('Error', resp.data?.message || 'Failed to update avatar');
       }
-    } catch (e: any) {
-      console.error('Avatar update error:', e);
-      Alert.alert('Error', e.response?.data?.message || 'Failed to update avatar');
+    } catch (_err: any) {
+      console.error('Avatar update error:', _err);
+      Alert.alert('Error', _err.response?.data?.message || 'Failed to update avatar');
     } finally {
       setIsUpdating(false);
     }
@@ -269,9 +297,9 @@ const ProfileScreen = () => {
       } else {
         Alert.alert('Error', resp.data?.message || 'Failed to save addresses');
       }
-    } catch (e: any) {
-      console.error('Addresses update error:', e);
-      Alert.alert('Error', e.response?.data?.message || 'Failed to save addresses');
+    } catch (_err: any) {
+      console.error('Addresses update error:', _err);
+      Alert.alert('Error', _err.response?.data?.message || 'Failed to save addresses');
     } finally {
       setIsSavingAddresses(false);
     }
@@ -435,21 +463,26 @@ const ProfileScreen = () => {
     }
   };
 
-  if (!isAuthenticated || !user) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-        <View style={styles.emptyStateContainer}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="person-outline" size={64} color={Colors.primary} />
-          </View>
-          <Text style={styles.emptyTitle}>Not Logged In</Text>
-          <Text style={styles.emptyDescription}>
-            Please log in to view your profile and manage your account.
-          </Text>
-        </View>
+// Ensure hooks run before any early returns
+const notAuthenticatedView = (
+  <View style={styles.container}>
+    <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+    <View style={styles.emptyStateContainer}>
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="person-outline" size={64} color={Colors.primary} />
       </View>
-    );
+      <Text style={styles.emptyTitle}>Not Logged In</Text>
+      <Text style={styles.emptyDescription}>
+        Please log in to view your profile and manage your account.
+      </Text>
+    </View>
+  </View>
+);
+
+  
+
+  if (!user) {
+    return notAuthenticatedView;
   }
 
   return (
@@ -489,10 +522,10 @@ const ProfileScreen = () => {
             </View>
             
             <View style={styles.userInfoContainer}>
-              <Text style={styles.heroName}>{user.name || 'User'}</Text>
+              <Text style={styles.heroName}>{user?.name || 'User'}</Text>
               <View style={styles.roleChip}>
-                <Ionicons name={getRoleIcon(user.role)} size={12} color={Colors.textPrimary} />
-                <Text style={styles.roleText}>{getRoleDisplayName(user.role)}</Text>
+                <Ionicons name={getRoleIcon(user?.role)} size={12} color={Colors.textPrimary} />
+                <Text style={styles.roleText}>{getRoleDisplayName(user?.role)}</Text>
               </View>
             </View>
           </View>
@@ -604,70 +637,142 @@ const ProfileScreen = () => {
             </View>
           </View>
 
-          {/* Saved Addresses */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Saved Addresses</Text>
-              <View style={styles.sectionHeaderRight}>
-                <Text style={styles.sectionSubtitle}>{addresses.length}/5</Text>
-                {addresses.length < 5 && (
-                  <TouchableOpacity 
-                    style={styles.addAddressButton}
-                    onPress={() => openAddressModal()}
-                  >
-                    <LinearGradient
-                      colors={Colors.gradients.primary as [string, string]}
-                      style={styles.addAddressButtonGradient}
+          {/* Addresses Section */}
+          {user.role !== 'Merchant' ? (
+            // User addresses (unchanged)
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Saved Addresses</Text>
+                <View style={styles.sectionHeaderRight}>
+                  <Text style={styles.sectionSubtitle}>{addresses.length}/5</Text>
+                  {addresses.length < 5 && (
+                    <TouchableOpacity 
+                      style={styles.addAddressButton}
+                      onPress={() => openAddressModal()}
                     >
-                      <Ionicons name="add" size={18} color={Colors.textPrimary} />
-                      <Text style={styles.addAddressButtonText}>Add New Address</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              {addresses.length === 0 ? (
-                <View style={styles.emptyAddressContainer}>
-                  <Ionicons name="location-outline" size={48} color={Colors.textSecondary} />
-                  <Text style={styles.emptyAddressText}>No addresses saved yet</Text>
-                  <Text style={styles.emptyAddressSubtext}>Add your delivery addresses below</Text>
+                      <LinearGradient
+                        colors={Colors.gradients.primary as [string, string]}
+                        style={styles.addAddressButtonGradient}
+                      >
+                        <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                        <Text style={styles.addAddressButtonText}>Add New Address</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              ) : (
-                addresses.map((addr, idx) => (
-                  <View key={`${addr}-${idx}`}>
-                    {idx > 0 && <View style={styles.divider} />}
-                    <View style={styles.addressItem}>
-                      <View style={styles.addressIconBox}>
-                        <Ionicons name="location" size={20} color={Colors.primary} />
-                      </View>
-                      <View style={styles.addressContent}>
-                        <Text style={styles.addressText} numberOfLines={2}>{addr}</Text>
-                        <View style={styles.addressActions}>
-                          <TouchableOpacity 
-                            style={styles.addressActionButton}
-                            onPress={() => openAddressModal(idx)}
-                          >
-                            <Ionicons name="create-outline" size={16} color={Colors.primary} />
-                            <Text style={styles.addressActionText}>Edit</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.addressActionButton, { marginLeft: 16 }]}
-                            onPress={() => deleteAddress(idx)}
-                          >
-                            <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                            <Text style={[styles.addressActionText, { color: Colors.error }]}>Delete</Text>
-                          </TouchableOpacity>
+              </View>
+
+              <View style={styles.card}>
+                {addresses.length === 0 ? (
+                  <View style={styles.emptyAddressContainer}>
+                    <Ionicons name="location-outline" size={48} color={Colors.textSecondary} />
+                    <Text style={styles.emptyAddressText}>No addresses saved yet</Text>
+                    <Text style={styles.emptyAddressSubtext}>Add your delivery addresses below</Text>
+                  </View>
+                ) : (
+                  addresses.map((addr, idx) => (
+                    <View key={`${addr}-${idx}`}>
+                      {idx > 0 && <View style={styles.divider} />}
+                      <View style={styles.addressItem}>
+                        <View style={styles.addressIconBox}>
+                          <Ionicons name="location" size={20} color={Colors.primary} />
+                        </View>
+                        <View style={styles.addressContent}>
+                          <Text style={styles.addressText} numberOfLines={2}>{addr}</Text>
+                          <View style={styles.addressActions}>
+                            <TouchableOpacity 
+                              style={styles.addressActionButton}
+                              onPress={() => openAddressModal(idx)}
+                            >
+                              <Ionicons name="create-outline" size={16} color={Colors.primary} />
+                              <Text style={styles.addressActionText}>Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={[styles.addressActionButton, { marginLeft: 16 }]}
+                              onPress={() => deleteAddress(idx)}
+                            >
+                              <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                              <Text style={[styles.addressActionText, { color: Colors.error }]}>Delete</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </View>
-                  </View>
-                ))
-              )}
-
+                  ))
+                )}
+              </View>
             </View>
-          </View>
+          ) : (
+            // Merchant single store address preview
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Store Address</Text>
+                <TouchableOpacity onPress={() => router.push('/auth/StoreDetails')}>
+                  <Ionicons name="create-outline" size={22} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.card}>
+                {storeDetails ? (
+                  <View style={{ gap: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <Ionicons name="storefront" size={18} color={Colors.primary} />
+                      <Text style={{ fontWeight: '700', color: Colors.textPrimary }}>{storeDetails.storeName}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <Ionicons name="location" size={18} color={Colors.primary} />
+                      <Text style={{ color: Colors.textPrimary, flex: 1 }}>{storeDetails.address}</Text>
+                    </View>
+                    {storeDetails.mapLink ? (
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        <Ionicons name="map" size={18} color={Colors.primary} />
+                        <Text style={{ color: Colors.textSecondary }} numberOfLines={1}>{storeDetails.mapLink}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={styles.emptyAddressContainer}>
+                    <Ionicons name="storefront" size={48} color={Colors.textSecondary} />
+                    <Text style={styles.emptyAddressText}>Store not set up</Text>
+                    <Text style={styles.emptyAddressSubtext}>Add your store details to start selling</Text>
+                    <View style={{ height: 12 }} />
+                    <TouchableOpacity onPress={() => router.push('/auth/StoreDetails')}>
+                      <LinearGradient colors={Colors.gradients.primary as [string, string]} style={styles.addAddressButtonGradient}>
+                        <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                        <Text style={styles.addAddressButtonText}>Add Store Details</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Merchant Store Settings Shortcut */}
+          {user.role === 'Merchant' && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Store Settings</Text>
+              </View>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.storeSettingsButton}
+                  onPress={() => router.push('/auth/StoreDetails')}
+                >
+                  <LinearGradient
+                    colors={Colors.gradients.primary as [string, string]}
+                    style={styles.storeSettingsGradient}
+                  >
+                    <Ionicons name="storefront" size={22} color={Colors.textPrimary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.storeSettingsTitle}>View / Update Store</Text>
+                      <Text style={styles.storeSettingsSubtitle}>Manage store info, images, working days</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Action Buttons */}
           <View style={styles.actionsSection}>
@@ -1288,6 +1393,32 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
+  },
+  storeSettingsButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  storeSettingsGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  storeSettingsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  storeSettingsSubtitle: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+    opacity: 0.8,
   },
   // Modal Styles
   modalBackdrop: {

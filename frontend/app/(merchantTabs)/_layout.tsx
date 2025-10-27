@@ -42,13 +42,11 @@ export default function MerchantTabLayout() {
           ),
         }}
       />
+      {/* Keep Settlement registered in tabs but hide it from the tab bar */}
       <Tabs.Screen
         name="settlement"
         options={{
-          title: 'Settlement',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet" color={color} size={size} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen

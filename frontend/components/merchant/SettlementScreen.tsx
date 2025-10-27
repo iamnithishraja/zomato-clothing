@@ -36,20 +36,32 @@ const SettlementScreen: React.FC = () => {
     try {
       setLoading(true);
       
+      // Compute date range based on selectedPeriod
+      const end = new Date();
+      const start = new Date(end);
+      if (selectedPeriod === 'week') {
+        start.setDate(end.getDate() - 7);
+      } else if (selectedPeriod === 'month') {
+        start.setMonth(end.getMonth() - 1);
+      } else {
+        // 'all' -> fallback to a wide range
+        start.setFullYear(end.getFullYear() - 5);
+      }
+
       // Load settlement report
       const reportResponse = await apiClient.get('/api/v1/settlement/report', {
-        params: { period: selectedPeriod }
+        params: { startDate: start.toISOString(), endDate: end.toISOString() }
       });
       
       // Load payout summary
       const payoutResponse = await apiClient.get('/api/v1/settlement/payout-summary');
       
       if (reportResponse.data.success) {
-        setSettlementData(reportResponse.data);
+        setSettlementData(reportResponse.data.report);
       }
       
       if (payoutResponse.data.success) {
-        setPayoutSummary(payoutResponse.data);
+        setPayoutSummary(payoutResponse.data.summary);
       }
     } catch (error: any) {
       console.error('Error loading settlement data:', error);
@@ -83,6 +95,17 @@ const SettlementScreen: React.FC = () => {
       </View>
     );
   }
+
+  // Derived values from backend contract
+  const totalEarnings = settlementData?.summary?.totalItemsValue || 0;
+  const totalCommission = settlementData?.summary?.platformFee || 0;
+  const totalTransactionFees = 0; // Not provided by backend currently
+  const netEarnings = (settlementData?.summary?.netPayout || 0);
+  const pendingPayoutAmount = payoutSummary?.pending?.amount || 0;
+  const pendingPayoutCount = payoutSummary?.pending?.count || 0;
+  const codOrders = settlementData?.paymentBreakdown?.cod?.orders || 0;
+  const codCollectedAmount = settlementData?.paymentBreakdown?.cod?.collectedAmount || 0;
+  const codPendingAmount = settlementData?.paymentBreakdown?.cod?.pendingAmount || 0;
 
   return (
     <View style={styles.container}>
@@ -148,10 +171,10 @@ const SettlementScreen: React.FC = () => {
                 <View style={styles.summaryContent}>
                   <Text style={styles.summaryLabel}>Total Earnings</Text>
                   <Text style={styles.summaryAmount}>
-                    ₹{formatINR(settlementData.totalEarnings || 0)}
+                    ₹{formatINR(totalEarnings)}
                   </Text>
                   <Text style={styles.summarySubtext}>
-                    From {settlementData.totalOrders || 0} completed orders
+                    From {settlementData?.summary?.totalOrders || 0} completed orders
                   </Text>
                 </View>
               </LinearGradient>
@@ -169,10 +192,10 @@ const SettlementScreen: React.FC = () => {
                 <View style={styles.summaryContent}>
                   <Text style={styles.summaryLabel}>Pending Settlement</Text>
                   <Text style={styles.summaryAmount}>
-                    ₹{formatINR(settlementData.pendingAmount || 0)}
+                    ₹{formatINR(pendingPayoutAmount)}
                   </Text>
                   <Text style={styles.summarySubtext}>
-                    From {settlementData.pendingOrders || 0} orders
+                    {pendingPayoutCount} payouts pending
                   </Text>
                 </View>
               </LinearGradient>
@@ -186,7 +209,7 @@ const SettlementScreen: React.FC = () => {
                   <Text style={styles.infoLabel}>Platform Commission</Text>
                 </View>
                 <Text style={styles.infoValue}>
-                  ₹{formatINR(settlementData.totalCommission || 0)}
+                  ₹{formatINR(totalCommission)}
                 </Text>
               </View>
               <View style={styles.infoRow}>
@@ -195,7 +218,7 @@ const SettlementScreen: React.FC = () => {
                   <Text style={styles.infoLabel}>Transaction Fees</Text>
                 </View>
                 <Text style={styles.infoValue}>
-                  ₹{formatINR(settlementData.totalTransactionFees || 0)}
+                  ₹{formatINR(totalTransactionFees)}
                 </Text>
               </View>
               <View style={[styles.infoRow, styles.infoRowTotal]}>
@@ -204,7 +227,7 @@ const SettlementScreen: React.FC = () => {
                   <Text style={styles.infoLabelBold}>Net Earnings</Text>
                 </View>
                 <Text style={styles.infoValueBold}>
-                  ₹{formatINR((settlementData.totalEarnings || 0) - (settlementData.totalCommission || 0) - (settlementData.totalTransactionFees || 0))}
+                  ₹{formatINR(netEarnings)}
                 </Text>
               </View>
             </View>
@@ -215,59 +238,52 @@ const SettlementScreen: React.FC = () => {
         {payoutSummary && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Recent Payouts</Text>
-            
-            {payoutSummary.payouts && payoutSummary.payouts.length > 0 ? (
-              payoutSummary.payouts.map((payout: any, index: number) => (
-                <View key={index} style={styles.payoutCard}>
-                  <View style={styles.payoutHeader}>
-                    <View style={styles.payoutLeft}>
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
-                      <View style={styles.payoutInfo}>
-                        <Text style={styles.payoutDate}>{formatDate(payout.date)}</Text>
-                        <Text style={styles.payoutId}>Payout ID: {payout.id}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.payoutAmount}>₹{formatINR(payout.amount)}</Text>
+            <View style={styles.payoutCard}>
+              <View style={styles.payoutHeader}>
+                <View style={styles.payoutLeft}>
+                  <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
+                  <View style={styles.payoutInfo}>
+                    <Text style={styles.payoutDate}>Completed Payouts</Text>
+                    <Text style={styles.payoutId}>Count: {payoutSummary?.completed?.count || 0}</Text>
                   </View>
-                  
-                  {payout.orders && (
-                    <Text style={styles.payoutOrders}>
-                      {payout.orders} orders included
-                    </Text>
-                  )}
                 </View>
-              ))
-            ) : (
-              <View style={styles.emptyPayoutCard}>
-                <Ionicons name="wallet-outline" size={48} color={Colors.textSecondary} />
-                <Text style={styles.emptyPayoutText}>No payouts yet</Text>
-                <Text style={styles.emptyPayoutSubtext}>
-                  Payouts are processed weekly for completed orders
-                </Text>
+                <Text style={styles.payoutAmount}>₹{formatINR(payoutSummary?.completed?.amount || 0)}</Text>
               </View>
-            )}
+            </View>
+            <View style={styles.payoutCard}>
+              <View style={styles.payoutHeader}>
+                <View style={styles.payoutLeft}>
+                  <Ionicons name="time-outline" size={24} color={Colors.warning} />
+                  <View style={styles.payoutInfo}>
+                    <Text style={styles.payoutDate}>Pending Payouts</Text>
+                    <Text style={styles.payoutId}>Count: {payoutSummary?.pending?.count || 0}</Text>
+                  </View>
+                </View>
+                <Text style={styles.payoutAmount}>₹{formatINR(payoutSummary?.pending?.amount || 0)}</Text>
+              </View>
+            </View>
           </View>
         )}
 
         {/* COD Summary */}
-        {settlementData && settlementData.codOrders > 0 && (
+        {settlementData && codOrders > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Cash on Delivery</Text>
             <View style={styles.codCard}>
               <View style={styles.codRow}>
                 <Text style={styles.codLabel}>Total COD Orders</Text>
-                <Text style={styles.codValue}>{settlementData.codOrders}</Text>
+                <Text style={styles.codValue}>{codOrders}</Text>
               </View>
               <View style={styles.codRow}>
                 <Text style={styles.codLabel}>COD Amount Collected</Text>
                 <Text style={styles.codValueAmount}>
-                  ₹{formatINR(settlementData.codCollected || 0)}
+                  ₹{formatINR(codCollectedAmount)}
                 </Text>
               </View>
               <View style={styles.codRow}>
                 <Text style={styles.codLabel}>Pending Collection</Text>
                 <Text style={[styles.codValueAmount, { color: Colors.warning }]}>
-                  ₹{formatINR(settlementData.codPending || 0)}
+                  ₹{formatINR(codPendingAmount)}
                 </Text>
               </View>
             </View>

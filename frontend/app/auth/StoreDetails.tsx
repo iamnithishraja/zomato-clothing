@@ -79,6 +79,8 @@ const StoreDetails = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -126,6 +128,48 @@ const StoreDetails = () => {
 
     return newErrors;
   }, [storeData]);
+
+  // Load existing store details for merchants to edit
+  React.useEffect(() => {
+    const loadExisting = async () => {
+      try {
+        setIsFetching(true);
+        const resp = await apiClient.get('/api/v1/store/details');
+        if (resp.data?.success && resp.data.store) {
+          const s = resp.data.store;
+          setStoreData({
+            storeName: s.storeName || '',
+            description: s.description || '',
+            storeImages: s.storeImages || [],
+            address: s.address || '',
+            mapLink: s.mapLink || '',
+            contact: {
+              phone: s.contact?.phone || '',
+              email: s.contact?.email || '',
+              website: s.contact?.website || '',
+            },
+            workingDays: {
+              monday: !!s.workingDays?.monday,
+              tuesday: !!s.workingDays?.tuesday,
+              wednesday: !!s.workingDays?.wednesday,
+              thursday: !!s.workingDays?.thursday,
+              friday: !!s.workingDays?.friday,
+              saturday: !!s.workingDays?.saturday,
+              sunday: !!s.workingDays?.sunday,
+            },
+          });
+          setIsEditMode(true);
+        } else {
+          setIsEditMode(false);
+        }
+      } catch (_err: any) {
+        setIsEditMode(false);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+    loadExisting();
+  }, []);
 
 
   const handleInputChange = useCallback((field: string, value: string) => {
@@ -219,7 +263,9 @@ const StoreDetails = () => {
         workingDays: storeData.workingDays
       };
 
-      const response = await apiClient.post('/api/v1/store/create', backendData);
+      const response = isEditMode
+        ? await apiClient.put('/api/v1/store/update', backendData)
+        : await apiClient.post('/api/v1/store/create', backendData);
 
       if (response.data.success) {
         // Update user data in context to reflect profile completion
@@ -229,7 +275,7 @@ const StoreDetails = () => {
         
         Alert.alert(
           'Success!',
-          'Your store details have been saved successfully.',
+          isEditMode ? 'Your store details have been updated.' : 'Your store details have been saved successfully.',
           [
             {
               text: 'Continue',
@@ -247,7 +293,7 @@ const StoreDetails = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [validateForm, isLoading, fadeAnim, storeData, login, token, router, user]);
+  }, [validateForm, isLoading, fadeAnim, storeData, login, token, router, user, isEditMode]);
 
   const renderWorkingDays = () => {
     const days = [

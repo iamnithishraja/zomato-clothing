@@ -108,7 +108,7 @@ const OrderManagement: React.FC = () => {
             try {
               setProcessingOrderId(orderId);
               await apiClient.post(`/api/v1/merchant-order/${orderId}/reject`, {
-                rejectionReason: 'Item unavailable'
+                reason: 'Item unavailable'
               });
               Alert.alert('Success', 'Order rejected');
               await loadOrders();

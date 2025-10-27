@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -80,6 +80,23 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+
+  // Flipkart-style status steps (end-state delivered)
+  const statusSteps = useMemo(() => (
+    ['Pending', 'Accepted', 'Processing', 'ReadyForPickup', 'Shipped', 'Delivered']
+  ), []);
+
+  const currentStepIndex = useMemo(() => {
+    if (!order?.status) return 0;
+    const idx = statusSteps.indexOf(order.status);
+    if (idx >= 0) return idx;
+    // If Cancelled/Rejected, show progress up to current history length - 1
+    if (['Cancelled', 'Rejected'].includes(order.status)) {
+      const histLen = Array.isArray(order?.statusHistory) ? order.statusHistory.length - 1 : 0;
+      return Math.max(0, Math.min(histLen, statusSteps.length - 1));
+    }
+    return 0;
+  }, [order?.status, order?.statusHistory, statusSteps]);
 
   const fetchOrderDetails = React.useCallback(async () => {
     try {
@@ -280,27 +297,54 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
         </View>
       </View>
 
-      {/* Order Timeline */}
-      {order.statusHistory && order.statusHistory.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Timeline</Text>
-          <View style={styles.timelineCard}>
-            {order.statusHistory.map((history: any, index: number) => (
-              <View key={index} style={styles.timelineItem}>
-                <View style={styles.timelineDot} />
-                {index < order.statusHistory.length - 1 && <View style={styles.timelineLine} />}
-                <View style={styles.timelineContent}>
-                  <Text style={styles.timelineStatus}>{history.status}</Text>
-                  <Text style={styles.timelineDate}>{formatDate(history.timestamp)}</Text>
-                  {history.note && (
-                    <Text style={styles.timelineNote}>{history.note}</Text>
+      {/* Order Tracking (Flipkart-style stepper) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Order Tracking</Text>
+        <View style={styles.stepperCard}>
+          {statusSteps.map((step, idx) => {
+            const isCompleted = idx <= currentStepIndex && !['Cancelled', 'Rejected'].includes(order.status);
+            const isCurrent = idx === currentStepIndex && !['Cancelled', 'Rejected'].includes(order.status);
+            const isCancelled = ['Cancelled', 'Rejected'].includes(order.status);
+
+            // Colors
+            const dotColor = isCancelled ? Colors.error : (isCompleted ? Colors.success : Colors.primary);
+            const lineColor = (idx < currentStepIndex && !isCancelled) ? Colors.success : Colors.primary;
+
+            // Find timestamp/note from history if available
+            const historyForStep = Array.isArray(order.statusHistory)
+              ? order.statusHistory.find((h: any) => h.status === step)
+              : null;
+            const timestamp = historyForStep?.timestamp || order.updatedAt || order.createdAt;
+            const note = historyForStep?.note;
+
+            return (
+              <View key={step} style={styles.stepRow}>
+                <View style={styles.stepIndicatorCol}>
+                  <View style={[styles.stepDot, { backgroundColor: dotColor }]} />
+                  {idx < statusSteps.length - 1 && (
+                    <View style={[styles.stepLine, { backgroundColor: lineColor }]} />
                   )}
                 </View>
+                <View style={styles.stepContentCol}>
+                  <View style={styles.stepHeaderRow}>
+                    <Text style={[styles.stepTitle, (isCompleted || isCurrent) ? styles.stepTitleActive : undefined]}>
+                      {step}
+                    </Text>
+                    {isCancelled && idx === currentStepIndex && (
+                      <View style={styles.cancelBadge}>
+                        <Ionicons name="close" size={12} color={Colors.textPrimary} />
+                        <Text style={styles.cancelText}>Cancelled</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.stepSubtext}>{formatDate(timestamp)}</Text>
+                  {!!note && <Text style={styles.stepNote}>{note}</Text>}
+                </View>
               </View>
-            ))}
-          </View>
+            );
+          })}
         </View>
-      )}
+      </View>
 
       {/* Action Buttons */}
       <View style={styles.actionsSection}>
@@ -543,49 +587,73 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: 8,
   },
-  timelineCard: {
+  // Flipkart-style stepper
+  stepperCard: {
     backgroundColor: Colors.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
   },
-  timelineItem: {
+  stepRow: {
     flexDirection: 'row',
-    position: 'relative',
     marginBottom: 20,
   },
-  timelineDot: {
+  stepIndicatorCol: {
+    width: 24,
+    alignItems: 'center',
+  },
+  stepDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: Colors.primary,
-    marginRight: 12,
     marginTop: 4,
+    marginBottom: 4,
   },
-  timelineLine: {
-    position: 'absolute',
-    left: 5.5,
-    top: 16,
-    bottom: -20,
-    width: 1,
-    backgroundColor: Colors.border,
-  },
-  timelineContent: {
+  stepLine: {
     flex: 1,
+    width: 2,
+    marginTop: 2,
+    marginBottom: -2,
   },
-  timelineStatus: {
+  stepContentCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  stepHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepTitle: {
     fontSize: 15,
     fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  stepTitleActive: {
     color: Colors.textPrimary,
   },
-  timelineDate: {
+  stepSubtext: {
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
   },
-  timelineNote: {
+  stepNote: {
     fontSize: 13,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  cancelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.error + '15',
+  },
+  cancelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   actionsSection: {
     paddingHorizontal: 20,

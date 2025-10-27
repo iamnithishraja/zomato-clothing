@@ -139,7 +139,26 @@ async function createOrder(req: Request, res: Response) {
       }]
     });
 
-    await order.save();
+    // Save with retry on duplicate orderNumber
+    {
+      let attempts = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        try {
+          await order.save();
+          break;
+        } catch (e: any) {
+          if (e && e.code === 11000 && e.keyPattern && e.keyPattern.orderNumber) {
+            // Regenerate and retry a few times
+            if (++attempts > 3) throw e;
+            const newOrderNumber = await generateOrderNumber(storeId);
+            order.orderNumber = newOrderNumber;
+            continue;
+          }
+          throw e;
+        }
+      }
+    }
 
     // Create payment record for COD
     if (paymentMethod === "COD") {
@@ -649,8 +668,25 @@ async function createMultipleOrders(req: Request, res: Response) {
             note: "Order created"
           }]
         });
-
-        await order.save();
+        // Save with retry on duplicate orderNumber
+        {
+          let attempts = 0;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            try {
+              await order.save();
+              break;
+            } catch (e: any) {
+              if (e && e.code === 11000 && e.keyPattern && e.keyPattern.orderNumber) {
+                if (++attempts > 3) throw e;
+                const newOrderNumber = await generateOrderNumber(storeId);
+                order.orderNumber = newOrderNumber;
+                continue;
+              }
+              throw e;
+            }
+          }
+        }
 
         // Create payment record for COD in batch-created orders as well!
         if (paymentMethod === "COD") {

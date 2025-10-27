@@ -1,14 +1,13 @@
-import express from "express";
+import express, { Router } from "express";
 import {
   createRazorpayOrder,
   verifyRazorpayPayment,
-  handleRazorpayWebhook,
   getPaymentDetails,
   retryPayment
 } from "../controllers/paymentController";
 import { isAuthenticated } from "../middleware/auth";
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Create Razorpay order for payment
 router.post("/create-order", isAuthenticated, createRazorpayOrder);
@@ -19,8 +18,13 @@ router.post("/verify", isAuthenticated, verifyRazorpayPayment);
 // Retry payment for pending/failed orders
 router.post("/retry/:orderId", isAuthenticated, retryPayment);
 
-// Razorpay webhook (no authentication required)
-router.post("/webhook/razorpay", handleRazorpayWebhook);
+// Razorpay webhook (no auth, needs raw body for signature)
+router.post(
+  "/webhook/razorpay",
+  express.raw({ type: "application/json" }),
+  // @ts-ignore - handler supports raw body
+  require("../controllers/paymentController").handleRazorpayWebhook
+);
 
 // Get payment details for an order
 router.get("/:orderId", isAuthenticated, getPaymentDetails);

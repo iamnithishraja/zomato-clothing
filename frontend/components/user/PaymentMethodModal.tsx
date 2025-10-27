@@ -31,7 +31,8 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('COD');
 
-  const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  const formatINR = (value: number) =>
+    Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
   const paymentMethods = [
     {
@@ -39,16 +40,12 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({
       title: 'Cash on Delivery',
       subtitle: 'Pay when you receive your order',
       icon: 'cash-outline',
-      color: Colors.success,
-      recommended: true,
     },
     {
       id: 'Online' as PaymentMethod,
       title: 'Online Payment',
       subtitle: 'Pay securely with UPI, Card, Net Banking',
       icon: 'card-outline',
-      color: Colors.primary,
-      recommended: false,
     },
   ];
 
@@ -80,52 +77,78 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({
           </View>
 
           {/* Payment Methods */}
-          <ScrollView 
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-          >
-            {paymentMethods.map((method) => (
-              <TouchableOpacity
-                key={method.id}
-                style={[
-                  styles.paymentOption,
-                  selectedMethod === method.id && styles.paymentOptionSelected,
-                ]}
-                onPress={() => setSelectedMethod(method.id)}
-                disabled={isProcessing}
-              >
-                <View style={styles.paymentOptionLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: method.color + '20' }]}>
-                    <Ionicons name={method.icon as any} size={28} color={method.color} />
-                  </View>
-                  <View style={styles.paymentOptionText}>
-                    <View style={styles.titleRow}>
-                      <Text style={styles.paymentTitle}>{method.title}</Text>
-                      {method.recommended && (
-                        <View style={styles.recommendedBadge}>
-                          <Text style={styles.recommendedText}>Recommended</Text>
-                        </View>
-                      )}
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {paymentMethods.map((method) => {
+              const isSelected = selectedMethod === method.id;
+              return (
+                <TouchableOpacity
+                  key={method.id}
+                  style={[
+                    styles.paymentOption,
+                    isSelected && styles.paymentOptionSelected,
+                  ]}
+                  onPress={() => setSelectedMethod(method.id)}
+                  disabled={isProcessing}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.paymentOptionLeft}>
+                    <View
+                      style={[
+                        styles.iconContainer,
+                        isSelected
+                          ? {
+                              backgroundColor: Colors.primary + '20',
+                              borderWidth: 1,
+                              borderColor: Colors.primary,
+                            }
+                          : {
+                              backgroundColor: Colors.backgroundSecondary,
+                              borderWidth: 1,
+                              borderColor: Colors.border,
+                            },
+                      ]}
+                    >
+                      <Ionicons
+                        name={method.icon as any}
+                        size={28}
+                        color={
+                          isSelected ? Colors.primary : Colors.textSecondary
+                        }
+                      />
                     </View>
-                    <Text style={styles.paymentSubtitle}>{method.subtitle}</Text>
+                    <View style={styles.paymentOptionText}>
+                      <Text
+                        style={[
+                          styles.paymentTitle,
+                          { color: isSelected ? Colors.primary : Colors.textPrimary },
+                        ]}
+                      >
+                        {method.title}
+                      </Text>
+                      <Text style={styles.paymentSubtitle}>{method.subtitle}</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={[
-                  styles.radioButton,
-                  selectedMethod === method.id && styles.radioButtonSelected
-                ]}>
-                  {selectedMethod === method.id && (
-                    <View style={styles.radioButtonInner} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.radioButton,
+                      isSelected && styles.radioButtonSelected,
+                    ]}
+                  >
+                    {isSelected && <View style={styles.radioButtonInner} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
 
             {/* Payment Info */}
             <View style={styles.infoCard}>
-              <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={Colors.primary}
+              />
               <Text style={styles.infoText}>
-                {selectedMethod === 'COD' 
+                {selectedMethod === 'COD'
                   ? 'Pay in cash to the delivery partner when you receive your order.'
                   : 'You will be redirected to secure payment gateway to complete your payment.'}
               </Text>
@@ -136,24 +159,43 @@ const PaymentMethodModal: React.FC<PaymentMethodModalProps> = ({
 
           {/* Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity 
-              style={[styles.continueButton, isProcessing && styles.continueButtonDisabled]}
+            <TouchableOpacity
+              style={[
+                styles.continueButton,
+                isProcessing && styles.continueButtonDisabled,
+              ]}
               onPress={handleContinue}
               disabled={isProcessing}
+              activeOpacity={0.8}
             >
               <LinearGradient
-                colors={isProcessing ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
+                colors={
+                  isProcessing
+                    ? ['#CCCCCC', '#CCCCCC']
+                    : (Colors.gradients.primary as [string, string])
+                }
                 style={styles.continueGradient}
               >
                 {isProcessing ? (
                   <>
-                    <ActivityIndicator color={Colors.textPrimary} style={{ marginRight: 8 }} />
+                    <ActivityIndicator
+                      color={Colors.textPrimary}
+                      style={{ marginRight: 8 }}
+                    />
                     <Text style={styles.continueText}>Processing...</Text>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.continueText}>Continue with {selectedMethod === 'COD' ? 'COD' : 'Online Payment'}</Text>
-                    <Ionicons name="arrow-forward" size={20} color={Colors.textPrimary} style={{ marginLeft: 8 }} />
+                    <Text style={styles.continueText}>
+                      Continue with{' '}
+                      {selectedMethod === 'COD' ? 'COD' : 'Online Payment'}
+                    </Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={20}
+                      color={Colors.textPrimary}
+                      style={{ marginLeft: 8 }}
+                    />
                   </>
                 )}
               </LinearGradient>
@@ -222,17 +264,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: Colors.border,
+    borderWidth: 1, // changed from 2 to 1 to remove thick yellow border
+    borderColor: Colors.border, // always default border
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.07,
     shadowRadius: 8,
     elevation: 2,
+    // Removed web-only transition prop
   },
   paymentOptionSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
+   
+    shadowOpacity: 0.10,
+    elevation: 3,
   },
   paymentOptionLeft: {
     flexDirection: 'row',
@@ -246,31 +290,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    // borderColor set in line
   },
   paymentOptionText: {
     flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
   },
   paymentTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.textPrimary,
-    marginRight: 8,
-  },
-  recommendedBadge: {
-    backgroundColor: Colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  recommendedText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    marginRight: 0,
+    marginBottom: 4,
   },
   paymentSubtitle: {
     fontSize: 13,
@@ -284,9 +314,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.background,
   },
   radioButtonSelected: {
     borderColor: Colors.primary,
+    backgroundColor: Colors.background,
   },
   radioButtonInner: {
     width: 12,
@@ -300,6 +332,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     marginTop: 8,
+    alignItems: 'flex-start',
   },
   infoText: {
     flex: 1,
@@ -339,4 +372,3 @@ const styles = StyleSheet.create({
 });
 
 export default PaymentMethodModal;
-

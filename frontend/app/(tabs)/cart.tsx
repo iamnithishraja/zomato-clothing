@@ -322,6 +322,8 @@ export default function CartScreen() {
 
   const handleOnlinePayment = async (order: any) => {
     try {
+      // We'll prefer the backend-provided key; frontend env is only a fallback
+      const razorpayKey = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
       // Create Razorpay order
       const paymentResponse = await apiClient.post('/api/v1/payment/create-order', {
         orderId: order._id
@@ -331,14 +333,14 @@ export default function CartScreen() {
         throw new Error('Failed to create payment order');
       }
 
-      const { razorpayOrder, paymentId } = paymentResponse.data;
+      const { razorpayOrder, paymentId, keyId } = paymentResponse.data;
 
       // Open Razorpay checkout
       const options = {
         description: `Order #${order.orderNumber || order._id.slice(-8)}`,
         image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
         currency: razorpayOrder.currency,
-        key: 'rzp_test_your_key_here', // Replace with your Razorpay key
+        key: keyId || razorpayKey || '',
         amount: razorpayOrder.amount,
         name: 'Locals',
         order_id: razorpayOrder.id,
@@ -398,6 +400,8 @@ export default function CartScreen() {
               errorDescription = error.error.description || error.description;
             } else if (error.code === 2) {
               errorReason = 'network_error';
+            } else if (typeof error.description === 'string') {
+              errorDescription = error.description;
             }
           } catch (e) {
             console.error('Error parsing Razorpay error:', e);
@@ -438,7 +442,7 @@ export default function CartScreen() {
     } catch (error: any) {
       console.error('Error processing online payment:', error);
       setProcessingPayment(false);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to process payment. Please try again.');
+      Alert.alert('Error', error.response?.data?.message || error.message || 'Failed to process payment. Please try again.');
     }
   };
 

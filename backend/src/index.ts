@@ -22,9 +22,9 @@ const app = express();
 
 connectDatabase();
 
-// Initialize Razorpay
-const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+// Initialize Razorpay (support multiple env var names)
+const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEYID;
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_API_SECRET;
 
 if (razorpayKeyId && razorpayKeySecret) {
   initializeRazorpay(razorpayKeyId, razorpayKeySecret);

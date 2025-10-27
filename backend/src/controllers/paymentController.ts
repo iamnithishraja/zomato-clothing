@@ -95,7 +95,8 @@ export async function createRazorpayOrder(req: Request, res: Response) {
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency
       },
-      paymentId: payment._id
+      paymentId: payment._id,
+      keyId: process.env.RAZORPAY_KEY_ID
     });
 
   } catch (error) {
@@ -143,7 +144,7 @@ export async function verifyRazorpayPayment(req: Request, res: Response) {
     }
 
     // Verify signature
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || "";
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_API_SECRET || "";
     const generatedSignature = crypto
       .createHmac("sha256", keySecret)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -226,10 +227,11 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || "";
     const signature = req.headers["x-razorpay-signature"] as string;
 
-    // Verify webhook signature
+    // Verify webhook signature – req.body is raw Buffer due to express.raw()
+    const body = (req as any).body instanceof Buffer ? (req as any).body : Buffer.from(JSON.stringify(req.body));
     const generatedSignature = crypto
       .createHmac("sha256", webhookSecret)
-      .update(JSON.stringify(req.body))
+      .update(body)
       .digest("hex");
 
     if (generatedSignature !== signature) {
@@ -237,8 +239,9 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
-    const event = req.body.event;
-    const payload = req.body.payload.payment.entity;
+    const json = JSON.parse(body.toString());
+    const event = json.event;
+    const payload = json.payload?.payment?.entity;
 
     console.log(`Webhook received: ${event}`);
 

@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +29,11 @@
       "enableProguardInReleaseBuilds": true,
       "enableShrinkResourcesInReleaseBuilds": true,
       "enableSeparateBuildPerCPUArchitecture": true,
-      "enableDexingInProcess": true
+      "enableDexingInProcess": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",

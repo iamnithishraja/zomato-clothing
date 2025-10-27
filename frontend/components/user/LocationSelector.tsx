@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Modal,
   FlatList,
   TextInput,
-  Pressable,
   SafeAreaView,
   ActivityIndicator,
   Alert,
@@ -16,6 +15,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useLocation } from '@/contexts/LocationContext';
+import { Region } from 'react-native-maps';
+import apiClient from '@/api/client';
+import { useAuth } from '@/contexts/AuthContext';
+import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
 
 interface Location {
   id: string;
@@ -30,58 +33,27 @@ interface LocationSelectorProps {
   onLocationSelect: (location: Location) => void;
 }
 
-// Mock locations data - in real app, this would come from API
-const MOCK_LOCATIONS: Location[] = [
-  { id: '1', name: 'Bangalore', city: 'Bangalore', state: 'Karnataka', country: 'India' },
-  { id: '2', name: 'Delhi', city: 'New Delhi', state: 'Delhi', country: 'India' },
-  { id: '3', name: 'Mumbai', city: 'Mumbai', state: 'Maharashtra', country: 'India' },
-  { id: '4', name: 'Chennai', city: 'Chennai', state: 'Tamil Nadu', country: 'India' },
-  { id: '5', name: 'Kolkata', city: 'Kolkata', state: 'West Bengal', country: 'India' },
-  { id: '6', name: 'Hyderabad', city: 'Hyderabad', state: 'Telangana', country: 'India' },
-  { id: '7', name: 'Pune', city: 'Pune', state: 'Maharashtra', country: 'India' },
-  { id: '8', name: 'Ahmedabad', city: 'Ahmedabad', state: 'Gujarat', country: 'India' },
-];
-
 const LocationSelector: React.FC<LocationSelectorProps> = ({
   selectedLocation,
   onLocationSelect,
 }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  // const [searchQuery, setSearchQuery] = useState('');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   
-  const { getCurrentLocation, currentLocation, setSelectedCity } = useLocation();
-
-  const filteredLocations = (() => {
-    const filtered = MOCK_LOCATIONS.filter(location =>
-      location.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      location.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      location.state.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    // If we have a current location and it matches the search, show it at the top
-    if (currentLocation && currentLocation.city) {
-      const currentCityMatch = currentLocation.city.toLowerCase().includes(searchQuery.toLowerCase());
-      if (currentCityMatch) {
-        const currentLocationItem: Location = {
-          id: 'current',
-          name: currentLocation.city,
-          city: currentLocation.city,
-          state: currentLocation.state,
-          country: currentLocation.country,
-        };
-        return [currentLocationItem, ...filtered.filter(item => item.id !== 'current')];
-      }
-    }
-
-    return filtered;
-  })();
+  const { getCurrentLocation, currentLocation, setSelectedCity, reverseGeocode } = useLocation();
+  const { user, updateUser } = useAuth();
 
   const handleLocationSelect = (location: Location) => {
     onLocationSelect(location);
     setSelectedCity(location.city);
     setIsModalVisible(false);
-    setSearchQuery('');
+    // search cleared (search removed)
   };
 
   const handleUseCurrentLocation = async () => {
@@ -107,6 +79,84 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     }
   };
 
+  const openMapPicker = async () => {
+    try {
+      // Always fetch current location; no defaults
+      const loc = await getCurrentLocation();
+      if (loc) {
+        const initial: Region = {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setMapRegion(initial);
+      } else {
+        setMapRegion(null);
+      }
+      setMapVisible(true);
+    } catch {}
+  };
+
+  const beginEditAddress = (index: number, value: string) => {
+    setEditingIndex(index);
+    setEditingText(value);
+  };
+
+  const cancelEditAddress = () => {
+    setEditingIndex(null);
+    setEditingText('');
+  };
+
+  const saveEditedAddress = async (index: number) => {
+    try {
+      if (!editingText.trim()) {
+        Alert.alert('Validation', 'Address cannot be empty');
+        return;
+      }
+      setIsSaving(true);
+      const next = (user?.addresses || []).map((a, i) => (i === index ? editingText.trim() : a));
+      const resp = await apiClient.put('/api/v1/user/profile', { addresses: next });
+      if (resp.data?.success) {
+        await updateUser(resp.data.user);
+        cancelEditAddress();
+      } else {
+        Alert.alert('Error', resp.data?.message || 'Failed to update address');
+      }
+    } catch (e) {
+      console.error('Edit address error:', e);
+      Alert.alert('Error', 'Failed to update address');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteAddressAt = async (index: number) => {
+    Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            setIsSaving(true);
+            const next = (user?.addresses || []).filter((_, i) => i !== index);
+            const resp = await apiClient.put('/api/v1/user/profile', { addresses: next });
+            if (resp.data?.success) {
+              await updateUser(resp.data.user);
+              cancelEditAddress();
+            } else {
+              Alert.alert('Error', resp.data?.message || 'Failed to delete address');
+            }
+          } catch (e) {
+            console.error('Delete address error:', e);
+            Alert.alert('Error', 'Failed to delete address');
+          } finally {
+            setIsSaving(false);
+          }
+        }
+      }
+    ]);
+  };
+
   return (
     <>
       <TouchableOpacity
@@ -123,101 +173,225 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
             {selectedLocation ? selectedLocation.name : 'Select Location'}
           </Text>
         </View>
-        {/* <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} /> */}
+        <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal
         visible={isModalVisible}
         animationType="slide"
-        transparent={true}
+        transparent={false}
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <Pressable 
-            style={styles.overlay} 
-            onPress={() => setIsModalVisible(false)} 
-          />
-          
-          <View style={styles.modal}>
-            <LinearGradient
-              colors={Colors.gradients.background as [string, string]}
-              style={styles.gradient}
-            >
-              <View style={styles.modalHeader}>
-                <View style={styles.grabber} />
-                <Text style={styles.modalTitle}>Select your location</Text>
+        <SafeAreaView style={styles.fullscreenModal}>
+          <LinearGradient
+            colors={Colors.gradients.background as [string, string]}
+            style={styles.modalGradient}
+          >
+            {/* Header with Close Button */}
+            <View style={styles.modalHeader}>
+              <View style={styles.headerContent}>
+                <Ionicons name="location-sharp" size={24} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Choose Location</Text>
               </View>
+              <TouchableOpacity 
+                onPress={() => setIsModalVisible(false)}
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={28} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-              <View style={styles.searchContainer}>
-                <View style={styles.searchInputContainer}>
-                  <Ionicons name="search-outline" size={20} color={Colors.textSecondary} />
-                  <TextInput
-                    placeholder="Search city or area"
-                    placeholderTextColor={Colors.textSecondary}
-                    style={styles.searchInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    autoFocus
-                  />
-                </View>
-                
-                {/* Use Current Location Button */}
-                <TouchableOpacity
-                  style={styles.currentLocationButton}
-                  onPress={handleUseCurrentLocation}
-                  disabled={isGettingLocation}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={Colors.gradients.primary as [string, string]}
-                    style={styles.currentLocationGradient}
-                  >
-                    {isGettingLocation ? (
-                      <ActivityIndicator size="small" color={Colors.textPrimary} />
-                    ) : (
-                      <Ionicons name="locate" size={18} color={Colors.textPrimary} />
-                    )}
-                    <Text style={styles.currentLocationText}>
-                      {isGettingLocation ? 'Getting Location...' : 'Use My Current Location'}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-
-              <FlatList
-                data={filteredLocations}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.locationItem,
-                      selectedLocation?.id === item.id && styles.selectedLocationItem
-                    ]}
-                    onPress={() => handleLocationSelect(item)}
-                  >
-                    <View style={styles.locationItemContent}>
-                      <View style={styles.locationItemIcon}>
-                        <Ionicons name="location-outline" size={20} color={Colors.primary} />
-                      </View>
-                      <View style={styles.locationItemInfo}>
-                        <Text style={styles.locationItemName}>{item.name}</Text>
-                        <Text style={styles.locationItemAddress}>
-                          {item.city}, {item.state}
-                        </Text>
-                      </View>
-                      {selectedLocation?.id === item.id && (
-                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                      )}
-                    </View>
+            {/* Search Input */}
+            {/* <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons name="search" size={20} color={Colors.textSecondary} />
+                <TextInput
+                  placeholder="Search city or area"
+                  placeholderTextColor={Colors.textSecondary}
+                  style={styles.searchInput}
+                  value={''}
+                  onChangeText={() => {}}
+                  autoFocus={false}
+                />
+                {false && (
+                  <TouchableOpacity onPress={() => {}}>
+                    <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 )}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                style={styles.locationsList}
-                showsVerticalScrollIndicator={false}
-              />
-            </LinearGradient>
-          </View>
+              </View>
+            </View> */}
+
+            {/* Quick Actions */}
+            <View style={styles.quickActions}>
+              {/* Current Location */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={handleUseCurrentLocation}
+                disabled={isGettingLocation}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionCardContent}>
+                  <View style={[styles.iconCircle, { backgroundColor: Colors.success + '20' }]}>
+                    <Ionicons name="navigate" size={22} color={Colors.success} />
+                  </View>
+                  <View style={styles.actionCardInfo}>
+                    <Text style={styles.actionCardTitle}>Current Location</Text>
+                    <Text style={styles.actionCardSubtitle} numberOfLines={1}>
+                      {isGettingLocation 
+                        ? 'Detecting...' 
+                        : currentLocation 
+                          ? `${currentLocation.city}` 
+                          : 'Use GPS'}
+                    </Text>
+                  </View>
+                  {isGettingLocation ? (
+                    <ActivityIndicator size="small" color={Colors.success} />
+                  ) : (
+                    <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Add New Address */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={openMapPicker}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionCardContent}>
+                  <View style={[styles.iconCircle, { backgroundColor: Colors.primary + '20' }]}>
+                    <Ionicons name="add-circle" size={22} color={Colors.primary} />
+                  </View>
+                  <View style={styles.actionCardInfo}>
+                    <Text style={styles.actionCardTitle}>Add New Address</Text>
+                    <Text style={styles.actionCardSubtitle}>Select on map</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Saved Addresses */}
+            {!!(user?.addresses && user.addresses.length) && (
+              <View style={styles.savedSection}>
+                <View style={styles.sectionHeaderContainer}>
+                  <Ionicons name="bookmark" size={18} color={Colors.primary} />
+                  <Text style={styles.sectionHeader}>Saved Addresses</Text>
+                </View>
+                <FlatList
+                  data={user.addresses}
+                  keyExtractor={(item, idx) => `${idx}`}
+                  renderItem={({ item, index }) => (
+                    <View style={styles.savedAddressCard}>
+                      {editingIndex === index ? (
+                        <View style={styles.editContainer}>
+                          <TextInput
+                            style={styles.editInput}
+                            value={editingText}
+                            onChangeText={setEditingText}
+                            multiline
+                            placeholder="Enter address"
+                            placeholderTextColor={Colors.textSecondary}
+                          />
+                          <View style={styles.editActions}>
+                            <TouchableOpacity 
+                              style={styles.editButton} 
+                              onPress={cancelEditAddress} 
+                              disabled={isSaving}
+                            >
+                              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+                              <Text style={styles.editButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={[styles.editButton, styles.saveButton]} 
+                              onPress={() => saveEditedAddress(index)} 
+                              disabled={isSaving}
+                            >
+                              {isSaving ? (
+                                <ActivityIndicator size="small" color={Colors.textPrimary} />
+                              ) : (
+                                <>
+                                  <Ionicons name="checkmark" size={18} color={Colors.textPrimary} />
+                                  <Text style={[styles.editButtonText, { color: Colors.textPrimary }]}>Save</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.savedAddressContent}>
+                          <View style={[styles.iconCircle, styles.smallIconCircle]}>
+                            <Ionicons name="home" size={18} color={Colors.primary} />
+                          </View>
+                          <Text style={styles.savedAddressText} numberOfLines={2}>{item}</Text>
+                          <View style={styles.addressActions}>
+                            <TouchableOpacity 
+                              onPress={() => beginEditAddress(index, item)} 
+                              style={styles.actionIcon}
+                            >
+                              <Ionicons name="pencil" size={18} color={Colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              onPress={() => deleteAddressAt(index)} 
+                              style={styles.actionIcon}
+                            >
+                              <Ionicons name="trash" size={18} color={Colors.error} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  ItemSeparatorComponent={() => <View style={styles.cardSeparator} />}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.savedListContent}
+                />
+              </View>
+            )}
+          </LinearGradient>
         </SafeAreaView>
+      </Modal>
+
+      {/* Map Picker Modal */}
+      <Modal
+        visible={mapVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setMapVisible(false)}
+      >
+        <LocationPickerScreen
+          initialRegion={mapRegion || undefined}
+          title="Choose Location"
+          onClose={() => setMapVisible(false)}
+          onConfirm={async ({ latitude, longitude, formattedAddress }) => {
+            try {
+              const nextAddresses = [...(user?.addresses || []), formattedAddress];
+              const resp = await apiClient.put('/api/v1/user/profile', { addresses: nextAddresses });
+              if (resp.data?.success) {
+                await updateUser(resp.data.user);
+              }
+              const addr = await reverseGeocode(latitude, longitude);
+              if (addr) {
+                setSelectedCity(addr.city);
+                const locItem: Location = {
+                  id: 'picked',
+                  name: addr.city,
+                  city: addr.city,
+                  state: addr.state,
+                  country: addr.country,
+                };
+                onLocationSelect(locItem);
+              }
+              setMapVisible(false);
+              setIsModalVisible(false);
+              Alert.alert('Success', 'Address added successfully');
+            } catch (error) {
+              console.error('Error saving address:', error);
+              Alert.alert('Error', 'Failed to add address');
+            }
+          }}
+        />
       </Modal>
     </>
   );
@@ -227,7 +401,8 @@ const styles = StyleSheet.create({
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',    },
+    backgroundColor: 'transparent',
+  },
   locationIcon: {
     marginRight: 12,
   },
@@ -245,126 +420,190 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  modalContainer: {
+  fullscreenModal: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  overlay: {
-    flex: 1,
-  },
-  modal: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '75%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
     backgroundColor: Colors.background,
   },
-  gradient: {
+  modalGradient: {
     flex: 1,
-    paddingTop: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingTop: 0,
   },
   modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '30',
   },
-  grabber: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-    marginBottom: 12,
-    opacity: 0.8,
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
+  closeButton: {
+    padding: 4,
+  },
   searchContainer: {
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 12,
+    height: 52,
   },
   searchInput: {
     flex: 1,
-    height: 44,
     paddingHorizontal: 12,
     color: Colors.textPrimary,
     fontSize: 16,
   },
-  currentLocationButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  quickActions: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
   },
-  currentLocationGradient: {
+  actionCard: {
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  actionCardContent: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
+    marginRight: 14,
   },
-  currentLocationText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+  smallIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+    backgroundColor: Colors.primary + '20',
   },
-  locationsList: {
+  actionCardInfo: {
     flex: 1,
   },
-  locationItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 4,
+  actionCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 4,
   },
-  selectedLocationItem: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 12,
-    marginHorizontal: -4,
-    paddingHorizontal: 8,
+  actionCardSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
-  locationItemContent: {
+  savedSection: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  sectionHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  savedListContent: {
+    paddingBottom: 20,
+  },
+  savedAddressCard: {
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+  },
+  savedAddressContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationItemIcon: {
-    marginRight: 12,
-  },
-  locationItemInfo: {
+  savedAddressText: {
     flex: 1,
-  },
-  locationItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  locationItemAddress: {
     fontSize: 14,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+  addressActions: {
+    flexDirection: 'row',
+    gap: 4,
+    marginLeft: 8,
+  },
+  actionIcon: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  editContainer: {
+    gap: 12,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.backgroundSecondary,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    fontSize: 14,
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  saveButton: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.textSecondary,
   },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: 44,
+  cardSeparator: {
+    height: 12,
   },
 });
 

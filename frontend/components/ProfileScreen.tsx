@@ -8,6 +8,8 @@ import { useLocation } from '../contexts/LocationContext';
 import { useRouter } from 'expo-router';
 import apiClient from '../api/client';
 import * as ImagePicker from 'expo-image-picker';
+import { Region } from 'react-native-maps';
+import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
 
 const ProfileScreen = () => {
   const { user, logout, isAuthenticated, updateUser } = useAuth();
@@ -41,6 +43,10 @@ const ProfileScreen = () => {
   });
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [editingAddressIndex, setEditingAddressIndex] = useState<number | null>(null);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
+  // handled by LocationPickerScreen now
+  const [reopenAddressAfterMap, setReopenAddressAfterMap] = useState(false);
 
   const handleLogout = () => {
     Alert.alert(
@@ -326,6 +332,40 @@ const ProfileScreen = () => {
     });
     setIsEditingAddress(false);
     setEditingAddressIndex(null);
+  };
+
+  const openMap = async () => {
+    try {
+      // Avoid nested modals on Android: close address modal and remember to reopen
+      if (addressModalVisible) {
+        setReopenAddressAfterMap(true);
+        setAddressModalVisible(false);
+      } else {
+        setReopenAddressAfterMap(false);
+      }
+      setMapVisible(true);
+      let initLat = (await getCurrentLocation())?.latitude || 12.9716;
+      let initLng = (await getCurrentLocation())?.longitude || 77.5946;
+      setMapRegion({
+        latitude: initLat,
+        longitude: initLng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    } catch {
+      // noop
+    } finally {
+      // no-op
+    }
+  };
+
+  // map region updates and geocoding are handled inside LocationPickerScreen
+  const closeMap = () => {
+    setMapVisible(false);
+    if (reopenAddressAfterMap) {
+      setAddressModalVisible(true);
+      setReopenAddressAfterMap(false);
+    }
   };
 
   const handleGetAddressFromLocation = async () => {
@@ -748,6 +788,21 @@ const ProfileScreen = () => {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* Pick on Map Button */}
+            <TouchableOpacity
+              style={[styles.getLocationButton, { marginTop: 0 }]}
+              onPress={openMap}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={Colors.gradients.primary as [string, string]}
+                style={styles.getLocationButtonGradient}
+              >
+                <Ionicons name="map" size={18} color={Colors.textPrimary} />
+                <Text style={styles.getLocationButtonText}>Pick on Map</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Address Line 1 *</Text>
               <TextInput
@@ -841,6 +896,38 @@ const ProfileScreen = () => {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Fullscreen Map Picker */}
+      <Modal
+        visible={mapVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={closeMap}
+      >
+        <LocationPickerScreen
+          initialRegion={mapRegion || undefined}
+          title="Choose Location"
+          onClose={closeMap}
+          onConfirm={({ formattedAddress }) => {
+            // Map -> Address modal form
+            const parts = formattedAddress.split(',').map(p => p.trim());
+            setAddressFormData(prev => ({
+              ...prev,
+              line1: parts[0] || prev.line1,
+              line2: parts[1] || prev.line2,
+              city: parts[2] || prev.city,
+              state: parts[3] || prev.state,
+              country: parts[5] || prev.country,
+              pincode: parts[4] || prev.pincode,
+            }));
+            setMapVisible(false);
+            if (reopenAddressAfterMap) {
+              setAddressModalVisible(true);
+              setReopenAddressAfterMap(false);
+            }
+          }}
+        />
       </Modal>
     </View>
   );

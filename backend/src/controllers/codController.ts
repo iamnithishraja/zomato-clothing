@@ -34,9 +34,9 @@ export async function markCodCollected(req: Request, res: Response) {
       return sendErrorResponse(res, 400, "This order is not a COD order");
     }
 
-    // Check if order is delivered
-    if (order.status !== "Delivered") {
-      return sendErrorResponse(res, 400, "Order must be delivered before marking COD as collected");
+    // Allow collecting COD once the parcel is picked up or delivered
+    if (!["PickedUp", "Delivered"].includes(order.status)) {
+      return sendErrorResponse(res, 400, "Order must be picked up before marking COD as collected");
     }
 
     // Find or create payment record

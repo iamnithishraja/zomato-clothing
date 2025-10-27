@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
 
@@ -54,6 +55,7 @@ const DeliveryDashboard: React.FC = () => {
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [codModalVisible, setCodModalVisible] = useState(false);
+  const router = useRouter();
 
   const loadData = useCallback(async () => {
     try {
@@ -169,7 +171,7 @@ const DeliveryDashboard: React.FC = () => {
         {/* Stats Cards */}
         {stats && (
           <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => setSelectedStatus('Delivered')}>
               <LinearGradient
                 colors={['#4CAF50', '#45A049']}
                 style={styles.statGradient}
@@ -178,9 +180,9 @@ const DeliveryDashboard: React.FC = () => {
                 <Text style={styles.statNumber}>{stats.totalDeliveries || 0}</Text>
                 <Text style={styles.statLabel}>Total Deliveries</Text>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
             
-            <View style={styles.statCard}>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => setSelectedStatus('PickedUp')}>
               <LinearGradient
                 colors={['#2196F3', '#1976D2']}
                 style={styles.statGradient}
@@ -189,9 +191,9 @@ const DeliveryDashboard: React.FC = () => {
                 <Text style={styles.statNumber}>{stats.activeDeliveries || 0}</Text>
                 <Text style={styles.statLabel}>Active</Text>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
             
-            <View style={styles.statCard}>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/delivery/settlement' as any)}>
               <LinearGradient
                 colors={['#FFA500', '#FF8C00']}
                 style={styles.statGradient}
@@ -200,7 +202,7 @@ const DeliveryDashboard: React.FC = () => {
                 <Text style={styles.statNumber}>₹{formatINR(stats.totalEarnings || 0)}</Text>
                 <Text style={styles.statLabel}>Earnings</Text>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -418,14 +420,14 @@ const DeliveryDashboard: React.FC = () => {
                 </View>
               </View>
 
-              {selectedDelivery.order && selectedDelivery.order.paymentMethod === 'COD' && (
+                  {selectedDelivery.order && selectedDelivery.order.paymentMethod === 'COD' && (
                 <View style={styles.modalSection}>
                   <Text style={styles.modalSectionTitle}>Cash on Delivery</Text>
                   <View style={styles.codBox}>
                     <Text style={styles.codAmount}>₹{formatINR(selectedDelivery.order.totalAmount)}</Text>
                     <Text style={styles.codLabel}>Amount to Collect</Text>
                   </View>
-                  {selectedDelivery.status === 'Delivered' && (
+                      {(selectedDelivery.status === 'PickedUp' || selectedDelivery.status === 'Delivered') && (
                     <TouchableOpacity
                       style={styles.codButton}
                       onPress={() => {

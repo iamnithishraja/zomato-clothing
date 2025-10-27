@@ -26,7 +26,8 @@ async function createStore(req: Request, res: Response) {
       address,
       mapLink,
       contact,
-      workingDays
+      workingDays,
+      isActive
     } = req.body;
     
     // Validate store data
@@ -115,7 +116,8 @@ async function updateStore(req: Request, res: Response) {
       address,
       mapLink,
       contact,
-      workingDays
+      workingDays,
+      isActive
     } = req.body;
     
     // Basic validation - check required fields
@@ -208,6 +210,7 @@ async function updateStore(req: Request, res: Response) {
     if (mapLink !== undefined) updateData.mapLink = mapLink.trim();
     if (contact !== undefined) updateData.contact = contact || {};
     if (workingDays !== undefined) updateData.workingDays = workingDays || {};
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
     
     // Update store
     const updatedStore = await StoreModel.findByIdAndUpdate(

@@ -42,6 +42,13 @@ export default function DeliveryTabLayout() {
           ),
         }}
       />
+      {/* Hidden Settlements route for delivery - accessible via navigation only */}
+      <Tabs.Screen
+        name="settlement"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

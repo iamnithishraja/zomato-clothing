@@ -1,20 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
+import { useRouter } from 'expo-router';
 
 export default function DeliveryHome() {
   const { user } = useAuth();
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalDeliveries: 0,
     averageRating: 0,
     totalEarnings: 0,
     isOnline: false
-  });
+  } as any);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([]);
 
   const loadDeliveryStats = useCallback(async () => {
     try {
@@ -23,9 +27,12 @@ export default function DeliveryHome() {
       if (response.data.success) {
         setStats(response.data.stats);
       }
+      const recentsResp = await apiClient.get('/api/v1/delivery', { params: { page: 1, limit: 5 } });
+      if (recentsResp.data?.success) {
+        setRecentDeliveries(recentsResp.data.deliveries || []);
+      }
     } catch (error) {
       console.error('Error loading delivery stats:', error);
-      Alert.alert('Error', 'Failed to load dashboard data');
     } finally {
       setIsLoading(false);
     }
@@ -33,6 +40,12 @@ export default function DeliveryHome() {
 
   useEffect(() => {
     loadDeliveryStats();
+  }, [loadDeliveryStats]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDeliveryStats();
+    setRefreshing(false);
   }, [loadDeliveryStats]);
 
   const getGreeting = () => {
@@ -43,7 +56,13 @@ export default function DeliveryHome() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} tintColor={Colors.primary} />
+      }
+    >
       {/* Header */}
       <LinearGradient
         colors={Colors.gradients.primary as [string, string]}
@@ -62,29 +81,29 @@ export default function DeliveryHome() {
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
+        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
           <View style={styles.statIcon}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
           </View>
           <Text style={styles.statNumber}>{isLoading ? '...' : stats.deliveredDeliveries}</Text>
           <Text style={styles.statLabel}>Completed</Text>
-        </View>
+        </TouchableOpacity>
         
-        <View style={styles.statCard}>
+        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
           <View style={styles.statIcon}>
             <Ionicons name="star" size={24} color={Colors.warning} />
           </View>
           <Text style={styles.statNumber}>{isLoading ? '...' : stats.averageRating.toFixed(1)}</Text>
           <Text style={styles.statLabel}>Rating</Text>
-        </View>
+        </TouchableOpacity>
         
-        <View style={styles.statCard}>
+        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/settlement' as any)}>
           <View style={styles.statIcon}>
             <Ionicons name="cash" size={24} color={Colors.primary} />
           </View>
           <Text style={styles.statNumber}>{isLoading ? '...' : `₹${stats.totalEarnings}`}</Text>
           <Text style={styles.statLabel}>Earnings</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Quick Actions */}
@@ -93,7 +112,7 @@ export default function DeliveryHome() {
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => Alert.alert('Coming Soon', 'Delivery toggle feature will be available soon!')}
+            onPress={() => router.push('/(deliveryTabs)/delivery' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="bicycle" size={28} color={Colors.primary} />
@@ -104,13 +123,24 @@ export default function DeliveryHome() {
           
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => Alert.alert('Coming Soon', 'Order management will be available soon!')}
+            onPress={() => router.push('/(deliveryTabs)/delivery' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="list" size={28} color={Colors.primary} />
             </View>
             <Text style={styles.actionTitle}>View Orders</Text>
             <Text style={styles.actionSubtitle}>Check pending deliveries</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/(deliveryTabs)/settlement' as any)}
+          >
+            <View style={styles.actionIcon}>
+              <Ionicons name="wallet" size={28} color={Colors.primary} />
+            </View>
+            <Text style={styles.actionTitle}>Settlements</Text>
+            <Text style={styles.actionSubtitle}>COD & payouts</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -119,27 +149,22 @@ export default function DeliveryHome() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
         <View style={styles.activityList}>
-          <View style={styles.activityItem}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Order #1234 Delivered</Text>
-              <Text style={styles.activityTime}>2 hours ago</Text>
-            </View>
-            <Text style={styles.activityAmount}>+₹50</Text>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Order #1233 Delivered</Text>
-              <Text style={styles.activityTime}>4 hours ago</Text>
-            </View>
-            <Text style={styles.activityAmount}>+₹45</Text>
-          </View>
+          {recentDeliveries.length === 0 ? (
+            <Text style={{ color: Colors.textSecondary }}>No recent deliveries</Text>
+          ) : (
+            recentDeliveries.map((d) => (
+              <View key={d._id} style={styles.activityItem}>
+                <View style={styles.activityIcon}>
+                  <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                </View>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>Order #{d.order?.orderNumber || String(d.order?._id || '').slice(-8)}</Text>
+                  <Text style={styles.activityTime}>{new Date(d.createdAt).toLocaleString()}</Text>
+                </View>
+                <Text style={styles.activityAmount}>+₹{d.deliveryFee}</Text>
+              </View>
+            ))
+          )}
         </View>
       </View>
     </ScrollView>

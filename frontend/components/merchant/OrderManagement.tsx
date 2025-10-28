@@ -8,12 +8,12 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
+import { useRouter } from 'expo-router';
 
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -72,11 +72,14 @@ const getStatusIcon = (status: string) => {
 };
 
 const OrderManagement: React.FC = () => {
+  const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'amount_desc' | 'amount_asc' | 'payment_pending'>('newest');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   const loadOrders = useCallback(async () => {
@@ -108,13 +111,9 @@ const OrderManagement: React.FC = () => {
 
   const toggleOrderExpansion = (orderId: string) => {
     setExpandedOrders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(orderId)) {
-        newSet.delete(orderId);
-      } else {
-        newSet.add(orderId);
-      }
-      return newSet;
+      const setNext = new Set(prev);
+      if (setNext.has(orderId)) setNext.delete(orderId); else setNext.add(orderId);
+      return setNext;
     });
   };
 
@@ -190,6 +189,23 @@ const OrderManagement: React.FC = () => {
 
   const stats = getOrderStats();
 
+  const sortedOrders = React.useMemo(() => {
+    let list = [...orders];
+    if (sortBy === 'oldest') {
+      list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    } else if (sortBy === 'amount_desc') {
+      list.sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0));
+    } else if (sortBy === 'amount_asc') {
+      list.sort((a, b) => (a.totalAmount || 0) - (b.totalAmount || 0));
+    } else if (sortBy === 'payment_pending') {
+      list = list.filter(o => o.paymentStatus === 'Pending');
+    } else {
+      // newest
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return list;
+  }, [orders, sortBy]);
+
   if (loading && orders.length === 0) {
     return (
       <View style={styles.loadingContainer}>
@@ -211,33 +227,22 @@ const OrderManagement: React.FC = () => {
             <Text style={styles.headerTitle}>Orders</Text>
             <Text style={styles.headerSubtitle}>{orders.length} total orders</Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <Ionicons name="refresh" size={22} color={Colors.textPrimary} />
+          <TouchableOpacity style={styles.filterButton} onPress={() => setSortOpen(!sortOpen)}>
+            <Ionicons name="funnel" size={18} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
         {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
-              <Ionicons name="time-outline" size={18} color="#FF9800" />
-            </View>
             <Text style={styles.statValue}>{stats.pending}</Text>
             <Text style={styles.statLabel}>Pending</Text>
           </View>
-          
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: 'rgba(33, 150, 243, 0.15)' }]}>
-              <Ionicons name="sync-outline" size={18} color="#2196F3" />
-            </View>
             <Text style={styles.statValue}>{stats.accepted}</Text>
             <Text style={styles.statLabel}>Active</Text>
           </View>
-          
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: 'rgba(156, 39, 176, 0.15)' }]}>
-              <Ionicons name="cube-outline" size={18} color="#9C27B0" />
-            </View>
             <Text style={styles.statValue}>{stats.ready}</Text>
             <Text style={styles.statLabel}>Ready</Text>
           </View>
@@ -277,6 +282,25 @@ const OrderManagement: React.FC = () => {
         </ScrollView>
       </View>
 
+      {/* Sort Dropdown */}
+      {sortOpen && (
+        <View style={styles.sortDrop}>
+          {(
+            [
+              { key: 'newest', label: 'Newest' },
+              { key: 'oldest', label: 'Oldest' },
+              { key: 'amount_desc', label: 'Amount High-Low' },
+              { key: 'amount_asc', label: 'Amount Low-High' },
+              { key: 'payment_pending', label: 'Payment Pending' },
+            ] as any
+          ).map((opt: any) => (
+            <TouchableOpacity key={opt.key} style={styles.sortItem} onPress={() => { setSortBy(opt.key); setSortOpen(false); }}>
+              <Text style={[styles.sortText, sortBy === opt.key && styles.sortTextActive]}>{opt.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Orders List */}
       <ScrollView 
         style={styles.content}
@@ -290,7 +314,7 @@ const OrderManagement: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {orders.length === 0 ? (
+        {(sortedOrders.length === 0) ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
               <Ionicons name="receipt-outline" size={56} color={Colors.textSecondary} />
@@ -304,16 +328,14 @@ const OrderManagement: React.FC = () => {
           </View>
         ) : (
           <View style={styles.ordersList}>
-            {orders.map((order) => {
+            {sortedOrders.map((order) => {
               const isProcessing = processingOrderId === order._id;
               const isExpanded = expandedOrders.has(order._id);
               
               return (
-                <TouchableOpacity 
+                <View 
                   key={order._id} 
                   style={styles.orderCard}
-                  onPress={() => toggleOrderExpansion(order._id)}
-                  activeOpacity={0.7}
                 >
                   {/* Order Header */}
                   <View style={styles.orderHeader}>
@@ -332,8 +354,13 @@ const OrderManagement: React.FC = () => {
                         <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
                       </View>
                     </View>
-                    <View style={[styles.statusPill, { backgroundColor: getStatusColor(order.status) }]}>
-                      <Text style={styles.statusText}>{order.status}</Text>
+                    <View style={styles.headerRightRow}>
+                      <TouchableOpacity style={styles.viewBtn} onPress={() => router.push(`/(merchantTabs)/orders/${order._id}` as any)}>
+                        <Text style={styles.viewBtnText}>View</Text>
+                      </TouchableOpacity>
+                      <View style={[styles.statusPill, { backgroundColor: getStatusColor(order.status) }]}>
+                        <Text style={styles.statusText}>{order.status}</Text>
+                      </View>
                     </View>
                   </View>
 
@@ -349,7 +376,7 @@ const OrderManagement: React.FC = () => {
                   </View>
 
                   {/* Items Preview */}
-                  <View style={styles.itemsPreview}>
+                  <TouchableOpacity style={styles.itemsPreview} onPress={() => toggleOrderExpansion(order._id)}>
                     <Ionicons name="basket-outline" size={14} color={Colors.textSecondary} />
                     <Text style={styles.itemsPreviewText}>
                       {order.orderItems.length} {order.orderItems.length === 1 ? 'item' : 'items'}
@@ -360,7 +387,7 @@ const OrderManagement: React.FC = () => {
                       color={Colors.textSecondary}
                       style={styles.expandIcon}
                     />
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Expanded Content */}
                   {isExpanded && (
@@ -459,7 +486,7 @@ const OrderManagement: React.FC = () => {
                       )}
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             })}
           </View>
@@ -473,6 +500,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+    position: 'relative',
   },
   loadingContainer: {
     flex: 1,
@@ -487,17 +515,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   header: {
-    paddingTop: 28,
-    paddingBottom: 20,
+    paddingTop: 18,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
   headerTop: {
+    paddingTop: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   headerTitle: {
     fontSize: 32,
@@ -520,34 +549,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  filterButton: {
+    
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  sortDrop: {
+    position: 'absolute',
+    right: 16,
+    top: 86,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 8,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 1000,
+  },
+  sortItem: { paddingHorizontal: 14, paddingVertical: 10, minWidth: 160 },
+  sortText: { color: Colors.textSecondary, fontWeight: '600' },
+  sortTextActive: { color: Colors.textPrimary },
   statsContainer: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   statCard: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    padding: 10,
     alignItems: 'center',
-    backdropFilter: 'blur(10px)',
-  },
-  statIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+    backdropFilter: 'blur(8px)',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.textPrimary,
     marginBottom: 2,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textPrimary,
     opacity: 0.8,
     fontWeight: '600',
@@ -637,6 +685,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   orderHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -668,6 +721,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
+  },
+  viewBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  viewBtnText: {
+    color: Colors.textSecondary,
+    fontWeight: '700',
   },
   statusText: {
     fontSize: 11,

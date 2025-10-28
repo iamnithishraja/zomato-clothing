@@ -26,66 +26,80 @@ export function initializeRazorpay(keyId: string, keySecret: string) {
 export async function createRazorpayOrder(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const { orderId } = req.body;
+    const { orderId, orderIds } = req.body as { orderId?: string; orderIds?: string[] };
 
-    if (!orderId) {
-      return sendErrorResponse(res, 400, "Order ID is required");
+    if (!orderId && (!orderIds || orderIds.length === 0)) {
+      return sendErrorResponse(res, 400, "Order ID(s) are required");
     }
 
-    // Find the order
-    const order = await OrderModel.findById(orderId);
-    if (!order) {
-      return sendErrorResponse(res, 404, "Order not found");
+    // Normalize to an array of order ids to support single or multiple
+    const targetOrderIds = (orderIds && orderIds.length > 0) ? orderIds : [orderId as string];
+
+    // Load all orders and validate ownership/method/status
+    const orders = await OrderModel.find({ _id: { $in: targetOrderIds } });
+    if (orders.length !== targetOrderIds.length) {
+      return sendErrorResponse(res, 404, "One or more orders not found");
     }
 
-    // Check if user owns the order
-    if (order.user.toString() !== user._id.toString()) {
-      return sendErrorResponse(res, 403, "Access denied");
-    }
-
-    // Check if order is already paid
-    if (order.paymentStatus === "Completed") {
-      return sendErrorResponse(res, 400, "Order is already paid");
-    }
-
-    // Check if payment method is Online
-    if (order.paymentMethod !== "Online") {
-      return sendErrorResponse(res, 400, "Order payment method is not Online");
+    for (const o of orders) {
+      if (o.user.toString() !== user._id.toString()) {
+        return sendErrorResponse(res, 403, "Access denied for one or more orders");
+      }
+      if (o.paymentStatus === "Completed") {
+        return sendErrorResponse(res, 400, `Order ${o.orderNumber || o._id} is already paid`);
+      }
+      if (o.paymentMethod !== "Online") {
+        return sendErrorResponse(res, 400, `Order ${o.orderNumber || o._id} payment method is not Online`);
+      }
     }
 
     if (!razorpayInstance) {
       return sendErrorResponse(res, 500, "Payment gateway not initialized");
     }
 
-    // Create Razorpay order
+    // Compute total amount across orders
+    const totalAmount = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+    // Guard against empty
+    if (orders.length === 0) {
+      return sendErrorResponse(res, 400, "No orders to pay");
+    }
+
+    // Create a single Razorpay order for all
+    const primary = orders[0];
+    const baseRef = primary ? String(primary.orderNumber || primary._id) : String(Date.now());
+    const shortRef = baseRef.slice(-8);
+    const tsShort = Date.now().toString().slice(-6);
+    const receiptStr = `grp_${shortRef}_${tsShort}`; // <= 40 chars
     const razorpayOrder = await razorpayInstance.orders.create({
-      amount: Math.round(order.totalAmount * 100), // Amount in paise
+      amount: Math.round(totalAmount * 100), // Amount in paise
       currency: "INR",
-      receipt: order.orderNumber || order._id.toString(),
+      receipt: receiptStr,
       notes: {
-        orderId: order._id.toString(),
+        orderIds: JSON.stringify(orders.map(o => o._id.toString())),
         userId: user._id.toString(),
-        storeId: order.store.toString()
       }
     });
 
-    // Create payment record
-    const payment = new PaymentModel({
-      order: order._id,
-      user: user._id,
-      store: order.store,
-      amount: order.totalAmount,
-      paymentMethod: "Online",
-      paymentStatus: "Pending",
-      paymentGateway: "Razorpay",
-      gatewayOrderId: razorpayOrder.id
-    });
-
-    await payment.save();
-
-    // Update order with payment reference
-    order.paymentId = payment._id as any;
-    await order.save();
+    // Create payment records per order, all tied to the same gatewayOrderId
+    const paymentIds: string[] = [];
+    for (const o of orders) {
+      const payment = new PaymentModel({
+        order: o._id,
+        user: user._id,
+        store: o.store,
+        amount: o.totalAmount,
+        paymentMethod: "Online",
+        paymentStatus: "Pending",
+        paymentGateway: "Razorpay",
+        gatewayOrderId: razorpayOrder.id,
+        metadata: { group: razorpayOrder.id }
+      });
+      await payment.save();
+      o.paymentId = payment._id as any;
+      await o.save();
+      paymentIds.push(String(payment._id));
+    }
 
     return res.status(200).json({
       success: true,
@@ -95,7 +109,7 @@ export async function createRazorpayOrder(req: Request, res: Response) {
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency
       },
-      paymentId: payment._id,
+      paymentIds,
       keyId: process.env.RAZORPAY_KEY_ID
     });
 
@@ -115,28 +129,26 @@ export async function verifyRazorpayPayment(req: Request, res: Response) {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      paymentId
+      paymentId,
+      paymentIds,
     } = req.body;
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !paymentId) {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || (!paymentId && (!paymentIds || paymentIds.length === 0))) {
       return sendErrorResponse(res, 400, "Missing payment verification details");
     }
 
-    // Find payment record
-    const payment = await PaymentModel.findById(paymentId);
-    if (!payment) {
-      return sendErrorResponse(res, 404, "Payment record not found");
+    // Load payments (single or multiple)
+    const targetPaymentIds = (paymentIds && paymentIds.length > 0) ? paymentIds : [paymentId];
+    const payments = await PaymentModel.find({ _id: { $in: targetPaymentIds } });
+    if (payments.length !== targetPaymentIds.length) {
+      return sendErrorResponse(res, 404, "One or more payment records not found");
     }
-
-    // Find order
-    const order = await OrderModel.findById(payment.order);
-    if (!order) {
-      return sendErrorResponse(res, 404, "Order not found");
-    }
-
-    // Check if user owns the order
-    if (order.user.toString() !== user._id.toString()) {
-      return sendErrorResponse(res, 403, "Access denied");
+    const orderIds = payments.map(p => p.order);
+    const orders = await OrderModel.find({ _id: { $in: orderIds } });
+    for (const o of orders) {
+      if (o.user.toString() !== user._id.toString()) {
+        return sendErrorResponse(res, 403, "Access denied");
+      }
     }
 
     if (!razorpayInstance) {
@@ -151,66 +163,64 @@ export async function verifyRazorpayPayment(req: Request, res: Response) {
       .digest("hex");
 
     if (generatedSignature !== razorpay_signature) {
-      // Signature verification failed
-      payment.paymentStatus = "Failed";
-      payment.notes = "Signature verification failed";
-      await payment.save();
-
-      order.paymentStatus = "Failed";
-      await order.save();
-
-      // Release inventory
-      await releaseInventory(order.orderItems);
-
-      // Notify user
-      await notifyPaymentFailed(
-        order._id,
-        order.orderNumber || order._id.toString().slice(-8),
-        user._id,
-        order.totalAmount,
-        order.store as unknown as Types.ObjectId
-      );
+      // Signature verification failed for the group: mark all as failed and release inventory
+      for (const p of payments) {
+        p.paymentStatus = "Failed";
+        p.notes = "Signature verification failed";
+        await p.save();
+      }
+      for (const o of orders) {
+        o.paymentStatus = "Failed";
+        await o.save();
+        await releaseInventory(o.orderItems);
+        await notifyPaymentFailed(
+          o._id,
+          o.orderNumber || o._id.toString().slice(-8),
+          user._id,
+          o.totalAmount,
+          o.store as unknown as Types.ObjectId
+        );
+      }
 
       return sendErrorResponse(res, 400, "Payment verification failed");
     }
 
-    // Payment verified successfully
-    payment.paymentStatus = "Completed";
-    payment.gatewayPaymentId = razorpay_payment_id;
-    payment.gatewaySignature = razorpay_signature;
-    payment.transactionId = razorpay_payment_id;
-    payment.transactionDate = new Date();
-    await payment.save();
+    // Payment verified successfully - update all payments and orders in the group
+    for (const p of payments) {
+      p.paymentStatus = "Completed";
+      p.gatewayPaymentId = razorpay_payment_id;
+      p.gatewaySignature = razorpay_signature;
+      p.transactionId = razorpay_payment_id;
+      p.transactionDate = new Date();
+      await p.save();
+    }
 
-    // Update order
-    order.paymentStatus = "Completed";
-    order.status = "Accepted"; // Auto-accept order after payment
-    order.statusHistory.push({
-      status: "Accepted",
-      timestamp: new Date(),
-      updatedBy: user._id,
-      note: "Payment completed successfully"
-    });
-    await order.save();
+    for (const o of orders) {
+      o.paymentStatus = "Completed";
+      await o.save();
+    }
 
-    // Notify user
-    await notifyPaymentSuccess(
-      order._id,
-      order.orderNumber || order._id.toString().slice(-8),
-      user._id,
-      order.totalAmount,
-      order.store as unknown as Types.ObjectId
-    );
+    // Notify user (summarize first order id)
+    const first = orders[0];
+    if (first) {
+      await notifyPaymentSuccess(
+        first._id,
+        first.orderNumber || first._id.toString().slice(-8),
+        user._id,
+        first.totalAmount,
+        first.store as unknown as Types.ObjectId
+      );
+    }
 
     return res.status(200).json({
       success: true,
       message: "Payment verified successfully",
-      order: {
-        _id: order._id,
-        orderNumber: order.orderNumber,
-        paymentStatus: order.paymentStatus,
-        status: order.status
-      }
+      orders: orders.map(o => ({
+        _id: o._id,
+        orderNumber: o.orderNumber,
+        paymentStatus: o.paymentStatus,
+        status: o.status
+      }))
     });
 
   } catch (error) {
@@ -285,16 +295,18 @@ async function handlePaymentCaptured(payload: any) {
       payment.transactionDate = new Date();
       await payment.save();
 
-      const order = await OrderModel.findById(payment.order);
-      if (order && order.paymentStatus !== "Completed") {
-        order.paymentStatus = "Completed";
-        order.status = "Accepted";
-        order.statusHistory.push({
-          status: "Accepted",
-          timestamp: new Date(),
-          note: "Payment captured via webhook"
-        });
-        await order.save();
+      // Update all payments in the group and corresponding orders
+      const groupedPayments = await PaymentModel.find({ gatewayOrderId: payload.order_id });
+      const groupedOrderIds = groupedPayments.map(p => p.order);
+      await PaymentModel.updateMany({ gatewayOrderId: payload.order_id }, {
+        $set: { paymentStatus: "Completed", gatewayPaymentId: payload.id, transactionId: payload.id, transactionDate: new Date() }
+      });
+      const orders = await OrderModel.find({ _id: { $in: groupedOrderIds } });
+      for (const o of orders) {
+        if (o.paymentStatus !== "Completed") {
+          o.paymentStatus = "Completed";
+          await o.save();
+        }
       }
     }
   } catch (error) {

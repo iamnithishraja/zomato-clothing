@@ -1,6 +1,7 @@
 import DeliveryModel from "../Models/deliveryModel";
 import OrderModel from "../Models/orderModel";
 import StoreModel from "../Models/storeModel";
+import { notifyOrderPickedUp, notifyOrderDelivered } from "../utils/notificationUtils";
 import { type IDelivery } from "../types/delivery";
 import type { Response, Request } from "express";
 import z from "zod";
@@ -57,7 +58,7 @@ async function createDelivery(req: Request, res: Response) {
       });
     }
 
-    if (orderDoc.status !== 'Processing') {
+    if (!['Processing', 'ReadyForPickup'].includes(orderDoc.status as any)) {
       return res.status(400).json({
         success: false,
         message: "Order is not ready for delivery. Current status: " + orderDoc.status
@@ -85,9 +86,8 @@ async function createDelivery(req: Request, res: Response) {
 
     await delivery.save();
 
-    // Update order status to shipped
+    // Associate delivery person on the order (do not change order status here; it will become Shipped on PickedUp)
     await OrderModel.findByIdAndUpdate(order, { 
-      status: 'Shipped',
       deliveryPerson: user._id
     });
 
@@ -292,17 +292,81 @@ async function updateDeliveryStatus(req: Request, res: Response) {
          path: 'user',
          select: 'name phone'
        }
+     })
+     .populate({
+       path: 'order',
+       populate: {
+         path: 'store',
+         select: 'storeName'
+       }
      });
 
-    // Update order status if delivery is completed or cancelled
-    if (status === 'Delivered') {
+    // Update order status and send notifications for key delivery transitions
+    if (status === 'PickedUp') {
+      await OrderModel.findByIdAndUpdate(delivery.order, {
+        status: 'Shipped',
+        $push: {
+          statusHistory: {
+            status: 'Shipped',
+            timestamp: new Date(),
+            note: 'Order picked up by delivery partner'
+          }
+        }
+      });
+      try {
+        const orderDoc = await OrderModel.findById(delivery.order).populate('store', 'storeName').populate('user','_id').lean();
+        if (orderDoc && updatedDelivery?.deliveryPerson) {
+          await notifyOrderPickedUp(
+            orderDoc._id,
+            orderDoc.orderNumber || orderDoc._id.toString().slice(-8),
+            orderDoc.user as any,
+            (updatedDelivery.deliveryPerson as any).name || 'Delivery Partner',
+            (orderDoc.store as any)?._id
+          );
+        }
+      } catch (e) {
+        console.error('Failed to send pickup notification', e);
+      }
+    } else if (status === 'Delivered') {
+      // Enforce COD collection before marking delivery delivered
+      try {
+        const ord = await OrderModel.findById(delivery.order).lean();
+        if (ord && ord.paymentMethod === 'COD' && ord.paymentStatus !== 'Completed') {
+          return res.status(400).json({
+            success: false,
+            message: 'Collect COD payment before marking as Delivered'
+          });
+        }
+      } catch (e) {
+        // fallthrough; if lookup fails we let normal error handling proceed below
+      }
       await OrderModel.findByIdAndUpdate(delivery.order, { 
         status: 'Delivered',
-        deliveryDate: new Date()
+        deliveryDate: new Date(),
+        $push: {
+          statusHistory: {
+            status: 'Delivered',
+            timestamp: new Date(),
+            note: 'Order delivered successfully'
+          }
+        }
       });
+      try {
+        const orderDoc = await OrderModel.findById(delivery.order).populate('user','_id').lean();
+        if (orderDoc) {
+          await notifyOrderDelivered(
+            orderDoc._id,
+            orderDoc.orderNumber || orderDoc._id.toString().slice(-8),
+            orderDoc.user as any,
+            (orderDoc.store as any)
+          );
+        }
+      } catch (e) {
+        console.error('Failed to send delivered notification', e);
+      }
     } else if (status === 'Cancelled') {
       await OrderModel.findByIdAndUpdate(delivery.order, { 
-        status: 'Processing',
+        status: 'ReadyForPickup',
         $unset: { deliveryPerson: 1 }
       });
     }

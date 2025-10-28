@@ -3,6 +3,7 @@ import OrderModel from "../Models/orderModel";
 import StoreModel from "../Models/storeModel";
 import PaymentModel from "../Models/paymentModel";
 import { sendErrorResponse } from "../utils/validation";
+import Razorpay from "razorpay";
 import { releaseInventory } from "../utils/orderUtils";
 import { notifyOrderAccepted, notifyOrderRejected, notifyOrderReady } from "../utils/notificationUtils";
 import type { Types } from "mongoose";
@@ -132,18 +133,38 @@ export async function rejectOrder(req: Request, res: Response) {
     // Release inventory
     await releaseInventory(order.orderItems);
 
-    // Handle refund for online payments
+    // Handle refund for online payments (Razorpay)
     if (order.paymentMethod === "Online" && order.paymentStatus === "Completed") {
-      // Mark for refund processing
-      order.paymentStatus = "Refunded";
-      await order.save();
+      try {
+        const payment = await PaymentModel.findById(order.paymentId);
+        if (payment && payment.gatewayPaymentId) {
+          const keyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEYID || "";
+          const keySecret = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_API_SECRET || "";
+          const rp = new Razorpay({ key_id: keyId, key_secret: keySecret });
 
-      const payment = await PaymentModel.findById(order.paymentId);
-      if (payment) {
-        payment.refundAmount = payment.amount;
-        payment.refundReason = "Order rejected by merchant";
-        payment.payoutStatus = "Pending";
-        await payment.save();
+          const refund = await rp.payments.refund(payment.gatewayPaymentId, {
+            amount: Math.round((payment.amount || 0) * 100),
+            speed: "optimum",
+            notes: { reason: "Order rejected by merchant", orderId: String(order._id) }
+          } as any);
+
+          // Update payment with refund details
+          payment.paymentStatus = "Refunded";
+          payment.refundAmount = (refund.amount || 0) / 100;
+          payment.refundReason = "Order rejected by merchant";
+          payment.refundDate = new Date();
+          payment.refundTransactionId = refund.id;
+          await payment.save();
+
+          // Update order payment status
+          order.paymentStatus = "Refunded";
+          await order.save();
+        } else {
+          console.warn("Payment record missing or no gatewayPaymentId for refund", order._id);
+        }
+      } catch (refundErr) {
+        console.error("Refund error:", refundErr);
+        // Do not fail the rejection if refund fails; client can retry via admin
       }
     }
 

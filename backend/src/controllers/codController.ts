@@ -5,6 +5,7 @@ import DeliveryModel from "../Models/deliveryModel";
 import { sendErrorResponse } from "../utils/validation";
 import type { Types } from "mongoose";
 import z from "zod";
+import DeliveryModel from "../Models/deliveryModel";
 
 /**
  * Mark COD as collected by delivery person
@@ -34,9 +35,15 @@ export async function markCodCollected(req: Request, res: Response) {
       return sendErrorResponse(res, 400, "This order is not a COD order");
     }
 
-    // Allow collecting COD once the parcel is picked up or delivered
-    if (!["PickedUp", "Delivered"].includes(order.status)) {
-      return sendErrorResponse(res, 400, "Order must be picked up before marking COD as collected");
+    // Verify delivery assignment and status against Delivery entity
+    const delivery = await DeliveryModel.findOne({ order: orderId, deliveryPerson: user._id });
+    if (!delivery) {
+      return sendErrorResponse(res, 403, "No delivery assignment found for this order");
+    }
+
+    // Allow collecting COD once the parcel is picked up or delivered (Delivery status)
+    if (!["PickedUp", "Delivered"].includes(delivery.status)) {
+      return sendErrorResponse(res, 400, "Delivery must be picked up before marking COD as collected");
     }
 
     // Find or create payment record

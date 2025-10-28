@@ -112,7 +112,12 @@ const DeliveryDashboard: React.FC = () => {
   const handleCollectCOD = async (deliveryId: string) => {
     try {
       setProcessingDeliveryId(deliveryId);
-      await apiClient.post(`/api/v1/cod/${deliveryId}/collect`);
+      const delivery = deliveries.find(d => d._id === deliveryId);
+      const orderId = delivery && delivery.order && (typeof delivery.order === 'object' ? delivery.order._id : delivery.order);
+      if (!orderId) {
+        throw new Error('Order not found for this delivery');
+      }
+      await apiClient.post(`/api/v1/cod/${orderId}/collect`);
       Alert.alert('Success', 'COD amount collected successfully');
       await loadData();
       setCodModalVisible(false);

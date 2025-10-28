@@ -3,6 +3,7 @@ import OrderModel from "../Models/orderModel";
 import PaymentModel from "../Models/paymentModel";
 import StoreModel from "../Models/storeModel";
 import { sendErrorResponse } from "../utils/validation";
+import type { Types } from "mongoose";
 
 /**
  * Get merchant's settlement/payout report
@@ -173,6 +174,83 @@ export async function getPayoutSummary(req: Request, res: Response) {
 
   } catch (error) {
     console.error("Error getting payout summary:", error);
+    return sendErrorResponse(res, 500, "Internal server error");
+  }
+}
+
+/**
+ * Create payout for delivered orders in a period (admin/automated)
+ * Marks payments as paid out with transaction reference
+ */
+export async function createPayout(req: Request, res: Response) {
+  try {
+    // In a real app, restrict to Admin; for now, Merchant can simulate payout for their store
+    const user = (req as any).user;
+    if (user.role !== "Merchant") {
+      return sendErrorResponse(res, 403, "Only merchants can create payouts for their store");
+    }
+
+    const store = await StoreModel.findOne({ merchantId: user._id });
+    if (!store) {
+      return sendErrorResponse(res, 404, "Store not found for this merchant");
+    }
+
+    const startDate = req.body.startDate ? new Date(req.body.startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const endDate = req.body.endDate ? new Date(req.body.endDate) : new Date();
+    const transactionId = req.body.transactionId || `payout_${store._id}_${Date.now()}`;
+
+    // Find eligible payments (Completed, not yet paid out) for delivered orders in range
+    const deliveredOrders = await OrderModel.find({
+      store: store._id,
+      status: "Delivered",
+      deliveryDate: { $gte: startDate, $lte: endDate }
+    }).select("_id itemsTotal");
+
+    const orderIds = deliveredOrders.map(o => o._id);
+
+    const payments = await PaymentModel.find({
+      store: store._id,
+      order: { $in: orderIds as unknown as Types.ObjectId[] },
+      paymentStatus: "Completed",
+      payoutStatus: { $ne: "Completed" }
+    });
+
+    // Compute payout (simple: itemsTotal sum minus platform fee)
+    const itemsTotalByOrder: Record<string, number> = deliveredOrders.reduce((acc, o) => {
+      acc[String(o._id)] = o.itemsTotal;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const platformFeePercentage = 5;
+    const gross = Object.values(itemsTotalByOrder).reduce((a, b) => a + b, 0);
+    const platformFee = (gross * platformFeePercentage) / 100;
+    const net = gross - platformFee;
+
+    // Mark payments as paid out
+    for (const p of payments) {
+      p.payoutStatus = "Completed";
+      p.payoutAmount = itemsTotalByOrder[String(p.order)] ?? p.amount; // fallback
+      p.payoutDate = new Date();
+      p.payoutTransactionId = transactionId;
+      await p.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payout created",
+      payout: {
+        store: store._id,
+        startDate,
+        endDate,
+        transactionId,
+        platformFee,
+        amount: net,
+        paymentsCount: payments.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Error creating payout:", error);
     return sendErrorResponse(res, 500, "Internal server error");
   }
 }

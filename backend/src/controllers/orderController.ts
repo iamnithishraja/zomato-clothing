@@ -232,7 +232,7 @@ async function getOrderById(req: Request, res: Response) {
     const order = await OrderModel.findById(orderId)
       .populate('user', 'name phone email')
       .populate('store', 'storeName address storeImages')
-      .populate('orderItems.product', 'name images price category subcategory');
+      .populate('orderItems.product', 'name images price category subcategory availableQuantity');
 
     if (!order) {
       return res.status(404).json({

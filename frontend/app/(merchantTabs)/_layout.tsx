@@ -49,6 +49,12 @@ export default function MerchantTabLayout() {
           href: null,
         }}
       />
+            <Tabs.Screen
+        name="orders/[id]"
+        options={{
+          href: null,
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{

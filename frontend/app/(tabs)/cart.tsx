@@ -291,9 +291,8 @@ export default function CartScreen() {
 
       // Handle payment based on method
       if (paymentMethod === 'Online' && successfulOrders.length > 0) {
-        // For online payment, process Razorpay for the first order
-        // In production, you'd handle multiple orders differently
-        await handleOnlinePayment(successfulOrders[0]);
+        // For online payment, process one payment for all created orders
+        await handleOnlinePayment(successfulOrders);
       } else {
         // COD order - show success message
         clearCart();
@@ -320,24 +319,24 @@ export default function CartScreen() {
     }
   };
 
-  const handleOnlinePayment = async (order: any) => {
+  const handleOnlinePayment = async (orders: any[]) => {
     try {
       // We'll prefer the backend-provided key; frontend env is only a fallback
       const razorpayKey = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
       // Create Razorpay order
       const paymentResponse = await apiClient.post('/api/v1/payment/create-order', {
-        orderId: order._id
+        orderIds: orders.map(o => o._id)
       });
 
       if (!paymentResponse.data.success) {
         throw new Error('Failed to create payment order');
       }
 
-      const { razorpayOrder, paymentId, keyId } = paymentResponse.data;
+      const { razorpayOrder, paymentIds, keyId } = paymentResponse.data;
 
       // Open Razorpay checkout
       const options = {
-        description: `Order #${order.orderNumber || order._id.slice(-8)}`,
+        description: `Locals order payment`,
         image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
         currency: razorpayOrder.currency,
         key: keyId || razorpayKey || '',
@@ -360,14 +359,14 @@ export default function CartScreen() {
               razorpay_order_id: data.razorpay_order_id,
               razorpay_payment_id: data.razorpay_payment_id,
               razorpay_signature: data.razorpay_signature,
-              paymentId: paymentId
+              paymentIds: paymentIds
             });
 
             clearCart();
             setProcessingPayment(false);
             Alert.alert(
               'Payment Successful!',
-              'Your order has been placed and payment received successfully.',
+              'Your orders have been placed and payment received successfully.',
               [
                 {
                   text: 'View Order',

@@ -38,20 +38,23 @@ export async function generateOrderNumber(storeId: Types.ObjectId | string): Pro
  * This is a simple implementation - you can enhance it with real distance calculation
  */
 export function calculateDeliveryFee(orderAmount: number, distance?: number): number {
-  // Basic logic: flat fee or percentage
-  const baseFee = 50;
-  
+  // If distance is provided, calculate based on distance
   if (distance) {
+    const baseFee = 50;
     // ₹10 per km after first 2km
-    return baseFee + Math.max(0, (distance - 2) * 10);
+    return Math.round(baseFee + Math.max(0, (distance - 2) * 10));
   }
   
-  // Or based on order amount
-  if (orderAmount >= 500) {
-    return 0; // Free delivery for orders above ₹500
+  // Tiered delivery fee based on order amount
+  if (orderAmount >= 2000) {
+    return 0; // Free delivery for orders above ₹2000
+  } else if (orderAmount >= 1000) {
+    return 30; // ₹30 for orders between ₹1000-1999
+  } else if (orderAmount >= 500) {
+    return 50; // ₹50 for orders between ₹500-999
+  } else {
+    return 70; // ₹70 for orders below ₹500
   }
-  
-  return baseFee;
 }
 
 /**

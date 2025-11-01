@@ -108,7 +108,7 @@ export default function MerchantOrderDetails() {
           <View style={styles.summaryPill}><Text style={styles.summaryPillText}>{order.status}</Text></View>
           <View style={styles.summaryPill}><Text style={styles.summaryPillText}>{order.paymentMethod}</Text></View>
           <View style={styles.summaryPill}><Text style={styles.summaryPillText}>{order.paymentStatus}</Text></View>
-          <View style={styles.summaryAmount}><Text style={styles.summaryAmountText}>₹{Math.round(order.totalAmount)}</Text></View>
+          <View style={styles.summaryAmount}><Text style={styles.summaryAmountText}>₹{Math.round(order.totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text></View>
         </View>
       </LinearGradient>
 
@@ -131,7 +131,7 @@ export default function MerchantOrderDetails() {
                 <View style={styles.cardInfo}>
                   <Text numberOfLines={1} style={styles.cardTitle}>{it.product?.name || 'Product'}</Text>
                   <Text style={styles.cardMeta}>
-                    Qty: {it.quantity} • Price: ₹{Math.round(it.price * it.quantity)}
+                    Qty: {it.quantity} • Price: ₹{Math.round(it.price * it.quantity).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </Text>
                   {typeof available === 'number' && (
                     <Text style={[styles.stockText, shortfall && styles.stockTextWarn]}>

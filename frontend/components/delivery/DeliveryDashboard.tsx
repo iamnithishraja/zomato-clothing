@@ -118,9 +118,19 @@ const DeliveryDashboard: React.FC = () => {
         throw new Error('Order not found for this delivery');
       }
       await apiClient.post(`/api/v1/cod/${orderId}/collect`);
-      Alert.alert('Success', 'COD amount collected successfully');
-      await loadData();
-      setCodModalVisible(false);
+      Alert.alert(
+        'Success', 
+        'COD amount collected successfully! You can now mark this delivery as completed.',
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await loadData();
+              setCodModalVisible(false);
+            }
+          }
+        ]
+      );
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to collect COD');
     } finally {
@@ -353,25 +363,53 @@ const DeliveryDashboard: React.FC = () => {
                   )}
 
                   {delivery.status === 'PickedUp' && (
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleUpdateStatus(delivery._id, 'Delivered')}
-                      disabled={isProcessing}
-                    >
-                      <LinearGradient
-                        colors={['#4CAF50', '#45A049']}
-                        style={styles.actionGradient}
-                      >
-                        {isProcessing ? (
-                          <ActivityIndicator color="#FFFFFF" />
-                        ) : (
-                          <>
-                            <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
-                            <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Mark Delivered</Text>
-                          </>
-                        )}
-                      </LinearGradient>
-                    </TouchableOpacity>
+                    <>
+                      {/* For COD orders, show collect COD button if not collected */}
+                      {order && order.paymentMethod === 'COD' && order.paymentStatus !== 'Completed' ? (
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => {
+                            setSelectedDelivery(delivery);
+                            setCodModalVisible(true);
+                          }}
+                          disabled={isProcessing}
+                        >
+                          <LinearGradient
+                            colors={['#FFA500', '#FF8C00']}
+                            style={styles.actionGradient}
+                          >
+                            {isProcessing ? (
+                              <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                              <>
+                                <Ionicons name="cash" size={20} color="#FFFFFF" />
+                                <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Collect COD First (₹{formatINR(order.totalAmount)})</Text>
+                              </>
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleUpdateStatus(delivery._id, 'Delivered')}
+                          disabled={isProcessing}
+                        >
+                          <LinearGradient
+                            colors={['#4CAF50', '#45A049']}
+                            style={styles.actionGradient}
+                          >
+                            {isProcessing ? (
+                              <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                              <>
+                                <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
+                                <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Mark Delivered</Text>
+                              </>
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
                 </TouchableOpacity>
               );
@@ -430,9 +468,11 @@ const DeliveryDashboard: React.FC = () => {
                   <Text style={styles.modalSectionTitle}>Cash on Delivery</Text>
                   <View style={styles.codBox}>
                     <Text style={styles.codAmount}>₹{formatINR(selectedDelivery.order.totalAmount)}</Text>
-                    <Text style={styles.codLabel}>Amount to Collect</Text>
+                    <Text style={styles.codLabel}>
+                      {selectedDelivery.order.paymentStatus === 'Completed' ? 'Already Collected ✓' : 'Amount to Collect'}
+                    </Text>
                   </View>
-                      {(selectedDelivery.status === 'PickedUp' || selectedDelivery.status === 'Delivered') && (
+                      {selectedDelivery.order.paymentStatus !== 'Completed' && (selectedDelivery.status === 'PickedUp' || selectedDelivery.status === 'Delivered') && (
                     <TouchableOpacity
                       style={styles.codButton}
                       onPress={() => {
@@ -442,6 +482,12 @@ const DeliveryDashboard: React.FC = () => {
                     >
                       <Text style={styles.codButtonText}>Mark COD Collected</Text>
                     </TouchableOpacity>
+                  )}
+                      {selectedDelivery.order.paymentStatus === 'Completed' && (
+                    <View style={styles.codCollectedBadge}>
+                      <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
+                      <Text style={styles.codCollectedText}>Payment Collected</Text>
+                    </View>
                   )}
                 </View>
               )}
@@ -825,6 +871,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  codCollectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.success + '20',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  codCollectedText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.success,
   },
 });
 

@@ -150,7 +150,7 @@ export async function rejectOrder(req: Request, res: Response) {
 
           // Update payment with refund details
           payment.paymentStatus = "Refunded";
-          payment.refundAmount = (refund.amount || 0) / 100;
+          payment.refundAmount = Math.round((refund.amount || 0) / 100);
           payment.refundReason = "Order rejected by merchant";
           payment.refundDate = new Date();
           payment.refundTransactionId = refund.id;

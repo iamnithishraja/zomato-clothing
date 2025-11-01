@@ -40,7 +40,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const [sizeModalVisible, setSizeModalVisible] = useState(false);
 
   const formatPrice = (price: number) => {
-    return price.toLocaleString('en-IN');
+    return Math.round(price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   };
 
   const formatSizes = (sizes: string[]) => {

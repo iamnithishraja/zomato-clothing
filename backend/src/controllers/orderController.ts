@@ -69,14 +69,15 @@ async function createOrder(req: Request, res: Response) {
         return sendErrorResponse(res, 400, `Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
       }
 
-      // Use current product price
-      const itemTotal = item.quantity * product.price;
+      // Use current product price (rounded to whole number)
+      const roundedPrice = Math.round(product.price);
+      const itemTotal = item.quantity * roundedPrice;
       itemsTotal += itemTotal;
 
       validatedOrderItems.push({
         product: product._id,
         quantity: item.quantity,
-        price: product.price
+        price: roundedPrice
       });
     }
 
@@ -90,11 +91,14 @@ async function createOrder(req: Request, res: Response) {
       return sendErrorResponse(res, 400, "Store ID is required");
     }
 
-    // Calculate delivery fee
-    const deliveryFee = calculateDeliveryFee(itemsTotal);
+    // Round itemsTotal to ensure no decimals
+    itemsTotal = Math.round(itemsTotal);
 
-    // Calculate total amount
-    const totalAmount = itemsTotal + deliveryFee;
+    // Calculate delivery fee (already returns whole number)
+    const deliveryFee = Math.round(calculateDeliveryFee(itemsTotal));
+
+    // Calculate total amount (ensure whole number)
+    const totalAmount = Math.round(itemsTotal + deliveryFee);
 
     // Generate unique order number
     const orderNumber = await generateOrderNumber(storeId);
@@ -166,7 +170,7 @@ async function createOrder(req: Request, res: Response) {
         order: order._id,
         user: user._id,
         store: storeId,
-        amount: totalAmount,
+        amount: Math.round(totalAmount),
         paymentMethod: "COD",
         paymentStatus: "Pending"
       });
@@ -620,8 +624,8 @@ async function createMultipleOrders(req: Request, res: Response) {
         }
 
         // Calculate delivery fee and total amount as in single order
-        const deliveryFee = calculateDeliveryFee(itemsTotal);
-        const totalAmount = itemsTotal + deliveryFee;
+        const deliveryFee = Math.round(calculateDeliveryFee(itemsTotal));
+        const totalAmount = Math.round(itemsTotal + deliveryFee);
 
         // Perform atomic stock update for all order items, fail all if any fails (simulate a "transaction")
         let stockOk = true;
@@ -694,7 +698,7 @@ async function createMultipleOrders(req: Request, res: Response) {
             order: order._id,
             user: user._id,
             store: storeId,
-            amount: totalAmount,
+            amount: Math.round(totalAmount),
             paymentMethod: "COD",
             paymentStatus: "Pending"
           });

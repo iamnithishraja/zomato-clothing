@@ -57,8 +57,8 @@ export async function createRazorpayOrder(req: Request, res: Response) {
       return sendErrorResponse(res, 500, "Payment gateway not initialized");
     }
 
-    // Compute total amount across orders
-    const totalAmount = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+    // Compute total amount across orders (ensure whole numbers)
+    const totalAmount = Math.round(orders.reduce((sum, o) => sum + o.totalAmount, 0));
 
     // Guard against empty
     if (orders.length === 0) {
@@ -88,7 +88,7 @@ export async function createRazorpayOrder(req: Request, res: Response) {
         order: o._id,
         user: user._id,
         store: o.store,
-        amount: o.totalAmount,
+        amount: Math.round(o.totalAmount),
         paymentMethod: "Online",
         paymentStatus: "Pending",
         paymentGateway: "Razorpay",
@@ -351,7 +351,7 @@ async function handleRefundCreated(payload: any) {
     }
 
     payment.paymentStatus = "Refunded";
-    payment.refundAmount = payload.amount / 100; // Convert from paise
+    payment.refundAmount = Math.round(payload.amount / 100); // Convert from paise and round
     payment.refundTransactionId = payload.id;
     payment.refundDate = new Date();
     await payment.save();
@@ -471,7 +471,7 @@ export async function retryPayment(req: Request, res: Response) {
         order: order._id,
         user: user._id,
         store: order.store,
-        amount: order.totalAmount,
+        amount: Math.round(order.totalAmount),
         paymentMethod: "Online",
         paymentStatus: "Pending",
         paymentGateway: "Razorpay",

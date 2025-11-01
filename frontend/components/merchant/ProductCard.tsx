@@ -37,7 +37,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onDelete,
 }) => {
   const formatPrice = (price: number) => {
-    return price.toLocaleString();
+    return Math.round(price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   };
 
   const formatDate = (dateString: string) => {

@@ -220,7 +220,7 @@ export default function OrderScreen() {
                 <View style={styles.orderFooter}>
                   <View style={styles.amountContainer}>
                     <Text style={styles.totalLabel}>Total</Text>
-                    <Text style={styles.totalAmount}>₹{order.totalAmount.toLocaleString('en-IN')}</Text>
+                    <Text style={styles.totalAmount}>₹{Math.round(order.totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                   <TouchableOpacity 
                     style={styles.viewButton}

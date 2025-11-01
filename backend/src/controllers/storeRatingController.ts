@@ -38,6 +38,11 @@ export async function rateStore(req: Request, res: Response) {
       return sendErrorResponse(res, 400, "You can only rate delivered orders");
     }
 
+    // Check if order has already been rated
+    if (order.storeRated) {
+      return sendErrorResponse(res, 400, "You have already rated this order");
+    }
+
     // Find the store
     const store = await StoreModel.findById(order.store);
     if (!store) {
@@ -55,6 +60,13 @@ export async function rateStore(req: Request, res: Response) {
     store.rating.average = newTotal / newCount;
     store.rating.totalReviews = newCount;
     await store.save();
+
+    // Mark order as rated and store the rating details
+    order.storeRated = true;
+    order.storeRating = rating;
+    order.storeReview = review || '';
+    order.storeRatedAt = new Date();
+    await order.save();
 
     return res.status(200).json({
       success: true,

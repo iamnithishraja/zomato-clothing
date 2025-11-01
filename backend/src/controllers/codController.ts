@@ -54,7 +54,7 @@ export async function markCodCollected(req: Request, res: Response) {
         order: order._id,
         user: order.user,
         store: order.store,
-        amount: order.totalAmount,
+        amount: Math.round(order.totalAmount),
         paymentMethod: "COD",
         paymentStatus: "Completed"
       });

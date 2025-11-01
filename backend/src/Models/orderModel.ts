@@ -122,12 +122,40 @@ const orderSchema: Schema = new Schema(
         ref: "User"
       },
       note: String
-    }]
+    }],
+    storeRated: {
+      type: Boolean,
+      default: false
+    },
+    storeRating: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    storeReview: {
+      type: String,
+      trim: true,
+      maxlength: 1000
+    },
+    storeRatedAt: {
+      type: Date
+    }
   },
   { 
     timestamps: true
   }
 );
+
+// Database indexes for optimized queries
+// Note: orderNumber already has a unique index from its schema definition
+orderSchema.index({ user: 1, status: 1 }); // Get user orders filtered by status
+orderSchema.index({ store: 1, status: 1 }); // Get merchant orders filtered by status
+orderSchema.index({ deliveryPerson: 1, status: 1 }); // Get delivery person orders
+orderSchema.index({ status: 1, createdAt: -1 }); // Query by status, sort by date
+orderSchema.index({ user: 1, createdAt: -1 }); // User order history
+orderSchema.index({ store: 1, createdAt: -1 }); // Store order history
+orderSchema.index({ paymentMethod: 1, paymentStatus: 1 }); // Payment queries
+orderSchema.index({ storeRated: 1, status: 1 }); // Rating queries
 
 const OrderModel = mongoose.model<IOrder>("Order", orderSchema);
 

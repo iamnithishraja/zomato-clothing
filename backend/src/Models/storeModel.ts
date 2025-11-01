@@ -70,8 +70,12 @@ const storeSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-storeSchema.index({ merchantId: 1 });
-storeSchema.index({ storeName: 1 });
+// Database indexes for optimized queries
+storeSchema.index({ merchantId: 1 }); // Find stores by merchant
+storeSchema.index({ storeName: 1 }); // Text search by store name
+storeSchema.index({ isActive: 1 }); // Filter active stores
+storeSchema.index({ 'rating.average': -1 }); // Sort by rating for bestsellers
+storeSchema.index({ merchantId: 1, isActive: 1 }); // Merchant's active stores
 
 const Store = mongoose.model("Store", storeSchema);
 export default Store;

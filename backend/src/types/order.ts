@@ -36,6 +36,10 @@ export interface IOrder {
   cancelledAt?: Date;
   notes?: string;
   statusHistory: IOrderStatusHistory[];
+  storeRated?: boolean;
+  storeRating?: number;
+  storeReview?: string;
+  storeRatedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -6,8 +6,12 @@ import {
   retryPayment
 } from "../controllers/paymentController";
 import { isAuthenticated } from "../middleware/auth";
+import { timeouts } from "../middleware/timeout";
 
 const router: Router = express.Router();
+
+// Apply longer timeout for payment operations (45 seconds)
+router.use(timeouts.payment);
 
 // Create Razorpay order for payment
 router.post("/create-order", isAuthenticated, createRazorpayOrder);

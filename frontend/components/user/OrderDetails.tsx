@@ -8,6 +8,8 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -146,9 +148,39 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
     );
   };
 
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [review, setReview] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+
   const handleRateStore = async () => {
-    // Navigate to rating screen or show rating modal
-    Alert.alert('Rate Store', 'Rating feature coming soon!');
+    setShowRatingModal(true);
+  };
+
+  const submitRating = async () => {
+    if (rating === 0) {
+      Alert.alert('Error', 'Please select a rating');
+      return;
+    }
+
+    try {
+      setSubmittingRating(true);
+      await apiClient.post('/api/v1/stores/rate', {
+        orderId: order._id,
+        rating,
+        review: review.trim() || undefined
+      });
+      Alert.alert('Success', 'Thank you for rating the store!');
+      setShowRatingModal(false);
+      setRating(0);
+      setReview('');
+      // Refresh order details to update the UI
+      fetchOrderDetails();
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to submit rating');
+    } finally {
+      setSubmittingRating(false);
+    }
   };
 
   if (loading) {
@@ -175,7 +207,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
   }
 
   const canCancel = ['Pending', 'Accepted', 'Processing'].includes(order.status);
-  const canRate = order.status === 'Delivered';
+  const canRate = order.status === 'Delivered' && !order.storeRated;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -201,9 +233,17 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
             color={getStatusColor(order.status)} 
           />
           <View style={styles.statusTextContainer}>
-            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
-              {order.status}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+                {order.status}
+              </Text>
+              {order.storeRated && order.status === 'Delivered' && (
+                <View style={styles.ratedBadge}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Text style={styles.ratedBadgeText}>Rated</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.statusSubtext}>
               {order.status === 'Pending' && 'Waiting for merchant confirmation'}
               {order.status === 'Accepted' && 'Order accepted by merchant'}
@@ -387,6 +427,79 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
       </View>
 
       <View style={{ height: 40 }} />
+
+      {/* Rating Modal */}
+      <Modal
+        visible={showRatingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRatingModal(false)}
+      >
+        <View style={styles.ratingModalOverlay}>
+          <View style={styles.ratingModalContainer}>
+            <View style={styles.ratingModalHeader}>
+              <Text style={styles.ratingModalTitle}>Rate Your Experience</Text>
+              <TouchableOpacity onPress={() => setShowRatingModal(false)}>
+                <Ionicons name="close" size={28} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.ratingModalSubtitle}>
+              {order?.store?.storeName ? `How was your experience with ${order.store.storeName}?` : 'How was your experience?'}
+            </Text>
+
+            {/* Star Rating */}
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setRating(star)}
+                  style={styles.starButton}
+                >
+                  <Ionicons
+                    name={star <= rating ? 'star' : 'star-outline'}
+                    size={40}
+                    color={star <= rating ? '#FFD700' : Colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Review Input */}
+            <TextInput
+              style={styles.reviewInput}
+              placeholder="Share your experience (optional)"
+              placeholderTextColor={Colors.textSecondary}
+              multiline
+              numberOfLines={4}
+              value={review}
+              onChangeText={setReview}
+              textAlignVertical="top"
+            />
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitRatingButton, submittingRating && styles.submitRatingButtonDisabled]}
+              onPress={submitRating}
+              disabled={submittingRating || rating === 0}
+            >
+              <LinearGradient
+                colors={rating === 0 ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
+                style={styles.submitRatingGradient}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color={Colors.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="send" size={20} color={Colors.textPrimary} />
+                    <Text style={styles.submitRatingText}>Submit Rating</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -679,6 +792,88 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     marginLeft: 8,
+  },
+  ratingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  ratingModalContainer: {
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  ratingModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ratingModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  ratingModalSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 24,
+  },
+  starButton: {
+    padding: 4,
+  },
+  reviewInput: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    minHeight: 100,
+    marginBottom: 20,
+  },
+  submitRatingButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  submitRatingButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitRatingGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  submitRatingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  ratedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD70020',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ratedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFD700',
   },
 });
 

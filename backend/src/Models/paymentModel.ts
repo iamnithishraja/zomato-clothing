@@ -170,13 +170,16 @@ const paymentSchema: Schema = new Schema(
 );
 
 // Indexes for faster queries
-paymentSchema.index({ order: 1 });
-paymentSchema.index({ user: 1 });
-paymentSchema.index({ store: 1 });
-paymentSchema.index({ paymentStatus: 1 });
-paymentSchema.index({ payoutStatus: 1 });
-paymentSchema.index({ gatewayOrderId: 1 });
-paymentSchema.index({ gatewayPaymentId: 1 });
+paymentSchema.index({ order: 1 }); // Single order lookup
+paymentSchema.index({ user: 1 }); // User payment history
+paymentSchema.index({ store: 1, payoutStatus: 1 }); // Store payout queries
+paymentSchema.index({ paymentStatus: 1 }); // Payment status queries
+paymentSchema.index({ payoutStatus: 1 }); // Payout status queries
+paymentSchema.index({ gatewayOrderId: 1 }); // Razorpay webhook lookup
+paymentSchema.index({ gatewayPaymentId: 1 }); // Razorpay payment lookup
+paymentSchema.index({ paymentMethod: 1, codSubmittedToStore: 1 }); // COD collection queries
+paymentSchema.index({ paymentMethod: 1, codCollectedBy: 1 }); // Delivery person COD
+paymentSchema.index({ store: 1, paymentStatus: 1, codSubmittedToStore: 1 }); // Settlement queries
 
 const PaymentModel = mongoose.model<IPayment>("Payment", paymentSchema);
 

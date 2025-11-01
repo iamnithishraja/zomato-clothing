@@ -55,6 +55,12 @@ const deliverySchema: Schema = new Schema(
   }
 );
 
+// Database indexes for optimized queries
+deliverySchema.index({ deliveryPerson: 1, status: 1 }); // Delivery person's deliveries by status
+deliverySchema.index({ order: 1 }); // Lookup delivery by order
+deliverySchema.index({ status: 1, createdAt: -1 }); // Query deliveries by status and date
+deliverySchema.index({ deliveryPerson: 1, createdAt: -1 }); // Delivery person history
+
 const DeliveryModel = mongoose.model<IDelivery>("Delivery", deliverySchema);
 
 export default DeliveryModel;

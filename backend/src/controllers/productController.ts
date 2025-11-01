@@ -54,7 +54,7 @@ async function createProduct(req: Request, res: Response) {
     // If either isOnSale is true OR discountPercentage is provided, calculate discount
     if (isOnSale || (discountPercentage && discountPercentage > 0)) {
       const discountAmount = (price * discountPercentage) / 100;
-      finalPrice = price - discountAmount;
+      finalPrice = Math.round(price - discountAmount);
       finalDiscountPercentage = discountPercentage;
       finalIsOnSale = true;
     }
@@ -263,7 +263,7 @@ async function updateProduct(req: Request, res: Response) {
       // If either isOnSale is true OR discountPercentage is provided, calculate discount
       if (isOnSale || (discountPercentage && discountPercentage > 0)) {
         const discountAmount = (originalPrice * discountPercentage) / 100;
-        finalPrice = originalPrice - discountAmount;
+        finalPrice = Math.round(originalPrice - discountAmount);
         finalDiscountPercentage = discountPercentage;
         finalIsOnSale = true;
       }

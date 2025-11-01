@@ -77,8 +77,8 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
       const discount = parseFloat(details.discountPercentage);
       if (price > 0 && discount >= 0 && discount <= 100) {
         const discountAmount = (price * discount) / 100;
-        const finalPrice = price - discountAmount;
-        setDiscountPreview(`₹${finalPrice.toFixed(2)}`);
+        const finalPrice = Math.round(price - discountAmount);
+        setDiscountPreview(`₹${finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`);
       }
     } else {
       setDiscountPreview('');
@@ -134,8 +134,8 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     
     if (price > 0 && discount > 0) {
       const discountAmount = (price * discount) / 100;
-      const finalPrice = price - discountAmount;
-      setDiscountPreview(`₹${finalPrice.toFixed(2)}`);
+      const finalPrice = Math.round(price - discountAmount);
+      setDiscountPreview(`₹${finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`);
     } else {
       setDiscountPreview('');
     }

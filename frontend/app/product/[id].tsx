@@ -155,7 +155,7 @@ export default function ProductDetailsScreen() {
   }
 
   const formatPrice = (price: number) => {
-    return price.toLocaleString('en-IN');
+    return Math.round(price).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   };
 
   const isDiscount = !!product?.isOnSale && !!product?.discountPercentage && (product!.discountPercentage as number) > 0;

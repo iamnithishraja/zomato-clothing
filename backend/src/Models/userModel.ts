@@ -70,7 +70,10 @@ const userSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-userSchema.index({ role: 1 });
+// Database indexes for optimized queries
+// Note: phone and email already have unique indexes from their schema definition
+userSchema.index({ role: 1 }); // Query users by role
+userSchema.index({ role: 1, isActive: 1 }); // Find active users by role (e.g., available delivery partners)
 
 const User = mongoose.model("User", userSchema);
 export default User;

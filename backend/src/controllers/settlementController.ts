@@ -70,8 +70,8 @@ export async function getSettlementReport(req: Request, res: Response) {
 
     // Calculate payout (simplified - in reality would include platform fees, taxes, etc.)
     const platformFeePercentage = 5; // 5% platform fee
-    const platformFee = (totalItemsValue * platformFeePercentage) / 100;
-    const netPayout = totalItemsValue - platformFee;
+    const platformFee = Math.round((totalItemsValue * platformFeePercentage) / 100);
+    const netPayout = Math.round(totalItemsValue - platformFee);
 
     return res.status(200).json({
       success: true,
@@ -222,14 +222,14 @@ export async function createPayout(req: Request, res: Response) {
     }, {} as Record<string, number>);
 
     const platformFeePercentage = 5;
-    const gross = Object.values(itemsTotalByOrder).reduce((a, b) => a + b, 0);
-    const platformFee = (gross * platformFeePercentage) / 100;
-    const net = gross - platformFee;
+    const gross = Math.round(Object.values(itemsTotalByOrder).reduce((a, b) => a + b, 0));
+    const platformFee = Math.round((gross * platformFeePercentage) / 100);
+    const net = Math.round(gross - platformFee);
 
     // Mark payments as paid out
     for (const p of payments) {
       p.payoutStatus = "Completed";
-      p.payoutAmount = itemsTotalByOrder[String(p.order)] ?? p.amount; // fallback
+      p.payoutAmount = Math.round(itemsTotalByOrder[String(p.order)] ?? p.amount); // fallback
       p.payoutDate = new Date();
       p.payoutTransactionId = transactionId;
       await p.save();

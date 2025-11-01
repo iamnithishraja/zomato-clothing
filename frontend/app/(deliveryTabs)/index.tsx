@@ -101,7 +101,7 @@ export default function DeliveryHome() {
           <View style={styles.statIcon}>
             <Ionicons name="cash" size={24} color={Colors.primary} />
           </View>
-          <Text style={styles.statNumber}>{isLoading ? '...' : `₹${stats.totalEarnings}`}</Text>
+          <Text style={styles.statNumber}>{isLoading ? '...' : `₹${Math.round(stats.totalEarnings).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}</Text>
           <Text style={styles.statLabel}>Earnings</Text>
         </TouchableOpacity>
       </View>

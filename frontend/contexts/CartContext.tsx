@@ -20,6 +20,7 @@ export type CartContextType = {
   clearCart: () => void;
   getQty: (productId: string) => number;
   getSizeQty: (productId: string, size: string) => number;
+  isInCart: (productId: string) => boolean; // Check if product (any variant) is in cart
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,27 +30,65 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((product: Product, qty: number = 1, size?: string) => {
     setItems(prev => {
-      const idx = prev.findIndex(i => i.productId === product._id && i.size === size);
+      // For matching, compare sizes carefully (undefined/null should match each other)
+      const idx = prev.findIndex(i => {
+        const sameProduct = i.productId === product._id;
+        const sameSize = (!i.size && !size) || (i.size === size);
+        return sameProduct && sameSize;
+      });
+      
       if (idx >= 0) {
         const clone = [...prev];
         clone[idx] = { ...clone[idx], qty: clone[idx].qty + qty };
         return clone;
       }
-      return [...prev, { productId: product._id, product, qty, price: product.price, size }];
+      
+      // Only add size property if it's defined
+      const newItem: CartItem = {
+        productId: product._id,
+        product,
+        qty,
+        price: product.price
+      };
+      
+      if (size) {
+        newItem.size = size;
+      }
+      
+      return [...prev, newItem];
     });
   }, []);
 
   const updateQty = useCallback((productId: string, qty: number, size?: string) => {
     setItems(prev => {
       if (qty <= 0) {
-        return prev.filter(i => !(i.productId === productId && (size ? i.size === size : true)));
+        // Remove item(s)
+        return prev.filter(i => {
+          const sameProduct = i.productId === productId;
+          const sameSize = (!i.size && !size) || (i.size === size);
+          return !(sameProduct && sameSize);
+        });
       }
-      return prev.map(i => (i.productId === productId && (size ? i.size === size : true) ? { ...i, qty } : i));
+      
+      // Update quantity
+      return prev.map(i => {
+        const sameProduct = i.productId === productId;
+        const sameSize = (!i.size && !size) || (i.size === size);
+        
+        if (sameProduct && sameSize) {
+          return { ...i, qty };
+        }
+        return i;
+      });
     });
   }, []);
 
   const removeItem = useCallback((productId: string, size?: string) => {
-    setItems(prev => prev.filter(i => !(i.productId === productId && (size ? i.size === size : true))));
+    setItems(prev => prev.filter(i => {
+      const sameProduct = i.productId === productId;
+      const sameSize = (!i.size && !size) || (i.size === size);
+      return !(sameProduct && sameSize);
+    }));
   }, []);
 
   const clearCart = useCallback(() => {
@@ -57,7 +96,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getQty = useCallback((productId: string) => {
-    return items.filter(i => i.productId === productId).reduce((acc, it) => acc + it.qty, 0);
+    // Only return quantity for items WITHOUT sizes (for product card display)
+    return items.filter(i => i.productId === productId && !i.size).reduce((acc, it) => acc + it.qty, 0);
   }, [items]);
 
   const getSizeQty = useCallback((productId: string, size: string) => {
@@ -65,10 +105,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return found ? found.qty : 0;
   }, [items]);
 
+  const isInCart = useCallback((productId: string) => {
+    // Check if ANY variant (with or without size) of this product is in cart
+    return items.some(i => i.productId === productId);
+  }, [items]);
+
   const count = useMemo(() => items.reduce((acc, i) => acc + i.qty, 0), [items]);
   const total = useMemo(() => items.reduce((acc, i) => acc + i.qty * i.price, 0), [items]);
 
-  const value = useMemo(() => ({ items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty }), [items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty]);
+  const value = useMemo(() => ({ items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty, isInCart }), [items, count, total, addItem, updateQty, removeItem, clearCart, getQty, getSizeQty, isInCart]);
 
   return (
     <CartContext.Provider value={value}>

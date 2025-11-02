@@ -36,7 +36,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   const effectiveIsFavorite = isFavorite ?? favoritesHook.isFavorite;
   const effectiveToggle = onToggleFavorite ?? favoritesHook.toggleFavorite;
   const effectiveLoading = favoritesLoading ?? favoritesHook.isLoading;
-  const { addItem, updateQty, getQty } = useCart();
+  const { addItem, updateQty, getQty, isInCart } = useCart();
   const [sizeModalVisible, setSizeModalVisible] = useState(false);
 
   const formatPrice = (price: number) => {
@@ -66,6 +66,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   };
 
   const qty = getQty(product._id);
+  const inCart = isInCart(product._id); // Check if any variant is in cart
 
   const handleAddToCart = () => {
     const sizes = product.sizes || [];
@@ -77,7 +78,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
       addItem(product, 1, sizes[0]);
       return;
     }
-    addItem(product, 1);
+    // For products without sizes, explicitly pass undefined
+    addItem(product, 1, undefined);
   };
 
   const handleConfirmSizes = (selectedSizes: string[]) => {
@@ -90,12 +92,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
   };
 
   const handleIncrease = () => {
-    updateQty(product._id, qty + 1);
+    // Explicitly pass undefined for size to update non-sized products
+    updateQty(product._id, qty + 1, undefined);
   };
 
   const handleDecrease = () => {
     const next = qty - 1;
-    updateQty(product._id, next);
+    // Explicitly pass undefined for size to update non-sized products
+    updateQty(product._id, next, undefined);
   };
 
   // Check if product is available
@@ -267,18 +271,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, isFavorite,
                 </TouchableOpacity>
               </View>
             )}
-            {qty > 0 && (
-              <TouchableOpacity
-                style={styles.viewCartButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  router.push('/(tabs)/cart' as any);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.viewCartText}>View Cart</Text>
-              </TouchableOpacity>
-            )}
+             {inCart && (
+               <TouchableOpacity
+                 style={styles.viewCartButton}
+                 onPress={(e) => {
+                   e.stopPropagation();
+                   router.push('/(tabs)/cart' as any);
+                 }}
+                 activeOpacity={0.8}
+               >
+                 <Text style={styles.viewCartText}>View Cart</Text>
+               </TouchableOpacity>
+             )}
           </View>
         </View>
       </View>

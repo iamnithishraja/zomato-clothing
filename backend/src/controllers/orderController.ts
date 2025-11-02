@@ -30,6 +30,142 @@ const updateOrderStatusSchema = z.object({
   cancellationReason: z.string().optional()
 });
 
+// Helper function to create a single store order
+async function createSingleStoreOrder(
+  user: any,
+  storeId: string,
+  storeProducts: any[],
+  shippingAddress: string,
+  paymentMethod: string
+) {
+  let itemsTotal = 0;
+  const validatedOrderItems: any[] = [];
+
+  // Verify store exists and is active
+  const store = await StoreModel.findById(storeId);
+  if (!store || !store.isActive) {
+    throw new Error("Store is not available");
+  }
+
+  // Calculate total and prepare order items
+  for (const { product, quantity } of storeProducts) {
+    const roundedPrice = Math.round(product.price);
+    const itemTotal = quantity * roundedPrice;
+    itemsTotal += itemTotal;
+
+    validatedOrderItems.push({
+      product: product._id,
+      quantity: quantity,
+      price: roundedPrice
+    });
+  }
+
+  // Round itemsTotal to ensure no decimals
+  itemsTotal = Math.round(itemsTotal);
+
+  // Calculate delivery fee
+  const deliveryFee = Math.round(calculateDeliveryFee(itemsTotal));
+
+  // Calculate total amount
+  const totalAmount = Math.round(itemsTotal + deliveryFee);
+
+  // Generate unique order number
+  const orderNumber = await generateOrderNumber(storeId);
+
+  // Atomic stock update for all order items
+  for (const item of validatedOrderItems) {
+    const productUpdate = await ProductModel.findOneAndUpdate(
+      { _id: item.product, availableQuantity: { $gte: item.quantity } },
+      { $inc: { availableQuantity: -item.quantity } },
+      { new: true }
+    );
+    if (!productUpdate) {
+      // Rollback previous decrements
+      for (const prevItem of validatedOrderItems) {
+        if (prevItem.product.equals(item.product)) break;
+        await ProductModel.findByIdAndUpdate(prevItem.product, { $inc: { availableQuantity: prevItem.quantity } });
+      }
+      throw new Error(`Failed to reserve stock for product: ${item.product}`);
+    }
+  }
+
+  // Create order
+  const order = new OrderModel({
+    orderNumber,
+    user: user._id,
+    store: storeId,
+    orderItems: validatedOrderItems,
+    itemsTotal,
+    deliveryFee,
+    totalAmount,
+    shippingAddress: shippingAddress.trim(),
+    paymentMethod,
+    paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
+    statusHistory: [{
+      status: "Pending",
+      timestamp: new Date(),
+      updatedBy: user._id,
+      note: "Order created"
+    }]
+  });
+
+  // Save with retry on duplicate orderNumber
+  let attempts = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      await order.save();
+      break;
+    } catch (e: any) {
+      if (e && e.code === 11000 && e.keyPattern && e.keyPattern.orderNumber) {
+        if (++attempts > 3) throw e;
+        const newOrderNumber = await generateOrderNumber(storeId);
+        order.orderNumber = newOrderNumber;
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  // Create payment record for COD orders
+  if (paymentMethod === "COD") {
+    const payment = new PaymentModel({
+      order: order._id,
+      user: user._id,
+      store: storeId,
+      amount: Math.round(order.totalAmount),
+      paymentMethod: "COD",
+      paymentStatus: "Pending"
+    });
+    await payment.save();
+    order.paymentId = payment._id as any;
+    await order.save();
+  }
+
+  // Send notification to merchant
+  try {
+    await notifyOrderPlaced(
+      order._id,
+      order.orderNumber || "",
+      user._id,
+      store.merchantId,
+      storeId as any,
+      store.storeName,
+      totalAmount
+    );
+  } catch (notifyError) {
+    console.error("Failed to send order notification:", notifyError);
+  }
+
+  // Populate order details for response
+  const populatedOrder = await OrderModel.findById(order._id)
+    .populate('user', 'name phone email')
+    .populate('store', 'storeName address storeImages')
+    .populate('orderItems.product', 'name images price category subcategory');
+
+  return populatedOrder;
+}
+
 async function createOrder(req: Request, res: Response) {
   try {
     // User is already authenticated by middleware
@@ -42,12 +178,9 @@ async function createOrder(req: Request, res: Response) {
     const validatedData = createOrderSchema.parse(req.body);
     const { orderItems, shippingAddress, paymentMethod } = validatedData;
 
-    // Calculate total amount and validate product availability
-    let itemsTotal = 0;
-    let storeId: any = null;
-    const validatedOrderItems: any[] = [];
-
-    // Check all products and quantities up front and ensure all from the same store
+    // First, load all products and group them by store
+    const productsByStore: Map<string, any[]> = new Map();
+    
     for (const item of orderItems) {
       const product = await ProductModel.findById(item.product);
       if (!product) {
@@ -58,28 +191,88 @@ async function createOrder(req: Request, res: Response) {
         return sendErrorResponse(res, 400, `Product is not available: ${product.name}`);
       }
 
-      // Set storeId from the first product (all products should be from same store)
-      if (storeId === null) {
-        storeId = product.storeId;
-      } else if (product.storeId.toString() !== storeId.toString()) {
-        return sendErrorResponse(res, 400, "All products must be from the same store for a single order");
-      }
-
       if (product.availableQuantity < item.quantity) {
         return sendErrorResponse(res, 400, `Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
       }
 
+      const storeIdStr = product.storeId.toString();
+      if (!productsByStore.has(storeIdStr)) {
+        productsByStore.set(storeIdStr, []);
+      }
+      
+      productsByStore.get(storeIdStr)!.push({
+        product: product,
+        quantity: item.quantity,
+        requestedPrice: item.price
+      });
+    }
+
+    // If products are from multiple stores, create separate orders for each store
+    if (productsByStore.size > 1) {
+      console.log(`Creating ${productsByStore.size} orders for products from ${productsByStore.size} different stores`);
+      
+      const createdOrders = [];
+      const errors = [];
+      
+      for (const [storeIdStr, storeProducts] of productsByStore.entries()) {
+        try {
+          const order = await createSingleStoreOrder(
+            user,
+            storeIdStr,
+            storeProducts,
+            shippingAddress,
+            paymentMethod
+          );
+          createdOrders.push(order);
+        } catch (error) {
+          console.error(`Error creating order for store ${storeIdStr}:`, error);
+          errors.push({
+            storeId: storeIdStr,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      if (createdOrders.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No orders were created successfully",
+          errors
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `${createdOrders.length} order${createdOrders.length > 1 ? 's' : ''} created successfully from ${productsByStore.size} store${productsByStore.size > 1 ? 's' : ''}`,
+        orders: createdOrders,
+        multipleStores: true,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    }
+
+    // Single store order - continue with original logic
+    const firstEntry = Array.from(productsByStore.entries())[0];
+    if (!firstEntry) {
+      return sendErrorResponse(res, 400, "No products found in order");
+    }
+    const [storeIdStr, storeProducts] = firstEntry;
+    let itemsTotal = 0;
+    const validatedOrderItems: any[] = [];
+
+    for (const { product, quantity } of storeProducts) {
       // Use current product price (rounded to whole number)
       const roundedPrice = Math.round(product.price);
-      const itemTotal = item.quantity * roundedPrice;
+      const itemTotal = quantity * roundedPrice;
       itemsTotal += itemTotal;
 
       validatedOrderItems.push({
         product: product._id,
-        quantity: item.quantity,
+        quantity: quantity,
         price: roundedPrice
       });
     }
+
+    const storeId = storeIdStr;
 
     // Verify store exists and is active
     const store = await StoreModel.findById(storeId);
@@ -588,6 +781,9 @@ async function createMultipleOrders(req: Request, res: Response) {
         let storeId: any = null;
         const validatedOrderItems: any[] = [];
 
+        // Group products by store for this order batch
+        const productsByStore: Map<string, any[]> = new Map();
+        
         for (const item of orderItems) {
           const product = await ProductModel.findById(item.product);
           if (!product) {
@@ -598,24 +794,46 @@ async function createMultipleOrders(req: Request, res: Response) {
             throw new Error(`Product is not available: ${product.name}`);
           }
 
-          if (storeId === null) {
-            storeId = product.storeId;
-          } else if (product.storeId.toString() !== storeId.toString()) {
-            throw new Error("All products must be from the same store for a single order");
-          }
-
           if (product.availableQuantity < item.quantity) {
-            throw new Error(`Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}`);
+            throw new Error(`Insufficient stock for product: ${product.name}. Available: ${product.availableQuantity}, Requested: ${item.quantity}`);
           }
 
-          const itemTotal = item.quantity * product.price;
-          itemsTotal += itemTotal;
-
-          validatedOrderItems.push({
-            product: product._id,
-            quantity: item.quantity,
-            price: product.price
+          const storeIdStr = product.storeId.toString();
+          if (!productsByStore.has(storeIdStr)) {
+            productsByStore.set(storeIdStr, []);
+          }
+          
+          productsByStore.get(storeIdStr)!.push({
+            product,
+            quantity: item.quantity
           });
+        }
+        
+        // Now process each store separately
+        for (const [storeIdStr, storeProducts] of productsByStore.entries()) {
+          storeId = storeIdStr;
+          itemsTotal = 0;
+          const validatedStoreItems: any[] = [];
+          
+          for (const { product, quantity } of storeProducts) {
+            // Use rounded price
+            const roundedPrice = Math.round(product.price);
+            const itemTotal = quantity * roundedPrice;
+            itemsTotal += itemTotal;
+
+            validatedStoreItems.push({
+              product: product._id,
+              quantity: quantity,
+              price: roundedPrice
+            });
+          }
+          
+          validatedOrderItems.push(...validatedStoreItems);
+        }
+        
+        // If multiple stores detected, skip this batch approach - it's malformed
+        if (productsByStore.size > 1) {
+          throw new Error("Products from multiple stores detected. Please use the single order endpoint which will automatically split orders by store.");
         }
 
         const store = await StoreModel.findById(storeId);
@@ -623,6 +841,9 @@ async function createMultipleOrders(req: Request, res: Response) {
           throw new Error("Store is not available");
         }
 
+        // Round itemsTotal before calculating delivery fee
+        itemsTotal = Math.round(itemsTotal);
+        
         // Calculate delivery fee and total amount as in single order
         const deliveryFee = Math.round(calculateDeliveryFee(itemsTotal));
         const totalAmount = Math.round(itemsTotal + deliveryFee);

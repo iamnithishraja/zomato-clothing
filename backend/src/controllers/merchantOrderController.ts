@@ -243,33 +243,94 @@ export async function markReadyForPickup(req: Request, res: Response) {
       store.storeName
     );
 
-    // Auto-assign delivery partner
+    // Auto-assign delivery partner using proximity-based algorithm
     try {
       const UserModel = (await import("../Models/userModel")).default;
       const DeliveryModel = (await import("../Models/deliveryModel")).default;
       const { notifyDeliveryAssigned } = await import("../utils/notificationUtils");
 
-      // Find available delivery partners
+      // Calculate distance between two coordinates using Haversine formula
+      const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+        const R = 6371; // Radius of the Earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      };
+
+      // Get pickup location coordinates
+      let pickupLat: number | null = null;
+      let pickupLng: number | null = null;
+
+      if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
+        pickupLat = order.pickupLocation.lat;
+        pickupLng = order.pickupLocation.lng;
+      }
+
+      // Find available delivery partners (not busy and active)
       const availableDeliveryPartners = await UserModel.find({
         role: "Delivery",
-        isActive: true
-      }).limit(10);
+        isActive: true,
+        isBusy: false
+      }).lean();
 
       if (availableDeliveryPartners.length > 0) {
-        // Randomly select one (in production, use proximity algorithm)
-        const selectedDeliveryPartner = availableDeliveryPartners[
-          Math.floor(Math.random() * availableDeliveryPartners.length)
-        ];
+        let selectedDeliveryPartner = null;
+        let minDistance = Infinity;
+
+        // If we have pickup location, find the nearest delivery partner within 5km
+        if (pickupLat && pickupLng) {
+          for (const partner of availableDeliveryPartners) {
+            if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+              const distance = calculateDistance(
+                pickupLat,
+                pickupLng,
+                partner.currentLocation.lat,
+                partner.currentLocation.lng
+              );
+
+              // Only consider partners within 5km radius
+              if (distance <= 5 && distance < minDistance) {
+                minDistance = distance;
+                selectedDeliveryPartner = partner;
+              }
+            }
+          }
+
+          // If no partner found within 5km, select random from available
+          if (!selectedDeliveryPartner && availableDeliveryPartners.length > 0) {
+            console.log("No delivery partner within 5km, selecting random available partner");
+            selectedDeliveryPartner = availableDeliveryPartners[
+              Math.floor(Math.random() * availableDeliveryPartners.length)
+            ];
+          }
+        } else {
+          // No location data, select random from available partners
+          selectedDeliveryPartner = availableDeliveryPartners[
+            Math.floor(Math.random() * availableDeliveryPartners.length)
+          ];
+        }
 
         if (selectedDeliveryPartner) {
-          // Assign delivery partner to order
+          // Assign delivery partner to order and mark as Assigned
           order.deliveryPerson = selectedDeliveryPartner._id as any;
+          order.status = "Assigned";
           order.statusHistory.push({
-            status: order.status,
+            status: "Assigned",
             timestamp: new Date(),
-            note: `Delivery partner ${selectedDeliveryPartner.name || 'Unknown'} auto-assigned`
+            note: `Delivery partner ${selectedDeliveryPartner.name || 'Unknown'} auto-assigned${pickupLat && pickupLng && minDistance !== Infinity ? ` (${minDistance.toFixed(2)}km away)` : ''}`
           });
           await order.save();
+
+          // Mark delivery partner as busy and set current order
+          await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, {
+            isBusy: true,
+            currentOrder: order._id
+          });
 
           // Create delivery record
           const delivery = new DeliveryModel({
@@ -293,15 +354,15 @@ export async function markReadyForPickup(req: Request, res: Response) {
             store._id
           );
 
-          console.log(`Delivery partner ${selectedDeliveryPartner.name} auto-assigned to order ${order._id}`);
+          console.log(`✅ Delivery partner ${selectedDeliveryPartner.name} auto-assigned to order ${order._id}${minDistance !== Infinity ? ` (${minDistance.toFixed(2)}km away)` : ''}`);
         } else {
-          console.log(`Failed to select delivery partner for order ${order._id}`);
+          console.log(`❌ No suitable delivery partner found for order ${order._id}`);
         }
       } else {
-        console.log(`No delivery partners available for order ${order._id}`);
+        console.log(`⚠️ No delivery partners available for order ${order._id}`);
       }
     } catch (assignError) {
-      console.error("Error auto-assigning delivery partner:", assignError);
+      console.error("❌ Error auto-assigning delivery partner:", assignError);
       // Don't fail the entire request if auto-assignment fails
     }
 

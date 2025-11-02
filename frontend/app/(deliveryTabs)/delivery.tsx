@@ -1,11 +1,11 @@
 import React from 'react';
 import { View } from 'react-native';
-import DeliveryDashboard from '@/components/delivery/DeliveryDashboard';
+import ModernDeliveryDashboard from '@/components/delivery/ModernDeliveryDashboard';
 
 export default function DeliveryScreen() {
   return (
     <View style={{ flex: 1 }}>
-      <DeliveryDashboard />
+      <ModernDeliveryDashboard />
     </View>
   );
 }

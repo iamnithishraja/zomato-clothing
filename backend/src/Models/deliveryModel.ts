@@ -15,7 +15,7 @@ const deliverySchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Accepted", "PickedUp", "Delivered", "Cancelled"],
+      enum: ["Pending", "Accepted", "PickedUp", "OnTheWay", "Delivered", "Cancelled"],
       default: "Pending"
     },
     pickupAddress: { 

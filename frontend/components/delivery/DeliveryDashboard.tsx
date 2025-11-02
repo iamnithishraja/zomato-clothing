@@ -36,6 +36,8 @@ const getStatusColor = (status: string) => {
       return '#4CAF50';
     case 'PickedUp':
       return '#2196F3';
+    case 'OnTheWay':
+      return '#9C27B0';
     case 'Delivered':
       return '#4CAF50';
     case 'Cancelled':
@@ -143,6 +145,7 @@ const DeliveryDashboard: React.FC = () => {
     { key: 'Pending', label: 'Pending' },
     { key: 'Accepted', label: 'Accepted' },
     { key: 'PickedUp', label: 'Picked Up' },
+    { key: 'OnTheWay', label: 'On The Way' },
     { key: 'Delivered', label: 'Delivered' },
   ];
 
@@ -363,6 +366,28 @@ const DeliveryDashboard: React.FC = () => {
                   )}
 
                   {delivery.status === 'PickedUp' && (
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleUpdateStatus(delivery._id, 'OnTheWay')}
+                      disabled={isProcessing}
+                    >
+                      <LinearGradient
+                        colors={['#9C27B0', '#7B1FA2']}
+                        style={styles.actionGradient}
+                      >
+                        {isProcessing ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Ionicons name="navigate" size={20} color="#FFFFFF" />
+                            <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Mark On The Way</Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+
+                  {delivery.status === 'OnTheWay' && (
                     <>
                       {/* For COD orders, show collect COD button if not collected */}
                       {order && order.paymentMethod === 'COD' && order.paymentStatus !== 'Completed' ? (

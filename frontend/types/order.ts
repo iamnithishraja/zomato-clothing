@@ -24,7 +24,7 @@ export interface Order {
   totalAmount: number;
   shippingAddress: string;
   orderDate: string;
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'Rejected' | 'Processing' | 'ReadyForPickup' | 'Assigned' | 'PickedUp' | 'OnTheWay' | 'Shipped' | 'Delivered' | 'Cancelled';
   paymentMethod: 'COD' | 'Online';
   paymentStatus: 'Pending' | 'Completed' | 'Failed';
   deliveryDate?: string;
@@ -35,6 +35,16 @@ export interface Order {
     phone: string;
   };
   deliveryFee?: number;
+  pickupLocation?: {
+    lat?: number;
+    lng?: number;
+    address?: string;
+  };
+  deliveryLocation?: {
+    lat?: number;
+    lng?: number;
+    address?: string;
+  };
   discountAmount?: number;
   taxAmount?: number;
   finalAmount?: number;
@@ -59,7 +69,7 @@ export interface CreateOrderRequest {
 }
 
 export interface UpdateOrderStatusRequest {
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'Rejected' | 'Processing' | 'ReadyForPickup' | 'Assigned' | 'PickedUp' | 'OnTheWay' | 'Shipped' | 'Delivered' | 'Cancelled';
   cancellationReason?: string;
 }
 

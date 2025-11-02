@@ -66,7 +66,7 @@ const orderSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Shipped", "Delivered", "Cancelled"],
+      enum: ["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Assigned", "PickedUp", "OnTheWay", "Shipped", "Delivered", "Cancelled"],
       default: "Pending"
     },
     merchantAcceptedAt: {
@@ -96,6 +96,16 @@ const orderSchema: Schema = new Schema(
     },
     deliveryDate: { 
       type: Date
+    },
+    pickupLocation: {
+      lat: { type: Number },
+      lng: { type: Number },
+      address: { type: String }
+    },
+    deliveryLocation: {
+      lat: { type: Number },
+      lng: { type: Number },
+      address: { type: String }
     },
     cancellationReason: {
       type: String,

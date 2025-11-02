@@ -33,10 +33,11 @@ export interface Delivery {
     totalAmount: number;
     shippingAddress: string;
     orderDate: string;
-    status: string;
-    paymentMethod: string;
+    status: 'Pending' | 'Accepted' | 'Rejected' | 'Processing' | 'ReadyForPickup' | 'Assigned' | 'PickedUp' | 'OnTheWay' | 'Shipped' | 'Delivered' | 'Cancelled';
+    paymentMethod: 'COD' | 'Online';
+    paymentStatus: 'Pending' | 'Completed' | 'Failed';
   };
-  status: 'Pending' | 'Accepted' | 'PickedUp' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'PickedUp' | 'OnTheWay' | 'Delivered' | 'Cancelled';
   pickupAddress: string;
   deliveryAddress: string;
   estimatedDeliveryTime: string;
@@ -61,7 +62,7 @@ export interface CreateDeliveryRequest {
 }
 
 export interface UpdateDeliveryStatusRequest {
-  status: 'Pending' | 'Accepted' | 'PickedUp' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'PickedUp' | 'OnTheWay' | 'Delivered' | 'Cancelled';
   deliveryNotes?: string;
   cancellationReason?: string;
 }
@@ -107,7 +108,7 @@ export interface DeliveryStatsResponse {
   stats: DeliveryStats;
 }
 
-// Delivery person status
+// Delivery person status and location
 export interface DeliveryPersonStatus {
   isOnline: boolean;
   currentLocation?: {
@@ -115,4 +116,20 @@ export interface DeliveryPersonStatus {
     longitude: number;
   };
   lastUpdated: string;
+}
+
+export interface LocationUpdate {
+  lat: number;
+  lng: number;
+}
+
+export interface DeliveryPersonLocation {
+  _id: string;
+  name: string;
+  phone: string;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+  };
+  isBusy: boolean;
 }

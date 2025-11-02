@@ -66,6 +66,24 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+
+  // Delivery partner specific fields
+  currentLocation: {
+    lat: {
+      type: Number,
+    },
+    lng: {
+      type: Number,
+    }
+  },
+  isBusy: {
+    type: Boolean,
+    default: false,
+  },
+  currentOrder: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Order",
+  },
 }, {
   timestamps: true,
 });

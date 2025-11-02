@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { LocationProvider } from '@/contexts/LocationContext';
+import { OnlineStatusProvider } from '@/contexts/OnlineStatusContext';
 
 export const unstable_settings = {
   anchor: 'index',
@@ -17,8 +18,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <LocationProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <CartProvider>
+        <OnlineStatusProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <CartProvider>
           <Stack
             screenOptions={{
               headerShown: false,
@@ -35,9 +37,10 @@ export default function RootLayout() {
             <Stack.Screen name="store" options={{ headerShown: false }} />
             <Stack.Screen name="product" options={{ headerShown: false }} />
           </Stack>
-          <StatusBar style="auto" />
-          </CartProvider>
-        </ThemeProvider>
+            <StatusBar style="auto" />
+            </CartProvider>
+          </ThemeProvider>
+        </OnlineStatusProvider>
       </LocationProvider>
     </AuthProvider>
   );

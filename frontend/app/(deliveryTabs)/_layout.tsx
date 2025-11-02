@@ -49,6 +49,20 @@ export default function DeliveryTabLayout() {
           href: null,
         }}
       />
+      {/* Hidden Order Details screen - accessible via navigation only */}
+      <Tabs.Screen
+        name="order-details"
+        options={{
+          href: null,
+        }}
+      />
+      {/* Hidden Navigation Map screen - accessible via navigation only */}
+      <Tabs.Screen
+        name="navigation-map"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

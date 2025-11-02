@@ -16,6 +16,14 @@ export interface User {
     role: UserRole;
     otp?: string;
     otpExpiry?: Date;
+    isActive: boolean;
+    // Delivery partner specific fields
+    currentLocation?: {
+      lat: number;
+      lng: number;
+    };
+    isBusy?: boolean;
+    currentOrder?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
   }

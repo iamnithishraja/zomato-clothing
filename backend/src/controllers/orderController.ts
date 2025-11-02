@@ -24,7 +24,7 @@ const createOrderSchema = z.object({
 
 // Validation schema for order status update
 const updateOrderStatusSchema = z.object({
-  status: z.enum(["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Shipped", "Delivered", "Cancelled"], {
+  status: z.enum(["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Assigned", "PickedUp", "OnTheWay", "Shipped", "Delivered", "Cancelled"], {
     message: "Invalid order status"
   }),
   cancellationReason: z.string().optional()
@@ -608,7 +608,10 @@ async function updateOrderStatus(req: Request, res: Response) {
       'Accepted': ['Processing', 'Cancelled'],
       'Rejected': [],
       'Processing': ['ReadyForPickup', 'Cancelled'],
-      'ReadyForPickup': ['Shipped', 'Cancelled'],
+      'ReadyForPickup': ['Assigned', 'Shipped', 'Cancelled'],
+      'Assigned': ['PickedUp', 'Cancelled'],
+      'PickedUp': ['OnTheWay', 'Delivered', 'Cancelled'],
+      'OnTheWay': ['Delivered', 'Cancelled'],
       'Shipped': ['Delivered', 'Cancelled'],
       'Delivered': [],
       'Cancelled': []

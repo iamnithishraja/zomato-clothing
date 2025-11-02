@@ -5,7 +5,9 @@ import {
   updateDeliveryStatus,
   getDeliveriesForDeliveryPerson,
   rateDelivery,
-  getDeliveryStats
+  getDeliveryStats,
+  updateDeliveryLocation,
+  getDeliveryLocation
 } from "../controllers/deliveryController";
 import { isAuthenticated } from "../middleware/auth";
 import { requireRole } from "../middleware/roleAuth";
@@ -19,8 +21,14 @@ router.post("/", isAuthenticated, requireRole(['Delivery']), createDelivery);
 // Get delivery statistics - only for delivery persons
 router.get("/stats/overview", isAuthenticated, requireRole(['Delivery']), getDeliveryStats);
 
+// Update delivery partner's live location - only for delivery persons
+router.patch("/location", isAuthenticated, requireRole(['Delivery']), updateDeliveryLocation);
+
 // Get deliveries for delivery person - only for delivery persons
 router.get("/", isAuthenticated, requireRole(['Delivery']), getDeliveriesForDeliveryPerson);
+
+// Get delivery partner's location by ID - accessible by all authenticated users
+router.get("/location/:deliveryPersonId", isAuthenticated, getDeliveryLocation);
 
 // Get delivery by ID - accessible by all authenticated users with proper permissions
 router.get("/:deliveryId", isAuthenticated, getDeliveryById);

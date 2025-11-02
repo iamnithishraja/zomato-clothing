@@ -1,6 +1,7 @@
 import DeliveryModel from "../Models/deliveryModel";
 import OrderModel from "../Models/orderModel";
 import StoreModel from "../Models/storeModel";
+import UserModel from "../Models/userModel";
 import { notifyOrderPickedUp, notifyOrderDelivered } from "../utils/notificationUtils";
 import { type IDelivery } from "../types/delivery";
 import type { Response, Request } from "express";
@@ -17,7 +18,7 @@ const createDeliverySchema = z.object({
 
 // Validation schema for delivery status update
 const updateDeliveryStatusSchema = z.object({
-  status: z.enum(["Pending", "Accepted", "PickedUp", "Delivered", "Cancelled"], {
+  status: z.enum(["Pending", "Accepted", "PickedUp", "OnTheWay", "Delivered", "Cancelled"], {
     message: "Invalid delivery status"
   }),
   deliveryNotes: z.string().optional(),
@@ -153,24 +154,20 @@ async function getDeliveryById(req: Request, res: Response) {
       .populate('deliveryPerson', 'name phone email')
       .populate({
         path: 'order',
-        populate: {
-          path: 'user',
-          select: 'name phone email'
-        }
-      })
-      .populate({
-        path: 'order',
-        populate: {
-          path: 'store',
-          select: 'storeName address storeImages'
-        }
-      })
-      .populate({
-        path: 'order',
-        populate: {
-          path: 'orderItems.product',
-          select: 'name images price'
-        }
+        populate: [
+          {
+            path: 'user',
+            select: 'name phone email address'
+          },
+          {
+            path: 'store',
+            select: 'storeName address storeImages mapLink'
+          },
+          {
+            path: 'orderItems.product',
+            select: 'name images price'
+          }
+        ]
       });
 
     if (!delivery) {
@@ -181,7 +178,11 @@ async function getDeliveryById(req: Request, res: Response) {
     }
 
     // Check permissions
-    if (user.role === 'Delivery' && delivery.deliveryPerson.toString() !== user._id.toString()) {
+    const deliveryPersonId = typeof delivery.deliveryPerson === 'object' 
+      ? (delivery.deliveryPerson as any)._id 
+      : delivery.deliveryPerson;
+    
+    if (user.role === 'Delivery' && deliveryPersonId.toString() !== user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Access denied. You can only view your own deliveries"
@@ -257,7 +258,8 @@ async function updateDeliveryStatus(req: Request, res: Response) {
     const validTransitions: { [key: string]: string[] } = {
       'Pending': ['Accepted', 'Cancelled'],
       'Accepted': ['PickedUp', 'Cancelled'],
-      'PickedUp': ['Delivered', 'Cancelled'],
+      'PickedUp': ['OnTheWay', 'Delivered', 'Cancelled'],
+      'OnTheWay': ['Delivered', 'Cancelled'],
       'Delivered': [],
       'Cancelled': []
     };
@@ -304,10 +306,10 @@ async function updateDeliveryStatus(req: Request, res: Response) {
     // Update order status and send notifications for key delivery transitions
     if (status === 'PickedUp') {
       await OrderModel.findByIdAndUpdate(delivery.order, {
-        status: 'Shipped',
+        status: 'PickedUp',
         $push: {
           statusHistory: {
-            status: 'Shipped',
+            status: 'PickedUp',
             timestamp: new Date(),
             note: 'Order picked up by delivery partner'
           }
@@ -327,6 +329,17 @@ async function updateDeliveryStatus(req: Request, res: Response) {
       } catch (e) {
         console.error('Failed to send pickup notification', e);
       }
+    } else if (status === 'OnTheWay') {
+      await OrderModel.findByIdAndUpdate(delivery.order, {
+        status: 'OnTheWay',
+        $push: {
+          statusHistory: {
+            status: 'OnTheWay',
+            timestamp: new Date(),
+            note: 'Delivery partner is on the way to delivery location'
+          }
+        }
+      });
     } else if (status === 'Delivered') {
       // Enforce COD collection before marking delivery delivered
       try {
@@ -368,6 +381,20 @@ async function updateDeliveryStatus(req: Request, res: Response) {
       await OrderModel.findByIdAndUpdate(delivery.order, { 
         status: 'ReadyForPickup',
         $unset: { deliveryPerson: 1 }
+      });
+      
+      // Mark delivery partner as not busy and clear current order
+      await UserModel.findByIdAndUpdate(delivery.deliveryPerson, {
+        isBusy: false,
+        $unset: { currentOrder: 1 }
+      });
+    }
+
+    // Mark delivery partner as not busy after successful delivery
+    if (status === 'Delivered') {
+      await UserModel.findByIdAndUpdate(delivery.deliveryPerson, {
+        isBusy: false,
+        $unset: { currentOrder: 1 }
       });
     }
 
@@ -626,12 +653,118 @@ async function getDeliveryStats(req: Request, res: Response) {
   }
 }
 
+/**
+ * Update delivery partner's live location
+ */
+async function updateDeliveryLocation(req: Request, res: Response) {
+  try {
+    const user = (req as any).user;
+    
+    // Check if user is a delivery person
+    if (user.role !== 'Delivery') {
+      return res.status(403).json({
+        success: false,
+        message: "Only delivery persons can update location"
+      });
+    }
+
+    const { lat, lng } = req.body;
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude are required"
+      });
+    }
+
+    // Validate coordinates
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude must be numbers"
+      });
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates"
+      });
+    }
+
+    // Update delivery partner's location
+    await UserModel.findByIdAndUpdate(user._id, {
+      currentLocation: { lat, lng }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Location updated successfully",
+      location: { lat, lng }
+    });
+
+  } catch (error) {
+    console.error("Error updating delivery location:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
+/**
+ * Get delivery partner's current location
+ */
+async function getDeliveryLocation(req: Request, res: Response) {
+  try {
+    const { deliveryPersonId } = req.params;
+
+    if (!deliveryPersonId) {
+      return res.status(400).json({
+        success: false,
+        message: "Delivery person ID is required"
+      });
+    }
+
+    const deliveryPerson = await UserModel.findById(deliveryPersonId)
+      .select('name phone currentLocation isBusy currentOrder');
+
+    if (!deliveryPerson || deliveryPerson.role !== 'Delivery') {
+      return res.status(404).json({
+        success: false,
+        message: "Delivery person not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Location retrieved successfully",
+      deliveryPerson: {
+        _id: deliveryPerson._id,
+        name: deliveryPerson.name,
+        phone: deliveryPerson.phone,
+        currentLocation: deliveryPerson.currentLocation,
+        isBusy: deliveryPerson.isBusy
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting delivery location:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
 export {
   createDelivery,
   getDeliveryById,
   updateDeliveryStatus,
   getDeliveriesForDeliveryPerson,
   rateDelivery,
-  getDeliveryStats
+  getDeliveryStats,
+  updateDeliveryLocation,
+  getDeliveryLocation
 };
 

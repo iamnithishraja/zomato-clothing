@@ -24,7 +24,7 @@ export interface IOrder {
   deliveryFee: number;
   totalAmount: number;
   orderDate: Date;
-  status: "Pending" | "Accepted" | "Rejected" | "Processing" | "ReadyForPickup" | "Shipped" | "Delivered" | "Cancelled";
+  status: "Pending" | "Accepted" | "Rejected" | "Processing" | "ReadyForPickup" | "Assigned" | "PickedUp" | "OnTheWay" | "Shipped" | "Delivered" | "Cancelled";
   merchantAcceptedAt?: Date;
   rejectionReason?: string;
   paymentMethod: "COD" | "Online";
@@ -32,6 +32,16 @@ export interface IOrder {
   paymentId?: mongoose.Schema.Types.ObjectId;
   deliveryPerson?: mongoose.Schema.Types.ObjectId | User;
   deliveryDate?: Date;
+  pickupLocation?: {
+    lat?: number;
+    lng?: number;
+    address?: string;
+  };
+  deliveryLocation?: {
+    lat?: number;
+    lng?: number;
+    address?: string;
+  };
   cancellationReason?: string;
   cancelledAt?: Date;
   notes?: string;

@@ -608,36 +608,54 @@ async function getDeliveryStats(req: Request, res: Response) {
       });
     }
 
+    // Get date range from query parameters
+    const startDate = req.query.startDate ? new Date(req.query.startDate as string) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date();
+
+    // Build base query with date filter
+    const baseQuery = { 
+      deliveryPerson: user._id,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    };
+
     const [totalDeliveries, pendingDeliveries, acceptedDeliveries, pickedUpDeliveries, deliveredDeliveries, cancelledDeliveries] = await Promise.all([
-      DeliveryModel.countDocuments({ deliveryPerson: user._id }),
-      DeliveryModel.countDocuments({ deliveryPerson: user._id, status: 'Pending' }),
-      DeliveryModel.countDocuments({ deliveryPerson: user._id, status: 'Accepted' }),
-      DeliveryModel.countDocuments({ deliveryPerson: user._id, status: 'PickedUp' }),
-      DeliveryModel.countDocuments({ deliveryPerson: user._id, status: 'Delivered' }),
-      DeliveryModel.countDocuments({ deliveryPerson: user._id, status: 'Cancelled' })
+      DeliveryModel.countDocuments(baseQuery),
+      DeliveryModel.countDocuments({ ...baseQuery, status: 'Pending' }),
+      DeliveryModel.countDocuments({ ...baseQuery, status: 'Accepted' }),
+      DeliveryModel.countDocuments({ ...baseQuery, status: 'PickedUp' }),
+      DeliveryModel.countDocuments({ ...baseQuery, status: 'Delivered' }),
+      DeliveryModel.countDocuments({ ...baseQuery, status: 'Cancelled' })
     ]);
 
-    // Calculate average rating
+    // Calculate average rating (with date filter)
     const ratingResult = await DeliveryModel.aggregate([
-      { $match: { deliveryPerson: user._id, rating: { $exists: true } } },
+      { $match: { ...baseQuery, rating: { $exists: true } } },
       { $group: { _id: null, averageRating: { $avg: '$rating' } } }
     ]);
 
-    // Calculate total earnings
+    // Calculate total earnings (with date filter)
     const earningsResult = await DeliveryModel.aggregate([
-      { $match: { deliveryPerson: user._id, status: 'Delivered' } },
+      { $match: { ...baseQuery, status: 'Delivered' } },
       { $group: { _id: null, totalEarnings: { $sum: '$deliveryFee' } } }
     ]);
 
+    // Calculate online payment earnings (populate order to get payment method)
+    const deliveries = await DeliveryModel.find({ ...baseQuery, status: 'Delivered' }).populate('order');
+    const onlinePaymentEarnings = deliveries
+      .filter((d: any) => d.order?.paymentMethod === 'Online')
+      .reduce((sum: number, d: any) => sum + (d.deliveryFee || 0), 0);
+
     const stats = {
       totalDeliveries,
-      pendingDeliveries,
-      acceptedDeliveries,
-      pickedUpDeliveries,
-      deliveredDeliveries,
-      cancelledDeliveries,
+      pending: pendingDeliveries + acceptedDeliveries + pickedUpDeliveries, // All in-progress deliveries
+      completed: deliveredDeliveries,
+      cancelled: cancelledDeliveries,
       averageRating: ratingResult[0]?.averageRating || 0,
-      totalEarnings: earningsResult[0]?.totalEarnings || 0
+      totalEarnings: earningsResult[0]?.totalEarnings || 0,
+      onlinePaymentEarnings
     };
 
     return res.status(200).json({

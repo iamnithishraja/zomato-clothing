@@ -14,6 +14,7 @@ interface User {
   isEmailVerified: boolean;
   isProfileComplete: boolean;
   role: 'User' | 'Merchant' | 'Delivery';
+  isBusy?: boolean; // For delivery partners
   createdAt?: string;
   updatedAt?: string;
 }

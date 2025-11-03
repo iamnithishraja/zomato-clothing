@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
@@ -18,7 +18,10 @@ export default function MerchantOrderDetails() {
     try {
       setLoading(true);
       const res = await apiClient.get(`/api/v1/order/${orderId}`);
-      if (res.data?.success) setOrder(res.data.order);
+      if (res.data?.success) {
+        console.log('Order loaded, status:', res.data.order.status);
+        setOrder(res.data.order);
+      }
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.message || 'Failed to load order');
     } finally {
@@ -26,9 +29,19 @@ export default function MerchantOrderDetails() {
     }
   }, [orderId]);
 
+  // Reload on initial mount
   useEffect(() => {
     if (orderId) load();
   }, [orderId, load]);
+
+  // Reload when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (orderId) {
+        load();
+      }
+    }, [orderId, load])
+  );
 
   const totals = useMemo(() => {
     if (!order) return { items: 0, qty: 0 };
@@ -40,10 +53,15 @@ export default function MerchantOrderDetails() {
   const acceptOrder = async () => {
     try {
       setProcessing(true);
-      await apiClient.post(`/api/v1/merchant-order/${orderId}/accept`);
+      const response = await apiClient.post(`/api/v1/merchant-order/${orderId}/accept`);
+      console.log('Accept response:', response.data);
+      
+      // Reload the order to get updated status
       await load();
-      Alert.alert('Accepted', 'Order accepted');
+      
+      Alert.alert('Success', 'Order accepted successfully!');
     } catch (e: any) {
+      console.error('Accept error:', e);
       Alert.alert('Error', e.response?.data?.message || 'Failed to accept');
     } finally {
       setProcessing(false);
@@ -51,16 +69,21 @@ export default function MerchantOrderDetails() {
   };
 
   const rejectOrder = async () => {
-    Alert.alert('Reject Order', 'Provide a reason?', [
+    Alert.alert('Reject Order', 'Are you sure you want to reject this order?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reject', style: 'destructive', onPress: async () => {
           try {
             setProcessing(true);
-            await apiClient.post(`/api/v1/merchant-order/${orderId}/reject`, { reason: 'Item unavailable' });
+            const response = await apiClient.post(`/api/v1/merchant-order/${orderId}/reject`, { reason: 'Item unavailable' });
+            console.log('Reject response:', response.data);
+            
+            // Reload the order to get updated status
             await load();
-            Alert.alert('Rejected', 'Order rejected');
+            
+            Alert.alert('Success', 'Order rejected');
           } catch (e: any) {
+            console.error('Reject error:', e);
             Alert.alert('Error', e.response?.data?.message || 'Failed to reject');
           } finally {
             setProcessing(false);
@@ -73,10 +96,15 @@ export default function MerchantOrderDetails() {
   const markReady = async () => {
     try {
       setProcessing(true);
-      await apiClient.post(`/api/v1/merchant-order/${orderId}/ready`);
+      const response = await apiClient.post(`/api/v1/merchant-order/${orderId}/ready`);
+      console.log('Mark ready response:', response.data);
+      
+      // Reload the order to get updated status
       await load();
-      Alert.alert('Updated', 'Marked Ready for Pickup');
+      
+      Alert.alert('Success', 'Order marked as ready for pickup!');
     } catch (e: any) {
+      console.error('Mark ready error:', e);
       Alert.alert('Error', e.response?.data?.message || 'Failed to mark ready');
     } finally {
       setProcessing(false);
@@ -181,7 +209,7 @@ export default function MerchantOrderDetails() {
                     
                     {typeof available === 'number' && (
                       <View style={[styles.stockBadge, shortfall && styles.stockBadgeWarning]}>
-                        <Text style={[styles.stockText, shortfall && styles.stockTextWarning]}>
+                        <Text style={[styles.stockText, shortfall && styles.stockTextWarn]}>
                           {shortfall ? '⚠️' : '✓'} Stock: {available}{shortfall ? ' (Low!)' : ''}
                         </Text>
                       </View>
@@ -261,42 +289,54 @@ export default function MerchantOrderDetails() {
           {order.status === 'Pending' ? (
             <View style={styles.actionButtons}>
               <TouchableOpacity 
-                style={[styles.actionButton, styles.rejectButton]} 
+                style={[styles.actionButton, styles.rejectButton, processing && styles.buttonDisabled]} 
                 disabled={processing} 
                 onPress={rejectOrder}
                 activeOpacity={0.8}
               >
-                <Text style={styles.actionButtonText}>✕ Reject</Text>
+                {processing ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.actionButtonText}>✕ Reject</Text>
+                )}
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.actionButton, styles.acceptButton]} 
+                style={[styles.actionButton, styles.acceptButton, processing && styles.buttonDisabled]} 
                 disabled={processing} 
                 onPress={acceptOrder}
                 activeOpacity={0.8}
               >
                 <LinearGradient 
-                  colors={['#4CAF50', '#45a049']} 
+                  colors={processing ? ['#CCCCCC', '#999999'] : ['#4CAF50', '#45a049']} 
                   style={styles.actionButtonGradient}
                 >
-                  <Text style={styles.actionButtonText}>✓ Accept Order</Text>
+                  {processing ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.actionButtonText}>✓ Accept Order</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity 
-              style={styles.actionButtonFull} 
+              style={[styles.actionButtonFull, processing && styles.buttonDisabled]} 
               disabled={processing} 
               onPress={markReady}
               activeOpacity={0.8}
             >
               <LinearGradient 
-                colors={Colors.gradients.primary as [string, string]} 
+                colors={processing ? ['#CCCCCC', '#999999'] : Colors.gradients.primary as [string, string]} 
                 style={styles.actionButtonGradient}
               >
-                <Text style={[styles.actionButtonText, styles.actionButtonTextLarge]}>
-                  ✓ Mark Ready for Pickup
-                </Text>
+                {processing ? (
+                  <ActivityIndicator color={Colors.textPrimary} size="small" />
+                ) : (
+                  <Text style={[styles.actionButtonText, styles.actionButtonTextLarge]}>
+                    ✓ Mark Ready for Pickup
+                  </Text>
+                )}
               </LinearGradient>
             </TouchableOpacity>
           )}
@@ -345,14 +385,13 @@ const styles = StyleSheet.create({
     flex: 1 
   },
   orderNumber: { 
-    fontSize: 28, 
+    fontSize: 14, 
     fontWeight: '900', 
     color: '#FFFFFF',
     letterSpacing: 0.5
   },
   orderMeta: { 
-    marginTop: 6, 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     opacity: 0.9,
     fontSize: 15,
     fontWeight: '600'
@@ -366,7 +405,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   closeButtonText: { 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     fontWeight: '800',
     fontSize: 20
   },
@@ -374,7 +413,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center',
     gap: 12,
-    marginBottom: 16
+    marginBottom: 6
   },
   statusBadge: { 
     paddingHorizontal: 16, 
@@ -387,7 +426,7 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   statusText: { 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     fontWeight: '800',
     fontSize: 13,
     letterSpacing: 0.5,
@@ -402,14 +441,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end'
   },
   amountLabel: { 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     fontSize: 11,
     fontWeight: '600',
     opacity: 0.8,
     marginBottom: 2
   },
   amountValue: { 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     fontWeight: '900',
     fontSize: 20,
     letterSpacing: 0.5
@@ -428,7 +467,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(76, 175, 80, 0.3)'
   },
   pillText: { 
-    color: '#FFFFFF', 
+    color: '#000000FF', 
     fontWeight: '700',
     fontSize: 13
   },
@@ -642,8 +681,8 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: 5,
+    paddingBottom: 5,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
@@ -661,14 +700,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    paddingVertical: 2
   },
   rejectButton: {
     backgroundColor: '#F44336',
-    paddingVertical: 18
   },
   acceptButton: {
-    backgroundColor: 'transparent'
+    backgroundColor: '#4CAF50',
+
   },
   actionButtonFull: {
     borderRadius: 16,
@@ -680,12 +720,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   actionButtonText: {
-    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 16,
     letterSpacing: 0.5
   },
   actionButtonTextLarge: {
     fontSize: 17
+  },
+  buttonDisabled: {
+    opacity: 0.6
   }
 });

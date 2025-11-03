@@ -481,9 +481,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   orderNumber: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#FFD700',
+    color: '#000000FF',
     letterSpacing: 1,
   },
   card: {

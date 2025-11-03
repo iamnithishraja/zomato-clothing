@@ -337,22 +337,13 @@ const OrderManagement: React.FC = () => {
                   key={order._id} 
                   style={styles.orderCard}
                 >
-                  {/* Order Header */}
-                  <View style={styles.orderHeader}>
-                    <View style={styles.orderHeaderLeft}>
-                      <View style={[styles.orderIconContainer, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-                        <Ionicons 
-                          name={getStatusIcon(order.status) as any} 
-                          size={20} 
-                          color={getStatusColor(order.status)} 
-                        />
-                      </View>
-                      <View style={styles.orderHeaderInfo}>
-                        <Text style={styles.orderNumber}>
-                          #{order.orderNumber || order._id.slice(-8)}
-                        </Text>
-                        <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
-                      </View>
+                  {/* Order Header - Order ID Top Row */}
+                  <View style={styles.orderIdRow}>
+                    <View style={styles.orderIdLeft}>
+                      <Text style={styles.orderIdLabel}>Order ID:</Text>
+                      <Text style={styles.orderIdValue}>
+                        #{order.orderNumber || order._id.slice(-8)}
+                      </Text>
                     </View>
                     <View style={styles.headerRightRow}>
                       <TouchableOpacity style={styles.viewBtn} onPress={() => router.push(`/(merchantTabs)/orders/${order._id}` as any)}>
@@ -361,6 +352,20 @@ const OrderManagement: React.FC = () => {
                       <View style={[styles.statusPill, { backgroundColor: getStatusColor(order.status) }]}>
                         <Text style={styles.statusText}>{order.status}</Text>
                       </View>
+                    </View>
+                  </View>
+
+                  {/* Order Info Row */}
+                  <View style={styles.orderInfoRow}>
+                    <View style={[styles.orderIconContainer, { backgroundColor: getStatusColor(order.status) + '20' }]}>
+                      <Ionicons 
+                        name={getStatusIcon(order.status) as any} 
+                        size={20} 
+                        color={getStatusColor(order.status)} 
+                      />
+                    </View>
+                    <View style={styles.orderMetaInfo}>
+                      <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
                     </View>
                   </View>
 
@@ -679,21 +684,44 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  orderHeader: {
+  orderIdRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  orderIdLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 12,
+  },
+  orderIdLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    flexShrink: 0,
+  },
+  orderIdValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    flexShrink: 1,
   },
   headerRightRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
-  orderHeaderLeft: {
+  orderInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 12,
   },
   orderIconContainer: {
     width: 44,
@@ -703,14 +731,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  orderHeaderInfo: {
+  orderMetaInfo: {
     flex: 1,
-  },
-  orderNumber: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 2,
   },
   orderDate: {
     fontSize: 13,
@@ -721,6 +743,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
+    flexShrink: 0,
   },
   viewBtn: {
     paddingHorizontal: 10,
@@ -729,10 +752,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
+    flexShrink: 0,
   },
   viewBtnText: {
     color: Colors.textSecondary,
     fontWeight: '700',
+    fontSize: 13,
   },
   statusText: {
     fontSize: 11,

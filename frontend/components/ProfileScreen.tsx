@@ -398,6 +398,48 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     }
   };
 
+  // Merchant store address map picker
+  const [isForStoreAddress, setIsForStoreAddress] = useState(false);
+
+  const openMapForStoreAddress = async () => {
+    try {
+      setIsForStoreAddress(true);
+      setMapVisible(true);
+      
+      // Try to get store's location from existing address or use current location
+      let initLat = (await getCurrentLocation())?.latitude || 12.9716;
+      let initLng = (await getCurrentLocation())?.longitude || 77.5946;
+      
+      setMapRegion({
+        latitude: initLat,
+        longitude: initLng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    } catch {
+      // noop
+    }
+  };
+
+  const saveStoreAddress = async (address: string, mapLink: string) => {
+    try {
+      const response = await apiClient.put('/api/v1/store/update', {
+        address: address,
+        mapLink: mapLink
+      });
+
+      if (response.data.success) {
+        setStoreDetails(response.data.store);
+        Alert.alert('Success', 'Store address updated successfully!');
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to update store address');
+      }
+    } catch (error: any) {
+      console.error('Error updating store address:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update store address');
+    }
+  };
+
   const handleGetAddressFromLocation = async () => {
     try {
       setIsSavingAddresses(true);
@@ -546,13 +588,15 @@ const notAuthenticatedView = (
               </Text>
             </View>
 
-            <View style={styles.statCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: '#F3E5F5' }]}>
-                <Ionicons name="location" size={24} color="#9C27B0" />
+            {user.role !== 'Delivery' && (
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#F3E5F5' }]}>
+                  <Ionicons name="location" size={24} color="#9C27B0" />
+                </View>
+                <Text style={styles.statLabel}>{user.role === 'Merchant' ? 'Store' : 'Addresses'}</Text>
+                <Text style={styles.statValue}>{user.role === 'Merchant' ? (storeDetails ? '1' : '0') : addresses.length}</Text>
               </View>
-              <Text style={styles.statLabel}>Addresses</Text>
-              <Text style={styles.statValue}>{addresses.length}</Text>
-            </View>
+            )}
 
             <View style={styles.statCard}>
               <View style={[styles.statIconContainer, { backgroundColor: '#E8F5E9' }]}>
@@ -563,6 +607,16 @@ const notAuthenticatedView = (
                 {(user.isEmailVerified ? 1 : 0) + (user.isPhoneVerified ? 1 : 0)}/2
               </Text>
             </View>
+
+            {user.role === 'Delivery' && (
+              <View style={styles.statCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
+                  <Ionicons name="bicycle" size={24} color="#FF9800" />
+                </View>
+                <Text style={styles.statLabel}>Status</Text>
+                <Text style={styles.statValue}>{user.isBusy ? 'Busy' : 'Available'}</Text>
+              </View>
+            )}
           </View>
 
           {/* Personal Information */}
@@ -639,8 +693,8 @@ const notAuthenticatedView = (
             </View>
           </View>
 
-          {/* Addresses Section */}
-          {user.role !== 'Merchant' ? (
+          {/* Addresses Section - Hidden for Delivery partners */}
+          {user.role === 'User' ? (
             // User addresses (unchanged)
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -704,14 +758,25 @@ const notAuthenticatedView = (
                 )}
               </View>
             </View>
-          ) : (
+          ) : user.role === 'Merchant' ? (
             // Merchant single store address preview
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Store Address</Text>
-                <TouchableOpacity onPress={() => router.push('/auth/StoreDetails')}>
-                  <Ionicons name="create-outline" size={22} color={Colors.primary} />
-                </TouchableOpacity>
+                <View style={styles.sectionHeaderRight}>
+                  {storeDetails && (
+                    <TouchableOpacity 
+                      style={styles.pickAddressButton}
+                      onPress={() => openMapForStoreAddress()}
+                    >
+                      <Ionicons name="map-outline" size={16} color={Colors.buttonPrimary} />
+                      <Text style={styles.pickAddressButtonText}>Update from Map</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => router.push('/auth/StoreDetails')}>
+                    <Ionicons name="create-outline" size={22} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.card}>
                 {storeDetails ? (
@@ -720,14 +785,14 @@ const notAuthenticatedView = (
                       <Ionicons name="storefront" size={18} color={Colors.primary} />
                       <Text style={{ fontWeight: '700', color: Colors.textPrimary }}>{storeDetails.storeName}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                      <Ionicons name="location" size={18} color={Colors.primary} />
-                      <Text style={{ color: Colors.textPrimary, flex: 1 }}>{storeDetails.address}</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                      <Ionicons name="location" size={18} color={Colors.primary} style={{ marginTop: 2 }} />
+                      <Text style={{ color: Colors.textPrimary, flex: 1, lineHeight: 22 }}>{storeDetails.address}</Text>
                     </View>
                     {storeDetails.mapLink ? (
                       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                         <Ionicons name="map" size={18} color={Colors.primary} />
-                        <Text style={{ color: Colors.textSecondary }} numberOfLines={1}>{storeDetails.mapLink}</Text>
+                        <Text style={{ color: Colors.textSecondary, fontSize: 12 }} numberOfLines={1}>{storeDetails.mapLink}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -747,7 +812,7 @@ const notAuthenticatedView = (
                 )}
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Merchant Store Settings Shortcut */}
           {user.role === 'Merchant' && (
@@ -1149,24 +1214,39 @@ const notAuthenticatedView = (
       >
         <LocationPickerScreen
           initialRegion={mapRegion || undefined}
-          title="Choose Location"
-          onClose={closeMap}
-          onConfirm={({ formattedAddress }) => {
-            // Map -> Address modal form
-            const parts = formattedAddress.split(',').map(p => p.trim());
-            setAddressFormData(prev => ({
-              ...prev,
-              line1: parts[0] || prev.line1,
-              line2: parts[1] || prev.line2,
-              city: parts[2] || prev.city,
-              state: parts[3] || prev.state,
-              country: parts[5] || prev.country,
-              pincode: parts[4] || prev.pincode,
-            }));
+          title={isForStoreAddress ? "Choose Store Location" : "Choose Location"}
+          onClose={() => {
             setMapVisible(false);
+            setIsForStoreAddress(false);
             if (reopenAddressAfterMap) {
               setAddressModalVisible(true);
               setReopenAddressAfterMap(false);
+            }
+          }}
+          onConfirm={({ latitude, longitude, formattedAddress }) => {
+            if (isForStoreAddress) {
+              // Save to store details
+              const mapLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+              saveStoreAddress(formattedAddress, mapLink);
+              setMapVisible(false);
+              setIsForStoreAddress(false);
+            } else {
+              // Map -> Address modal form (for user addresses)
+              const parts = formattedAddress.split(',').map(p => p.trim());
+              setAddressFormData(prev => ({
+                ...prev,
+                line1: parts[0] || prev.line1,
+                line2: parts[1] || prev.line2,
+                city: parts[2] || prev.city,
+                state: parts[3] || prev.state,
+                country: parts[5] || prev.country,
+                pincode: parts[4] || prev.pincode,
+              }));
+              setMapVisible(false);
+              if (reopenAddressAfterMap) {
+                setAddressModalVisible(true);
+                setReopenAddressAfterMap(false);
+              }
             }
           }}
         />
@@ -1447,6 +1527,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  pickAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.buttonPrimary,
+    gap: 4,
+    marginRight: 12,
+  },
+  pickAddressButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.buttonPrimary,
   },
   addAddressContainer: {
     marginTop: 8,

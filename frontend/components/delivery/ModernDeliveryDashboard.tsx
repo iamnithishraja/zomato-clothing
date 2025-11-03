@@ -279,7 +279,15 @@ const ModernDeliveryDashboard: React.FC = () => {
                         <Text style={styles.amountValue}>₹{formatINR(delivery.deliveryFee)}</Text>
                       </View>
                       
-                      <TouchableOpacity style={styles.viewButton}>
+                      <TouchableOpacity 
+                        style={styles.viewButton}
+                        onPress={() => {
+                          router.push({
+                            pathname: '/(deliveryTabs)/order-details',
+                            params: { deliveryId: delivery._id }
+                          } as any);
+                        }}
+                      >
                         <Text style={styles.viewButtonText}>View Details</Text>
                         <Ionicons name="arrow-forward" size={16} color="#667eea" />
                       </TouchableOpacity>

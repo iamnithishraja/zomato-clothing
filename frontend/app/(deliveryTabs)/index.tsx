@@ -143,38 +143,44 @@ export default function DeliveryHome() {
       {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsContainer}>
+        <View style={styles.actionsContainerColumn}>
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={styles.actionCardFull}
             onPress={() => router.push('/(deliveryTabs)/delivery' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="bicycle" size={28} color="#FFD700" />
             </View>
-            <Text style={styles.actionTitle}>Toggle Online</Text>
-            <Text style={styles.actionSubtitle}>Start/stop accepting orders</Text>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Toggle Online</Text>
+              <Text style={styles.actionSubtitle}>Start/stop accepting orders</Text>
+            </View>
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={styles.actionCardFull}
             onPress={() => router.push('/(deliveryTabs)/delivery' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="list" size={28} color="#FFD700" />
             </View>
-            <Text style={styles.actionTitle}>View Orders</Text>
-            <Text style={styles.actionSubtitle}>Check pending deliveries</Text>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>View Orders</Text>
+              <Text style={styles.actionSubtitle}>Check pending deliveries</Text>
+            </View>
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={styles.actionCardFull}
             onPress={() => router.push('/(deliveryTabs)/settlement' as any)}
           >
             <View style={styles.actionIcon}>
               <Ionicons name="wallet" size={28} color="#FFD700" />
             </View>
-            <Text style={styles.actionTitle}>Settlements</Text>
-            <Text style={styles.actionSubtitle}>COD & payouts</Text>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Settlements</Text>
+              <Text style={styles.actionSubtitle}>COD & payouts</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -358,7 +364,22 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 12,
   },
+  actionsContainerColumn: {
+    gap: 12,
+  },
   actionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  actionCardFull: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 20,
@@ -378,6 +399,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+    flexShrink: 0,
+  },
+  actionContent: {
+    flex: 1,
   },
   actionTitle: {
     fontSize: 17,

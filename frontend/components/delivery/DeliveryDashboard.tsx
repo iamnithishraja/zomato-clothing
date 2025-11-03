@@ -18,15 +18,7 @@ import apiClient from '@/api/client';
 
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+// Removed unused date formatter
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -211,14 +203,14 @@ const DeliveryDashboard: React.FC = () => {
               </LinearGradient>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/delivery/settlement' as any)}>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
               <LinearGradient
                 colors={['#FFA500', '#FF8C00']}
                 style={styles.statGradient}
               >
                 <Ionicons name="cash-outline" size={32} color="#FFFFFF" />
                 <Text style={styles.statNumber}>₹{formatINR(stats.totalEarnings || 0)}</Text>
-                <Text style={styles.statLabel}>Earnings</Text>
+                <Text style={styles.statLabel}>Deliverys</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -303,12 +295,7 @@ const DeliveryDashboard: React.FC = () => {
                       </Text>
                     </View>
                     
-                    <View style={styles.infoRow}>
-                      <Ionicons name="cash-outline" size={16} color={Colors.success} />
-                      <Text style={styles.infoText}>
-                        Delivery Fee: ₹{formatINR(delivery.deliveryFee)}
-                      </Text>
-                    </View>
+                    {/* Removed delivery fee row */}
 
                     {order && order.paymentMethod === 'COD' && (
                       <View style={styles.infoRow}>
@@ -470,10 +457,7 @@ const DeliveryDashboard: React.FC = () => {
                     <Text style={styles.statusText}>{selectedDelivery.status}</Text>
                   </View>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Delivery Fee</Text>
-                  <Text style={styles.detailValue}>₹{formatINR(selectedDelivery.deliveryFee)}</Text>
-                </View>
+                {/* Removed delivery fee details */}
               </View>
 
               <View style={styles.modalSection}>

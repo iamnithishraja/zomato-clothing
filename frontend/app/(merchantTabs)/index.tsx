@@ -45,15 +45,7 @@ export default function MerchantHome() {
         setStats(prev => ({ ...prev, pendingOrders: pendingResp.data.pagination?.totalOrders || 0 }));
       }
 
-      // Settlement earnings snapshot for current month
-      const end = new Date();
-      const start = new Date(end);
-      start.setMonth(end.getMonth() - 1);
-      const settleResp = await apiClient.get('/api/v1/settlement/report', { params: { startDate: start.toISOString(), endDate: end.toISOString() } });
-      if (settleResp.data?.success) {
-        const summary = settleResp.data.report?.summary;
-        setStats(prev => ({ ...prev, totalEarnings: Math.round(summary?.totalItemsValue || 0) }));
-      }
+      // Removed settlements snapshot
 
       // Store rating from store details
       const storeResp = await apiClient.get('/api/v1/store/details');
@@ -149,13 +141,7 @@ export default function MerchantHome() {
           <Text style={styles.statNumber}>{isLoading ? '...' : stats.pendingOrders}</Text>
           <Text style={styles.statLabel}>Pending Acceptance</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/settlement' as any)}>
-          <View style={styles.statIcon}>
-            <Ionicons name="wallet" size={24} color={Colors.primary} />
-          </View>
-          <Text style={styles.statNumber}>{isLoading ? '...' : `₹${Math.round(stats.totalEarnings)}`}</Text>
-          <Text style={styles.statLabel}>Earnings (month)</Text>
-        </TouchableOpacity>
+        {/* Removed settlements earnings card */}
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
             <Ionicons name="star" size={24} color={Colors.warning} />
@@ -211,18 +197,9 @@ export default function MerchantHome() {
           
 
 
-           <TouchableOpacity 
-             style={styles.actionCard}
-             onPress={() => router.push('/settlement' as any)}
-          >
-            <View style={styles.actionIcon}>
-              <Ionicons name="wallet" size={28} color={Colors.primary} />
-            </View>
-            <Text style={styles.actionTitle}>Settlements</Text>
-            <Text style={styles.actionSubtitle}>View earnings and payouts</Text>
-          </TouchableOpacity>
+          {/* Removed settlements quick action */}
 
-          <TouchableOpacity 
+          {/* <TouchableOpacity 
             style={styles.actionCard}
             onPress={() => router.push('/(merchantTabs)/profile?openStore=true' as any)}
           >
@@ -231,7 +208,7 @@ export default function MerchantHome() {
             </View>
             <Text style={styles.actionTitle}>Store Settings</Text>
             <Text style={styles.actionSubtitle}>Manage store information</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
 

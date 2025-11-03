@@ -14,7 +14,6 @@ import merchantOrderRoute from "./routes/merchantOrderRoutes";
 import codRoute from "./routes/codRoutes";
 import storeRatingRoute from "./routes/storeRatingRoutes";
 import deliveryAssignmentRoute from "./routes/deliveryAssignmentRoutes";
-import settlementRoute from "./routes/settlementRoutes";
 import directionsRoute from "./routes/directionsRoutes";
 import geocodeRoute from "./routes/geocodeRoutes";
 import { initializeRazorpay } from "./controllers/paymentController";
@@ -73,7 +72,6 @@ app.use("/api/v1/merchant-order", merchantOrderRoute);
 app.use("/api/v1/cod", codRoute);
 app.use("/api/v1/stores", storeRatingRoute);
 app.use("/api/v1/delivery-assignment", deliveryAssignmentRoute);
-app.use("/api/v1/settlement", settlementRoute);
 app.use("/api/v1", directionsRoute);
 app.use("/api/v1", geocodeRoute);
 

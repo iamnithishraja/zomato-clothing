@@ -42,13 +42,7 @@ export default function MerchantTabLayout() {
           ),
         }}
       />
-      {/* Keep Settlement registered in tabs but hide it from the tab bar */}
-      <Tabs.Screen
-        name="settlement"
-        options={{
-          href: null,
-        }}
-      />
+      {/* Removed Settlements route */}
             <Tabs.Screen
         name="orders/[id]"
         options={{

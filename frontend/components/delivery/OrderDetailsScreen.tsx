@@ -463,12 +463,7 @@ const OrderDetailsScreen: React.FC = () => {
             <Text style={styles.paymentLabel}>Order Total</Text>
             <Text style={styles.paymentValue}>₹{formatINR(order?.totalAmount || 0)}</Text>
           </View>
-          <View style={styles.paymentRow}>
-            <Text style={styles.paymentLabel}>Your Earning</Text>
-            <Text style={[styles.paymentValue, { color: '#4CAF50', fontWeight: '800' }]}>
-              ₹{formatINR(delivery.deliveryFee)}
-            </Text>
-          </View>
+          {/* Removed delivery partner earning/fee */}
           
           {order?.paymentMethod === 'COD' && (
             <View style={[styles.codStatusCard, order?.paymentStatus === 'Completed' ? styles.codCollected : styles.codPending]}>

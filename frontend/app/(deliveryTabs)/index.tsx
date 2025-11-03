@@ -107,7 +107,7 @@ export default function DeliveryHome() {
           >
             <Ionicons name="checkmark-circle" size={28} color="#FFFFFF" />
             <View style={styles.statContent}>
-              <Text style={styles.statNumber}>{isLoading ? '...' : stats.deliveredDeliveries || 0}</Text>
+              <Text style={styles.statNumber}>{isLoading ? '...' : (stats.completed || 0)}</Text>
               <Text style={styles.statLabel}>Completed</Text>
             </View>
           </LinearGradient>
@@ -126,15 +126,15 @@ export default function DeliveryHome() {
           </LinearGradient>
         </TouchableOpacity> */}
         
-        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/settlement' as any)}>
+        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
           <LinearGradient
-            colors={['#667eea', '#764ba2']}
+            colors={['#2196F3', '#1976D2']}
             style={styles.statGradient}
           >
-            <Ionicons name="cash" size={28} color="#FFFFFF" />
+            <Ionicons name="bicycle" size={28} color="#FFFFFF" />
             <View style={styles.statContent}>
-              <Text style={styles.statNumber}>{isLoading ? '...' : `₹${Math.round(stats.totalEarnings || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}</Text>
-              <Text style={styles.statLabel}>Earnings</Text>
+              <Text style={styles.statNumber}>{isLoading ? '...' : (stats.pending || 0)}</Text>
+              <Text style={styles.statLabel}>Active</Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -170,18 +170,7 @@ export default function DeliveryHome() {
             </View>
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            style={styles.actionCardFull}
-            onPress={() => router.push('/(deliveryTabs)/settlement' as any)}
-          >
-            <View style={styles.actionIcon}>
-              <Ionicons name="wallet" size={28} color="#FFD700" />
-            </View>
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Settlements</Text>
-              <Text style={styles.actionSubtitle}>COD & payouts</Text>
-            </View>
-          </TouchableOpacity>
+          {/* Removed Earnings quick action */}
         </View>
       </View>
 
@@ -218,7 +207,7 @@ export default function DeliveryHome() {
                     {new Date(d.createdAt).toLocaleDateString()} • {new Date(d.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
-                <Text style={styles.activityAmount}>+₹{d.deliveryFee || 0}</Text>
+              {/* Removed delivery fee from recent activity */}
               </TouchableOpacity>
             ))
           )}

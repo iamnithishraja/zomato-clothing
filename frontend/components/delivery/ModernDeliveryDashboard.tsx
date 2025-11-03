@@ -145,10 +145,7 @@ const ModernDeliveryDashboard: React.FC = () => {
             <Text style={styles.statMiniValue}>{getActiveDeliveries().length}</Text>
             <Text style={styles.statMiniLabel}>Active</Text>
           </View>
-          <View style={styles.statMiniCard}>
-            <Text style={styles.statMiniValue}>₹{formatINR(stats?.totalEarnings || 0)}</Text>
-            <Text style={styles.statMiniLabel}>Earned</Text>
-          </View>
+          {/* Removed Earned card */}
         </View>
       </LinearGradient>
 
@@ -272,13 +269,8 @@ const ModernDeliveryDashboard: React.FC = () => {
                       </View>
                     </View>
 
-                    {/* Amount & Action */}
+                    {/* Action */}
                     <View style={styles.cardFooter}>
-                      <View style={styles.amountContainer}>
-                        <Text style={styles.amountLabel}>Delivery Fee</Text>
-                        <Text style={styles.amountValue}>₹{formatINR(delivery.deliveryFee)}</Text>
-                      </View>
-                      
                       <TouchableOpacity 
                         style={styles.viewButton}
                         onPress={() => {

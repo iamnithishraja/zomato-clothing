@@ -30,11 +30,7 @@ export interface IPayment extends Document {
   codSubmittedToStore?: boolean;
   codSubmittedAt?: Date;
   
-  // Payout to merchant
-  payoutStatus: "Pending" | "Processing" | "Completed" | "Failed";
-  payoutAmount?: number;
-  payoutDate?: Date;
-  payoutTransactionId?: string;
+  // Payout fields removed – settlements/payouts no longer tracked
   
   // Metadata
   metadata?: any;
@@ -137,23 +133,7 @@ const paymentSchema: Schema = new Schema(
       type: Date
     },
     
-    // Payout to merchant
-    payoutStatus: {
-      type: String,
-      enum: ["Pending", "Processing", "Completed", "Failed"],
-      default: "Pending"
-    },
-    payoutAmount: {
-      type: Number,
-      min: 0
-    },
-    payoutDate: {
-      type: Date
-    },
-    payoutTransactionId: {
-      type: String,
-      trim: true
-    },
+    // Payout fields removed – settlements/payouts no longer tracked
     
     // Metadata
     metadata: {
@@ -172,14 +152,14 @@ const paymentSchema: Schema = new Schema(
 // Indexes for faster queries
 paymentSchema.index({ order: 1 }); // Single order lookup
 paymentSchema.index({ user: 1 }); // User payment history
-paymentSchema.index({ store: 1, payoutStatus: 1 }); // Store payout queries
+// Removed payout-related index
 paymentSchema.index({ paymentStatus: 1 }); // Payment status queries
-paymentSchema.index({ payoutStatus: 1 }); // Payout status queries
+// Removed payout-related index
 paymentSchema.index({ gatewayOrderId: 1 }); // Razorpay webhook lookup
 paymentSchema.index({ gatewayPaymentId: 1 }); // Razorpay payment lookup
 paymentSchema.index({ paymentMethod: 1, codSubmittedToStore: 1 }); // COD collection queries
 paymentSchema.index({ paymentMethod: 1, codCollectedBy: 1 }); // Delivery person COD
-paymentSchema.index({ store: 1, paymentStatus: 1, codSubmittedToStore: 1 }); // Settlement queries
+paymentSchema.index({ store: 1, paymentStatus: 1, codSubmittedToStore: 1 }); // Store payment queries
 
 const PaymentModel = mongoose.model<IPayment>("Payment", paymentSchema);
 

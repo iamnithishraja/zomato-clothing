@@ -13,8 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
-import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { Region } from 'react-native-maps';
 import { useLocation } from '@/contexts/LocationContext';
+import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
 
 interface Address {
   id: string;
@@ -34,7 +35,7 @@ export default function AddressSelector({
   onAddNewAddress 
 }: AddressSelectorProps) {
   const { user } = useAuth();
-  const { currentLocation, reverseGeocode, getCurrentLocation } = useLocation();
+  const { currentLocation, getCurrentLocation } = useLocation();
   const [modalVisible, setModalVisible] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,8 +43,6 @@ export default function AddressSelector({
   const [showAddForm, setShowAddForm] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [pickedAddress, setPickedAddress] = useState<string>('');
 
   useEffect(() => {
     if (modalVisible) {
@@ -115,7 +114,6 @@ export default function AddressSelector({
 
   const openMap = useCallback(async () => {
     try {
-      setMapVisible(true);
       // Initialize region from current location or a sensible default
       let initLat = currentLocation?.latitude ?? 12.9716; // Bengaluru default
       let initLng = currentLocation?.longitude ?? 77.5946;
@@ -132,33 +130,15 @@ export default function AddressSelector({
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
-      // Prime initial address
-      setIsGeocoding(true);
-      const addr = await reverseGeocode(initLat, initLng);
-      setPickedAddress(addr?.formattedAddress || '');
+      setMapVisible(true);
     } catch {
       // noop
-    } finally {
-      setIsGeocoding(false);
     }
-  }, [currentLocation, getCurrentLocation, reverseGeocode]);
+  }, [currentLocation, getCurrentLocation]);
 
-  const onRegionChangeComplete = useCallback(async (region: Region) => {
-    setMapRegion(region);
-    setIsGeocoding(true);
-    try {
-      const addr = await reverseGeocode(region.latitude, region.longitude);
-      setPickedAddress(addr?.formattedAddress || '');
-    } finally {
-      setIsGeocoding(false);
-    }
-  }, [reverseGeocode]);
-
-  const confirmPickedAddress = () => {
-    if (pickedAddress) {
-      setNewAddress(pickedAddress);
-      setMapVisible(false);
-    }
+  const confirmPickedAddress = async (params: { latitude: number; longitude: number; formattedAddress: string }) => {
+    setNewAddress(params.formattedAddress);
+    setMapVisible(false);
   };
 
   return (
@@ -311,49 +291,19 @@ export default function AddressSelector({
         </View>
       </Modal>
 
-      {/* Map Picker Modal */}
+      {/* Optimized Map Picker Modal */}
       <Modal
         visible={mapVisible}
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={() => setMapVisible(false)}
       >
-        <View style={styles.mapContainer}>
-          <View style={styles.mapHeader}>
-            <TouchableOpacity onPress={() => setMapVisible(false)} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Choose Location</Text>
-            <View style={styles.placeholder} />
-          </View>
-          {mapRegion && (
-            <View style={{ flex: 1 }}>
-              <MapView
-                style={{ flex: 1 }}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={mapRegion}
-                onRegionChangeComplete={onRegionChangeComplete}
-              />
-              {/* Center pin */}
-              <View pointerEvents="none" style={styles.centerPinWrapper}>
-                <Ionicons name="location-sharp" size={36} color={Colors.primary} />
-              </View>
-            </View>
-          )}
-          <View style={styles.mapFooter}>
-            <Text style={styles.addressPreviewLabel}>Selected Address</Text>
-            <Text style={styles.addressPreviewText} numberOfLines={2}>
-              {isGeocoding ? 'Fetching address…' : (pickedAddress || 'Move the map to select an address')}
-            </Text>
-            <TouchableOpacity
-              style={[styles.saveButton, (!pickedAddress || isGeocoding) && styles.saveButtonDisabled]}
-              onPress={confirmPickedAddress}
-              disabled={!pickedAddress || isGeocoding}
-            >
-              <Text style={styles.saveButtonText}>Use this location</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <LocationPickerScreen
+          initialRegion={mapRegion || undefined}
+          title="Choose Location"
+          onClose={() => setMapVisible(false)}
+          onConfirm={confirmPickedAddress}
+        />
       </Modal>
     </>
   );
@@ -582,42 +532,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
-  },
-  // Map modal styles
-  mapContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  mapHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  centerPinWrapper: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -18,
-    marginTop: -36,
-  },
-  mapFooter: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
-  },
-  addressPreviewLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-  },
-  addressPreviewText: {
-    fontSize: 14,
-    color: Colors.textPrimary,
-    marginBottom: 12,
   },
 });

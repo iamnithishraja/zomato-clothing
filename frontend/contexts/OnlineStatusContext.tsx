@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
+import apiClient from '@/api/client';
 
 interface OnlineStatusContextType {
   isOnline: boolean;
@@ -64,12 +65,22 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
             text: 'Go Online',
             onPress: async () => {
               try {
+                // Start location tracking
                 await startLocationTracking();
+                
+                // Notify backend that delivery person is now online
+                await apiClient.post('/api/v1/delivery/toggle-online', { isOnline: true });
+                
+                // Update local state
                 await setOnline(true);
+                
                 Alert.alert('Success', 'You are now online and accepting orders!');
-              } catch (error) {
+              } catch (error: any) {
                 console.error('Error going online:', error);
-                Alert.alert('Error', 'Failed to go online. Please try again.');
+                const errorMsg = error.response?.data?.message || 'Failed to go online. Please try again.';
+                Alert.alert('Error', errorMsg);
+                // Rollback location tracking if backend call failed
+                await stopLocationTracking();
               }
             }
           }
@@ -86,12 +97,20 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
             text: 'Go Offline',
             onPress: async () => {
               try {
+                // Stop location tracking
                 await stopLocationTracking();
+                
+                // Notify backend that delivery person is now offline
+                await apiClient.post('/api/v1/delivery/toggle-online', { isOnline: false });
+                
+                // Update local state
                 await setOnline(false);
+                
                 Alert.alert('Success', 'You are now offline');
-              } catch (error) {
+              } catch (error: any) {
                 console.error('Error going offline:', error);
-                Alert.alert('Error', 'Failed to go offline. Please try again.');
+                const errorMsg = error.response?.data?.message || 'Failed to go offline. Please try again.';
+                Alert.alert('Error', errorMsg);
               }
             }
           }

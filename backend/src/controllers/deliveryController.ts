@@ -757,6 +757,72 @@ async function getDeliveryLocation(req: Request, res: Response) {
   }
 }
 
+/**
+ * Toggle delivery partner's online/offline status
+ * When going online, triggers automatic assignment of nearby orders
+ */
+async function toggleOnlineStatus(req: Request, res: Response) {
+  try {
+    const user = (req as any).user;
+    
+    // Check if user is a delivery person
+    if (user.role !== 'Delivery') {
+      return res.status(403).json({
+        success: false,
+        message: "Only delivery persons can toggle online status"
+      });
+    }
+
+    const { isOnline } = req.body;
+
+    if (typeof isOnline !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "isOnline must be a boolean value"
+      });
+    }
+
+    // Update delivery partner's online status
+    await UserModel.findByIdAndUpdate(user._id, {
+      isActive: isOnline
+    });
+
+    // If going online, check for nearby orders and auto-assign
+    if (isOnline) {
+      console.log(`🟢 [Delivery] ${user.name} (${user._id}) went online`);
+      
+      // Dynamically import to avoid circular dependencies
+      const { assignOrdersToNewlyOnlinePartner } = await import('../services/orderAssignmentService');
+      
+      // Trigger assignment in background (don't wait for it)
+      assignOrdersToNewlyOnlinePartner(user._id)
+        .then((assignedCount) => {
+          if (assignedCount > 0) {
+            console.log(`✅ [Delivery] Assigned ${assignedCount} order(s) to ${user.name} upon going online`);
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ [Delivery] Error assigning orders to ${user.name}:`, error);
+        });
+    } else {
+      console.log(`🔴 [Delivery] ${user.name} (${user._id}) went offline`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `You are now ${isOnline ? 'online' : 'offline'}`,
+      isOnline
+    });
+
+  } catch (error) {
+    console.error("Error toggling online status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
 export {
   createDelivery,
   getDeliveryById,
@@ -765,6 +831,7 @@ export {
   rateDelivery,
   getDeliveryStats,
   updateDeliveryLocation,
-  getDeliveryLocation
+  getDeliveryLocation,
+  toggleOnlineStatus
 };
 

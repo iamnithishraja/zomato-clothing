@@ -7,7 +7,8 @@ import {
   rateDelivery,
   getDeliveryStats,
   updateDeliveryLocation,
-  getDeliveryLocation
+  getDeliveryLocation,
+  toggleOnlineStatus
 } from "../controllers/deliveryController";
 import { isAuthenticated } from "../middleware/auth";
 import { requireRole } from "../middleware/roleAuth";
@@ -23,6 +24,9 @@ router.get("/stats/overview", isAuthenticated, requireRole(['Delivery']), getDel
 
 // Update delivery partner's live location - only for delivery persons
 router.patch("/location", isAuthenticated, requireRole(['Delivery']), updateDeliveryLocation);
+
+// Toggle online/offline status - only for delivery persons
+router.post("/toggle-online", isAuthenticated, requireRole(['Delivery']), toggleOnlineStatus);
 
 // Get deliveries for delivery person - only for delivery persons
 router.get("/", isAuthenticated, requireRole(['Delivery']), getDeliveriesForDeliveryPerson);

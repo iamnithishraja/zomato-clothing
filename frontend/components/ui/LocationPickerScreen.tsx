@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Animated } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
@@ -22,6 +22,29 @@ const LocationPickerScreen: React.FC<LocationPickerScreenProps> = ({
   const [address, setAddress] = useState<string>('');
   const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
   const [isBootstrapping, setIsBootstrapping] = useState<boolean>(true);
+  
+  // Pulsing animation for precise point
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Start pulsing animation
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -112,10 +135,18 @@ const LocationPickerScreen: React.FC<LocationPickerScreenProps> = ({
             showsMyLocationButton={false}
           />
           
-          {/* Center Pin with Animation Effect */}
+          {/* Center Pin - Sharp and Precise */}
           <View pointerEvents="none" style={styles.centerPinContainer}>
-            <View style={styles.pinShadow} />
-            <Ionicons name="location-sharp" size={48} color={Colors.primary} />
+            <Ionicons name="location-sharp" size={56} color={Colors.primary} />
+            {/* Precise Point Indicator with Pulse Animation */}
+            <Animated.View 
+              style={[
+                styles.precisePoint,
+                {
+                  transform: [{ scale: pulseAnim }]
+                }
+              ]} 
+            />
           </View>
 
           {/* Drag Instruction Card */}
@@ -242,17 +273,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -24,
-    marginTop: -48,
+    marginLeft: -28, // Half of icon size (56/2)
+    marginTop: -56, // Full icon size for sharp bottom point
     alignItems: 'center',
   },
-  pinShadow: {
+  precisePoint: {
     position: 'absolute',
-    bottom: -8,
-    width: 24,
-    height: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    bottom: 0,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 5,
   },
   instructionCard: {
     position: 'absolute',

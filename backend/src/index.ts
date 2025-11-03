@@ -19,12 +19,16 @@ import directionsRoute from "./routes/directionsRoutes";
 import geocodeRoute from "./routes/geocodeRoutes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
+import { startAssignmentScheduler } from "./services/assignmentScheduler";
 // import { sanitizeInput } from "./middleware/sanitize"; // Disabled for now, will enable in production
 
 dotenv.config();
 const app = express();
 
 connectDatabase();
+
+// Start automatic order assignment service (runs every 60 seconds)
+startAssignmentScheduler();
 
 // Initialize Razorpay (support multiple env var names)
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEYID;

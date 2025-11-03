@@ -21,6 +21,7 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
   const [editData, setEditData] = useState({
     name: user?.name || '',
     email: user?.email || '',
+    phone: user?.phone || '',
     gender: user?.gender || ''
   });
   const [isUpdating, setIsUpdating] = useState(false);
@@ -132,6 +133,7 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     setEditData({
       name: user?.name || '',
       email: user?.email || '',
+      phone: user?.phone || '',
       gender: user?.gender || ''
     });
     setIsEditModalVisible(true);
@@ -791,7 +793,7 @@ const notAuthenticatedView = (
         </View>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
+      {/* Modern Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         animationType="slide"
@@ -799,57 +801,192 @@ const notAuthenticatedView = (
         onRequestClose={() => setIsEditModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <TouchableOpacity onPress={() => setIsEditModalVisible(false)} activeOpacity={0.7}>
-                <Text style={styles.modalCloseText}>Close</Text>
+          <View style={styles.editModalSheet}>
+            {/* Header */}
+            <View style={styles.editModalHeader}>
+              <View>
+                <Text style={styles.editModalTitle}>Edit Profile</Text>
+                <Text style={styles.editModalSubtitle}>Update your personal information</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setIsEditModalVisible(false)} 
+                activeOpacity={0.7}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalDivider} />
 
-            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editData.name}
-                onChangeText={(text) => setEditData({ ...editData, name: text })}
-                placeholder="Enter your full name"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
+            <ScrollView 
+              contentContainerStyle={styles.editModalContent} 
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {/* Full Name */}
+              <View style={styles.modernInputGroup}>
+                <Text style={styles.modernInputLabel}>Full Name</Text>
+                <View style={styles.modernInputContainer}>
+                  <Ionicons name="person-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.modernTextInput}
+                    value={editData.name}
+                    onChangeText={(text) => setEditData({ ...editData, name: text })}
+                    placeholder="Enter your full name"
+                    placeholderTextColor={Colors.textSecondary}
+                  />
+                </View>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editData.email}
-                onChangeText={(text) => setEditData({ ...editData, email: text })}
-                placeholder="Enter your email"
-                placeholderTextColor={Colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+              {/* Email Address - Show if user doesn't have email OR always editable */}
+              <View style={styles.modernInputGroup}>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.modernInputLabel}>Email Address</Text>
+                  {!user?.email && <Text style={styles.optionalBadge}>Optional</Text>}
+                  {user?.isEmailVerified && (
+                    <View style={styles.verifiedInputBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                      <Text style={styles.verifiedInputText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.modernInputContainer}>
+                  <Ionicons name="mail-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.modernTextInput}
+                    value={editData.email}
+                    onChangeText={(text) => setEditData({ ...editData, email: text })}
+                    placeholder="Enter your email"
+                    placeholderTextColor={Colors.textSecondary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!user?.isEmailVerified}
+                  />
+                  {user?.isEmailVerified && (
+                    <Ionicons name="lock-closed" size={16} color={Colors.textSecondary} style={styles.lockIcon} />
+                  )}
+                </View>
+                {user?.isEmailVerified && (
+                  <Text style={styles.inputHint}>Verified email cannot be changed</Text>
+                )}
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Gender</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editData.gender}
-                onChangeText={(text) => setEditData({ ...editData, gender: text })}
-                placeholder="Male, Female, or Other"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
+              {/* Phone Number - Show if user doesn't have phone OR always editable */}
+              <View style={styles.modernInputGroup}>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.modernInputLabel}>Phone Number</Text>
+                  {!user?.phone && <Text style={styles.optionalBadge}>Optional</Text>}
+                  {user?.isPhoneVerified && (
+                    <View style={styles.verifiedInputBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                      <Text style={styles.verifiedInputText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.modernInputContainer}>
+                  <Ionicons name="call-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.modernTextInput}
+                    value={editData.phone}
+                    onChangeText={(text) => {
+                      // Only allow digits and limit to 10
+                      const cleaned = text.replace(/\D/g, '').slice(0, 10);
+                      setEditData({ ...editData, phone: cleaned });
+                    }}
+                    placeholder="Enter 10-digit phone number"
+                    placeholderTextColor={Colors.textSecondary}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    editable={!user?.isPhoneVerified}
+                  />
+                  {user?.isPhoneVerified && (
+                    <Ionicons name="lock-closed" size={16} color={Colors.textSecondary} style={styles.lockIcon} />
+                  )}
+                </View>
+                {user?.isPhoneVerified ? (
+                  <Text style={styles.inputHint}>Verified phone cannot be changed</Text>
+                ) : editData.phone && editData.phone.length < 10 ? (
+                  <Text style={[styles.inputHint, { color: Colors.error }]}>
+                    Phone number must be 10 digits ({editData.phone.length}/10)
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Gender Selector */}
+              <View style={styles.modernInputGroup}>
+                <Text style={styles.modernInputLabel}>Gender</Text>
+                <View style={styles.genderSelectorContainer}>
+                  {(['Male', 'Female', 'Other'] as const).map((gender) => (
+                    <TouchableOpacity
+                      key={gender}
+                      style={[
+                        styles.genderOption,
+                        editData.gender === gender && styles.genderOptionSelected
+                      ]}
+                      onPress={() => setEditData({ ...editData, gender })}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons 
+                        name={
+                          gender === 'Male' ? 'male' : 
+                          gender === 'Female' ? 'female' : 
+                          'transgender'
+                        } 
+                        size={20} 
+                        color={editData.gender === gender ? Colors.primary : Colors.textSecondary} 
+                      />
+                      <Text style={[
+                        styles.genderOptionText,
+                        editData.gender === gender && styles.genderOptionTextSelected
+                      ]}>
+                        {gender}
+                      </Text>
+                      {editData.gender === gender && (
+                        <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Info Note */}
+              <View style={styles.infoNote}>
+                <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
+                <Text style={styles.infoNoteText}>
+                  {!user?.email && !user?.phone 
+                    ? 'Add email or phone for delivery notifications' 
+                    : !user?.email 
+                    ? 'Add email to receive order updates' 
+                    : !user?.phone 
+                    ? 'Add phone for delivery person contact' 
+                    : 'Keep your information updated for smooth delivery'}
+                </Text>
+              </View>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalSaveButton} activeOpacity={0.85} onPress={handleUpdateProfile} disabled={isUpdating}>
-                <Text style={styles.modalSaveButtonText}>
-                  {isUpdating ? 'Saving...' : 'Save Profile'}
-                </Text>
+            {/* Save Button */}
+            <View style={styles.editModalFooter}>
+              <TouchableOpacity 
+                style={[styles.modernSaveButton, isUpdating && styles.modernSaveButtonDisabled]} 
+                activeOpacity={0.85} 
+                onPress={handleUpdateProfile} 
+                disabled={isUpdating}
+              >
+                <LinearGradient
+                  colors={isUpdating ? ['#CCCCCC', '#999999'] : Colors.gradients.primary as [string, string]}
+                  style={styles.modernSaveButtonGradient}
+                >
+                  {isUpdating ? (
+                    <>
+                      <ActivityIndicator size="small" color={Colors.textPrimary} />
+                      <Text style={styles.modernSaveButtonText}>Saving...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.textPrimary} />
+                      <Text style={styles.modernSaveButtonText}>Save Changes</Text>
+                    </>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -1475,6 +1612,196 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#000',
   },
+
+  // Modern Edit Profile Modal Styles
+  editModalSheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  editModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    letterSpacing: 0.3,
+  },
+  editModalSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  modernInputGroup: {
+    marginBottom: 20,
+  },
+  modernInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  inputLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  optionalBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  verifiedInputBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  verifiedInputText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.success,
+  },
+  modernInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  modernTextInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  lockIcon: {
+    marginLeft: 8,
+  },
+  inputHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  genderSelectorContainer: {
+    gap: 12,
+  },
+  genderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  genderOptionSelected: {
+    backgroundColor: '#E6F4FE',
+    borderColor: Colors.primary,
+  },
+  genderOptionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  genderOptionTextSelected: {
+    color: Colors.primary,
+  },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#E6F4FE',
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    marginTop: 4,
+  },
+  infoNoteText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.primary,
+    lineHeight: 18,
+  },
+  editModalFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  modernSaveButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modernSaveButtonDisabled: {
+    opacity: 0.6,
+  },
+  modernSaveButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  modernSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    letterSpacing: 0.3,
+  },
   getLocationButton: {
     borderRadius: 12,
     overflow: 'hidden',
@@ -1517,7 +1844,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     backgroundColor: Colors.background,
   },
-  inputHint: {
+  addressInputHint: {
     fontSize: 13,
     color: Colors.textSecondary,
     marginTop: 8,

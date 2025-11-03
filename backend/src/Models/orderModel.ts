@@ -45,6 +45,17 @@ const orderSchema: Schema = new Schema(
       required: true,
       trim: true
     },
+    deliveryContactPhone: {
+      type: String,
+      required: true,
+      trim: true,
+      validate: {
+        validator: function(v: string) {
+          return /^\d{10}$/.test(v); // Must be exactly 10 digits
+        },
+        message: 'Delivery contact phone must be exactly 10 digits'
+      }
+    },
     itemsTotal: {
       type: Number,
       required: true,

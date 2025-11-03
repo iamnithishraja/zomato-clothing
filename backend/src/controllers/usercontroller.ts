@@ -671,7 +671,7 @@ async function updateProfile(req: Request, res: Response) {
         const user = (req as any).user;
         
         // Get update data from request body
-        const { name, email, gender, addresses, avatar } = req.body;
+        const { name, email, phone, gender, addresses, avatar } = req.body;
         
         // Validate input data
         const updateData: any = {};
@@ -694,6 +694,29 @@ async function updateProfile(req: Request, res: Response) {
                 });
             }
             updateData.email = email ? email.toLowerCase().trim() : email;
+        }
+        
+        if (phone !== undefined) {
+            // Only allow phone update if it's not verified
+            if (user.isPhoneVerified && phone !== user.phone) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Cannot change verified phone number"
+                });
+            }
+            
+            if (phone) {
+                // Validate phone number format (10 digits)
+                if (!/^\d{10}$/.test(phone)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Phone number must be exactly 10 digits"
+                    });
+                }
+                updateData.phone = phone;
+            } else {
+                updateData.phone = phone;
+            }
         }
         
         if (gender !== undefined) {
@@ -757,6 +780,21 @@ async function updateProfile(req: Request, res: Response) {
             }
         }
         
+        // Check if phone is being changed and if it already exists
+        if (updateData.phone && updateData.phone !== user.phone) {
+            const existingUser = await UserModel.findOne({ 
+                phone: updateData.phone,
+                _id: { $ne: user._id }
+            });
+            
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: "An account with this phone number already exists"
+                });
+            }
+        }
+        
         // Update user profile
         const updatedUser = await UserModel.findByIdAndUpdate(
             user._id,
@@ -800,6 +838,12 @@ async function updateProfile(req: Request, res: Response) {
                 return res.status(409).json({
                     success: false,
                     message: "An account with this email address already exists"
+                });
+            }
+            if (error.message.includes('phone')) {
+                return res.status(409).json({
+                    success: false,
+                    message: "An account with this phone number already exists"
                 });
             }
         }

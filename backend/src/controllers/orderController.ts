@@ -18,6 +18,7 @@ const createOrderSchema = z.object({
     price: z.number().min(0, "Price must be non-negative")
   })).min(1, "At least one order item is required"),
   shippingAddress: z.string().min(10, "Shipping address must be at least 10 characters"),
+  deliveryContactPhone: z.string().regex(/^\d{10}$/, "Delivery contact phone must be exactly 10 digits"),
   paymentMethod: z.enum(["COD", "Online"], {
     message: "Payment method must be COD or Online"
   })
@@ -37,6 +38,7 @@ async function createSingleStoreOrder(
   storeId: string,
   storeProducts: any[],
   shippingAddress: string,
+  deliveryContactPhone: string,
   paymentMethod: string
 ) {
   let itemsTotal = 0;
@@ -106,6 +108,7 @@ async function createSingleStoreOrder(
     deliveryFee,
     totalAmount,
     shippingAddress: shippingAddress.trim(),
+    deliveryContactPhone: deliveryContactPhone.trim(),
     paymentMethod,
     paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
     pickupLocation: pickupLocation || undefined,
@@ -185,7 +188,7 @@ async function createOrder(req: Request, res: Response) {
 
     // Validate request body
     const validatedData = createOrderSchema.parse(req.body);
-    const { orderItems, shippingAddress, paymentMethod } = validatedData;
+    const { orderItems, shippingAddress, deliveryContactPhone, paymentMethod } = validatedData;
 
     // First, load all products and group them by store
     const productsByStore: Map<string, any[]> = new Map();
@@ -230,6 +233,7 @@ async function createOrder(req: Request, res: Response) {
             storeIdStr,
             storeProducts,
             shippingAddress,
+            deliveryContactPhone,
             paymentMethod
           );
           createdOrders.push(order);
@@ -795,7 +799,7 @@ async function createMultipleOrders(req: Request, res: Response) {
 
         // Validate each order
         const validatedData = createOrderSchema.parse(orderData);
-        const { orderItems, shippingAddress, paymentMethod } = validatedData;
+        const { orderItems, shippingAddress, deliveryContactPhone, paymentMethod } = validatedData;
 
         let itemsTotal = 0;
         let storeId: any = null;
@@ -911,6 +915,7 @@ async function createMultipleOrders(req: Request, res: Response) {
           deliveryFee,
           totalAmount,
           shippingAddress: shippingAddress.trim(),
+          deliveryContactPhone: deliveryContactPhone.trim(),
           paymentMethod,
           pickupLocation: pickupLocation || undefined,
           deliveryLocation: deliveryLocation || undefined,

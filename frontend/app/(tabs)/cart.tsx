@@ -161,6 +161,7 @@ export default function CartScreen() {
   const router = useRouter();
   const { items, updateQty, removeItem, addItem, clearCart } = useCart();
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<CartItemType | null>(null);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -228,6 +229,11 @@ export default function CartScreen() {
       return;
     }
 
+    if (!selectedPhone || selectedPhone.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit delivery contact number');
+      return;
+    }
+
     // Show payment method selection modal
     setPaymentModalVisible(true);
   };
@@ -270,6 +276,7 @@ export default function CartScreen() {
       const ordersData = Object.values(ordersByStore).map((storeOrder: any) => ({
         orderItems: storeOrder.items,
         shippingAddress: selectedAddress,
+        deliveryContactPhone: selectedPhone,
         paymentMethod: paymentMethod
       }));
 
@@ -526,8 +533,15 @@ export default function CartScreen() {
           </View>
           <AddressSelector
             selectedAddress={selectedAddress}
-            onAddressSelect={setSelectedAddress}
-            onAddNewAddress={setSelectedAddress}
+            selectedPhone={selectedPhone}
+            onAddressSelect={(address, phone) => {
+              setSelectedAddress(address);
+              setSelectedPhone(phone);
+            }}
+            onAddNewAddress={(address, phone) => {
+              setSelectedAddress(address);
+              setSelectedPhone(phone);
+            }}
           />
         </View>
 

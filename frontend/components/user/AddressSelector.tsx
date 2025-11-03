@@ -25,30 +25,36 @@ interface Address {
 
 interface AddressSelectorProps {
   selectedAddress: string | null;
-  onAddressSelect: (address: string) => void;
-  onAddNewAddress: (address: string) => void;
+  selectedPhone: string | null;
+  onAddressSelect: (address: string, phone: string) => void;
+  onAddNewAddress: (address: string, phone: string) => void;
 }
 
 export default function AddressSelector({ 
-  selectedAddress, 
+  selectedAddress,
+  selectedPhone,
   onAddressSelect, 
   onAddNewAddress 
 }: AddressSelectorProps) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { currentLocation, getCurrentLocation } = useLocation();
   const [modalVisible, setModalVisible] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [newAddress, setNewAddress] = useState('');
+  const [deliveryPhone, setDeliveryPhone] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   useEffect(() => {
     if (modalVisible) {
       loadAddresses();
+      // Initialize phone with user's phone or selected phone
+      setDeliveryPhone(selectedPhone || user?.phone || '');
     }
-  }, [modalVisible]);
+  }, [modalVisible, user?.phone, selectedPhone]);
 
   const loadAddresses = async () => {
     try {
@@ -72,13 +78,23 @@ export default function AddressSelector({
   };
 
   const handleAddressSelect = (address: string) => {
-    onAddressSelect(address);
+    // Validate phone before selection
+    if (!deliveryPhone || deliveryPhone.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number for delivery contact');
+      return;
+    }
+    onAddressSelect(address, deliveryPhone);
     setModalVisible(false);
   };
 
   const handleAddNewAddress = async () => {
     if (!newAddress.trim()) {
       Alert.alert('Error', 'Please enter a valid address');
+      return;
+    }
+
+    if (!deliveryPhone || deliveryPhone.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number for delivery contact');
       return;
     }
 
@@ -89,8 +105,9 @@ export default function AddressSelector({
       });
 
       if (response.data.success) {
-        onAddNewAddress(newAddress.trim());
+        onAddNewAddress(newAddress.trim(), deliveryPhone);
         setNewAddress('');
+        setDeliveryPhone(user?.phone || '');
         setShowAddForm(false);
         setModalVisible(false);
         Alert.alert('Success', 'Address added successfully');
@@ -139,6 +156,42 @@ export default function AddressSelector({
   const confirmPickedAddress = async (params: { latitude: number; longitude: number; formattedAddress: string }) => {
     setNewAddress(params.formattedAddress);
     setMapVisible(false);
+  };
+
+  const handleSavePhoneNumber = async () => {
+    if (!deliveryPhone || deliveryPhone.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    if (user?.isPhoneVerified && deliveryPhone !== user.phone) {
+      Alert.alert('Error', 'Cannot change verified phone number');
+      return;
+    }
+
+    if (deliveryPhone === user?.phone) {
+      Alert.alert('Info', 'This phone number is already saved to your profile');
+      return;
+    }
+
+    try {
+      setIsSavingPhone(true);
+      const response = await apiClient.put('/api/v1/user/profile', {
+        phone: deliveryPhone
+      });
+
+      if (response.data.success) {
+        await updateUser(response.data.user);
+        Alert.alert('Success', 'Phone number saved to your profile successfully!');
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to save phone number');
+      }
+    } catch (error: any) {
+      console.error('Error saving phone number:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to save phone number');
+    } finally {
+      setIsSavingPhone(false);
+    }
   };
 
   return (
@@ -202,6 +255,55 @@ export default function AddressSelector({
               </View>
             ) : (
               <>
+                {/* Delivery Contact Number - Always visible */}
+                <View style={styles.phoneSection}>
+                  <View style={styles.phoneSectionHeader}>
+                    <Text style={styles.phoneSectionTitle}>Delivery Contact Number</Text>
+                    {deliveryPhone && deliveryPhone.length === 10 && deliveryPhone !== user?.phone && (
+                      <TouchableOpacity 
+                        style={styles.savePhoneButton}
+                        onPress={handleSavePhoneNumber}
+                        disabled={isSavingPhone || user?.isPhoneVerified}
+                      >
+                        <Ionicons name="save-outline" size={16} color={Colors.buttonPrimary} />
+                        <Text style={styles.savePhoneButtonText}>
+                          {isSavingPhone ? 'Saving...' : 'Save to Profile'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={styles.phoneInputContainer}>
+                    <Ionicons name="call-outline" size={20} color={Colors.textMuted} />
+                    <TextInput
+                      style={styles.phoneInput}
+                      placeholder="Enter 10-digit contact number"
+                      value={deliveryPhone}
+                      onChangeText={(text) => {
+                        // Only allow digits and limit to 10
+                        const cleaned = text.replace(/\D/g, '').slice(0, 10);
+                        setDeliveryPhone(cleaned);
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={10}
+                      placeholderTextColor={Colors.textMuted}
+                    />
+                  </View>
+                  {deliveryPhone && deliveryPhone.length < 10 && (
+                    <Text style={styles.phoneError}>
+                      Phone must be 10 digits ({deliveryPhone.length}/10)
+                    </Text>
+                  )}
+                  <Text style={styles.phoneHelp}>
+                    This number will be used by the delivery person to contact you
+                  </Text>
+                  {user?.phone && deliveryPhone === user.phone && (
+                    <View style={styles.phoneSavedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                      <Text style={styles.phoneSavedText}>This number is saved to your profile</Text>
+                    </View>
+                  )}
+                </View>
+
                 {addresses.length > 0 ? (
                   <>
                     {addresses.map((address) => (
@@ -263,6 +365,27 @@ export default function AddressSelector({
                       numberOfLines={4}
                       placeholderTextColor={Colors.textMuted}
                     />
+                    <View style={styles.phoneInputContainer}>
+                      <Ionicons name="call-outline" size={20} color={Colors.textMuted} />
+                      <TextInput
+                        style={styles.phoneInput}
+                        placeholder="Delivery contact number (10 digits)"
+                        value={deliveryPhone}
+                        onChangeText={(text) => {
+                          // Only allow digits and limit to 10
+                          const cleaned = text.replace(/\D/g, '').slice(0, 10);
+                          setDeliveryPhone(cleaned);
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={10}
+                        placeholderTextColor={Colors.textMuted}
+                      />
+                    </View>
+                    {deliveryPhone && deliveryPhone.length < 10 && (
+                      <Text style={styles.phoneError}>
+                        Phone must be 10 digits ({deliveryPhone.length}/10)
+                      </Text>
+                    )}
                     <View style={styles.addFormActions}>
                       <TouchableOpacity
                         style={styles.cancelButton}
@@ -496,6 +619,85 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     minHeight: 80,
     marginBottom: 16,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 8,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    marginLeft: 10,
+    paddingVertical: 6,
+  },
+  phoneError: {
+    fontSize: 12,
+    color: Colors.error,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  phoneSection: {
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  phoneSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  phoneSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  savePhoneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.buttonPrimary,
+    gap: 4,
+  },
+  savePhoneButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.buttonPrimary,
+  },
+  phoneHelp: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  phoneSavedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  phoneSavedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.success,
   },
   addFormActions: {
     flexDirection: 'row',

@@ -107,7 +107,7 @@ async function createDelivery(req: Request, res: Response) {
         path: 'order',
         populate: {
           path: 'store',
-          select: 'storeName address'
+          select: 'storeName address mapLink'
         }
       });
 
@@ -467,7 +467,7 @@ async function getDeliveriesForDeliveryPerson(req: Request, res: Response) {
         path: 'order',
         populate: {
           path: 'store',
-          select: 'storeName address'
+          select: 'storeName address mapLink'
         }
       });
 

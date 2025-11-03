@@ -36,6 +36,16 @@ export interface Delivery {
     status: 'Pending' | 'Accepted' | 'Rejected' | 'Processing' | 'ReadyForPickup' | 'Assigned' | 'PickedUp' | 'OnTheWay' | 'Shipped' | 'Delivered' | 'Cancelled';
     paymentMethod: 'COD' | 'Online';
     paymentStatus: 'Pending' | 'Completed' | 'Failed';
+    pickupLocation?: {
+      lat?: number;
+      lng?: number;
+      address?: string;
+    };
+    deliveryLocation?: {
+      lat?: number;
+      lng?: number;
+      address?: string;
+    };
   };
   status: 'Pending' | 'Accepted' | 'PickedUp' | 'OnTheWay' | 'Delivered' | 'Cancelled';
   pickupAddress: string;

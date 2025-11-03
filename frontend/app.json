@@ -11,6 +11,7 @@
     "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.Locals.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address."

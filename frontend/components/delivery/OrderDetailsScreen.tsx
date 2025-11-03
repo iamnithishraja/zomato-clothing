@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   Animated,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -95,75 +96,40 @@ const OrderDetailsScreen: React.FC = () => {
   };
 
   const openNavigation = (locationType: 'pickup' | 'delivery') => {
-    console.log('🗺️ Opening navigation for:', locationType);
-    console.log('📦 Delivery order data:', JSON.stringify(delivery?.order, null, 2));
-    
     const order = delivery?.order;
     if (!order) {
       Alert.alert('Error', 'Order data not available');
       return;
     }
 
-    // Get pickup location (from order or construct from store)
-    let pickupLoc = order.pickupLocation;
-    if (!pickupLoc || !pickupLoc.lat || !pickupLoc.lng) {
-      // Try to use store address as fallback
-      const store = order.store;
-      if (store && store.address) {
-        pickupLoc = {
-          lat: 0, // Will need geocoding
-          lng: 0,
-          address: store.address
-        };
-        console.warn('⚠️ Pickup location coordinates missing, using store address');
-      }
-    }
+    // Get store info for pickup
+    const store = order.store;
+    
+    // Prepare pickup location (store)
+    const pickupLocation = {
+      lat: order.pickupLocation?.lat,
+      lng: order.pickupLocation?.lng,
+      address: delivery.pickupAddress || store?.address || '',
+      mapLink: (store as any)?.mapLink // Pass mapLink if available
+    };
 
-    // Get delivery location (from order or construct from customer address)
-    let deliveryLoc = order.deliveryLocation;
-    if (!deliveryLoc || !deliveryLoc.lat || !deliveryLoc.lng) {
-      // Try to use customer address as fallback
-      if (order.address) {
-        deliveryLoc = {
-          lat: 0,
-          lng: 0,
-          address: order.address
-        };
-        console.warn('⚠️ Delivery location coordinates missing, using order address');
-      }
-    }
+    // Prepare delivery location (user address)
+    const deliveryLocation = {
+      lat: order.deliveryLocation?.lat,
+      lng: order.deliveryLocation?.lng,
+      address: delivery.deliveryAddress || order.shippingAddress || ''
+    };
 
-    // Validate the location we're trying to navigate to
-    const targetLocation = locationType === 'pickup' ? pickupLoc : deliveryLoc;
-    if (!targetLocation || !targetLocation.lat || !targetLocation.lng || targetLocation.lat === 0) {
-      Alert.alert(
-        'Location Not Available',
-        `The ${locationType} location coordinates are not available. Please ensure the order has proper location data.`,
-        [
-          { text: 'OK', style: 'cancel' },
-          {
-            text: 'View Address',
-            onPress: () => {
-              const address = locationType === 'pickup' 
-                ? (order.store?.address || 'Not available')
-                : (order.address || 'Not available');
-              Alert.alert('Address', address);
-            }
-          }
-        ]
-      );
-      return;
-    }
-
+    // Navigate to in-app navigation screen
     router.push({
       pathname: '/(deliveryTabs)/navigation-map',
       params: {
-        pickupLocation: JSON.stringify(pickupLoc),
-        deliveryLocation: JSON.stringify(deliveryLoc),
-        orderId: order._id,
-        navigationType: locationType,
+        orderId: delivery._id,
+        pickupLocation: JSON.stringify(pickupLocation),
+        deliveryLocation: JSON.stringify(deliveryLocation),
+        navigationType: locationType
       }
-    } as any);
+    });
   };
 
   const callCustomer = (phone: string) => {
@@ -173,7 +139,7 @@ const OrderDetailsScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
+        <ActivityIndicator size="large" color="#FFD700" />
         <Text style={styles.loadingText}>Loading order details...</Text>
       </View>
     );
@@ -189,7 +155,7 @@ const OrderDetailsScreen: React.FC = () => {
     if (processing) {
       return (
         <View style={styles.processingContainer}>
-          <ActivityIndicator color="#667eea" />
+          <ActivityIndicator color="#FFD700" />
           <Text style={styles.processingText}>Processing...</Text>
         </View>
       );
@@ -278,14 +244,14 @@ const OrderDetailsScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#FFD700', '#FFC107']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color="#2D2D2D" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Order Details</Text>
           <View style={{ width: 40 }} />
@@ -323,7 +289,7 @@ const OrderDetailsScreen: React.FC = () => {
             <Text style={styles.cardTitle}>Customer Information</Text>
             <View style={styles.customerInfo}>
               <View style={styles.customerAvatar}>
-                <Ionicons name="person" size={24} color="#667eea" />
+                <Ionicons name="person" size={24} color="#FFD700" />
               </View>
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>{customer.name}</Text>
@@ -333,7 +299,7 @@ const OrderDetailsScreen: React.FC = () => {
                 style={styles.callButton}
                 onPress={() => callCustomer(customer.phone)}
               >
-                <Ionicons name="call" size={20} color="#FFFFFF" />
+                <Ionicons name="call" size={20} color="#2D2D2D" />
               </TouchableOpacity>
             </View>
           </View>
@@ -347,7 +313,7 @@ const OrderDetailsScreen: React.FC = () => {
               style={styles.navigateButton}
               onPress={() => openNavigation('pickup')}
             >
-              <Ionicons name="navigate" size={16} color="#667eea" />
+              <Ionicons name="navigate" size={16} color="#FFD700" />
               <Text style={styles.navigateText}>Navigate</Text>
             </TouchableOpacity>
           </View>
@@ -370,7 +336,7 @@ const OrderDetailsScreen: React.FC = () => {
               style={styles.navigateButton}
               onPress={() => openNavigation('delivery')}
             >
-              <Ionicons name="navigate" size={16} color="#667eea" />
+              <Ionicons name="navigate" size={16} color="#FFD700" />
               <Text style={styles.navigateText}>Navigate</Text>
             </TouchableOpacity>
           </View>
@@ -468,26 +434,26 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#2D2D2D',
   },
   progressContainer: {
     gap: 12,
   },
   progressBar: {
     height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(45, 45, 45, 0.2)',
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2D2D2D',
     borderRadius: 3,
   },
   progressText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#2D2D2D',
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -517,7 +483,7 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#667eea',
+    color: '#FFD700',
     letterSpacing: 1,
   },
   card: {
@@ -567,17 +533,17 @@ const styles = StyleSheet.create({
   },
   customerPhone: {
     fontSize: 14,
-    color: '#666',
+    color: '#2D2D2D',
   },
   callButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
-    shadowColor: '#4CAF50',
+    shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,

@@ -15,6 +15,8 @@ import codRoute from "./routes/codRoutes";
 import storeRatingRoute from "./routes/storeRatingRoutes";
 import deliveryAssignmentRoute from "./routes/deliveryAssignmentRoutes";
 import settlementRoute from "./routes/settlementRoutes";
+import directionsRoute from "./routes/directionsRoutes";
+import geocodeRoute from "./routes/geocodeRoutes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
 // import { sanitizeInput } from "./middleware/sanitize"; // Disabled for now, will enable in production
@@ -68,6 +70,8 @@ app.use("/api/v1/cod", codRoute);
 app.use("/api/v1/stores", storeRatingRoute);
 app.use("/api/v1/delivery-assignment", deliveryAssignmentRoute);
 app.use("/api/v1/settlement", settlementRoute);
+app.use("/api/v1", directionsRoute);
+app.use("/api/v1", geocodeRoute);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);

@@ -6,6 +6,7 @@ import type { Response, Request } from "express";
 import { validateUserRole, sendErrorResponse } from "../utils/validation";
 import { generateOrderNumber, calculateDeliveryFee, releaseInventory } from "../utils/orderUtils";
 import { notifyOrderPlaced } from "../utils/notificationUtils";
+import { getStoreLocation, getDeliveryLocation } from "../utils/locationUtils";
 import z from "zod";
 import type { Types } from "mongoose";
 
@@ -72,6 +73,12 @@ async function createSingleStoreOrder(
   // Generate unique order number
   const orderNumber = await generateOrderNumber(storeId);
 
+  // Get store location coordinates (pickup location)
+  const pickupLocation = await getStoreLocation(store);
+
+  // Get delivery location coordinates
+  const deliveryLocation = await getDeliveryLocation(shippingAddress);
+
   // Atomic stock update for all order items
   for (const item of validatedOrderItems) {
     const productUpdate = await ProductModel.findOneAndUpdate(
@@ -101,6 +108,8 @@ async function createSingleStoreOrder(
     shippingAddress: shippingAddress.trim(),
     paymentMethod,
     paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
+    pickupLocation: pickupLocation || undefined,
+    deliveryLocation: deliveryLocation || undefined,
     statusHistory: [{
       status: "Pending",
       timestamp: new Date(),
@@ -296,6 +305,12 @@ async function createOrder(req: Request, res: Response) {
     // Generate unique order number
     const orderNumber = await generateOrderNumber(storeId);
 
+    // Get store location coordinates (pickup location)
+    const pickupLocation = await getStoreLocation(store);
+
+    // Get delivery location coordinates
+    const deliveryLocation = await getDeliveryLocation(shippingAddress);
+
     // To help avoid race conditions where multiple orders could oversell inventory,
     // we should update stocks with an atomic check. We'll use update with $inc + a filter.
 
@@ -328,6 +343,8 @@ async function createOrder(req: Request, res: Response) {
       shippingAddress: shippingAddress.trim(),
       paymentMethod,
       paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
+      pickupLocation: pickupLocation || undefined,
+      deliveryLocation: deliveryLocation || undefined,
       statusHistory: [{
         status: "Pending",
         timestamp: new Date(),
@@ -878,6 +895,12 @@ async function createMultipleOrders(req: Request, res: Response) {
         // Generate order number per store
         const orderNumber = await generateOrderNumber(storeId);
 
+        // Get store location coordinates (pickup location)
+        const pickupLocation = await getStoreLocation(store);
+
+        // Get delivery location coordinates
+        const deliveryLocation = await getDeliveryLocation(shippingAddress);
+
         // Create order
         const order = new OrderModel({
           orderNumber,
@@ -889,6 +912,8 @@ async function createMultipleOrders(req: Request, res: Response) {
           totalAmount,
           shippingAddress: shippingAddress.trim(),
           paymentMethod,
+          pickupLocation: pickupLocation || undefined,
+          deliveryLocation: deliveryLocation || undefined,
           statusHistory: [{
             status: "Pending",
             timestamp: new Date(),

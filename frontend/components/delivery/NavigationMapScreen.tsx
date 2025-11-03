@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { Colors } from '@/constants/colors';
+import NavigationMarker from './markers/NavigationMarker';
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;
@@ -43,6 +44,7 @@ const NavigationMapScreen: React.FC = () => {
   );
   
   const navigationType = params.navigationType as string; // 'pickup' or 'delivery'
+  const orderId = params.orderId as string; // Get orderId for back navigation
 
   const [currentLocation, setCurrentLocation] = useState<LocationCoords | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,11 +52,14 @@ const NavigationMapScreen: React.FC = () => {
   const [routeCoordinates, setRouteCoordinates] = useState<LocationCoords[]>([]);
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [heading, setHeading] = useState<number>(0);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [geocodedPickup, setGeocodedPickup] = useState<{ lat: number; lng: number } | null>(null);
   const [geocodedDelivery, setGeocodedDelivery] = useState<{ lat: number; lng: number } | null>(null);
   const previousNavigationType = useRef<string | null>(null);
+  const [currentRegion, setCurrentRegion] = useState({
+    latitudeDelta: LATITUDE_DELTA,
+    longitudeDelta: LONGITUDE_DELTA,
+  });
 
   // Extract coordinates from Google Maps link
   const extractCoordinatesFromMapLink = (mapLink: string): { lat: number; lng: number } | null => {
@@ -149,9 +154,6 @@ const NavigationMapScreen: React.FC = () => {
               latitude: newLocation.coords.latitude,
               longitude: newLocation.coords.longitude,
             });
-            if (newLocation.coords.heading) {
-              setHeading(newLocation.coords.heading);
-            }
           }
         );
 
@@ -416,6 +418,17 @@ const NavigationMapScreen: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLocation, loading, pickupLocation, deliveryLocation, navigationType, geocodedPickup, geocodedDelivery]);
 
+  const handleBack = () => {
+    if (orderId) {
+      router.push({
+        pathname: '/(deliveryTabs)/order-details',
+        params: { deliveryId: orderId }
+      } as any);
+    } else {
+      router.back();
+    }
+  };
+
   const centerOnUser = () => {
     if (currentLocation && mapRef.current) {
       mapRef.current.animateToRegion(
@@ -430,12 +443,57 @@ const NavigationMapScreen: React.FC = () => {
     }
   };
 
-  const zoomIn = () => {
-    // Zoom functionality can be added with region management
+  const zoomIn = async () => {
+    if (mapRef.current) {
+      const camera = await mapRef.current.getCamera();
+      if (camera) {
+        const newLatDelta = currentRegion.latitudeDelta * 0.5;
+        const newLngDelta = currentRegion.longitudeDelta * 0.5;
+        
+        setCurrentRegion({
+          latitudeDelta: newLatDelta,
+          longitudeDelta: newLngDelta,
+        });
+
+        mapRef.current.animateToRegion(
+          {
+            latitude: camera.center.latitude,
+            longitude: camera.center.longitude,
+            latitudeDelta: newLatDelta,
+            longitudeDelta: newLngDelta,
+          },
+          300
+        );
+      }
+    }
   };
 
-  const zoomOut = () => {
-    // Zoom functionality can be added with region management
+  const zoomOut = async () => {
+    if (mapRef.current) {
+      const camera = await mapRef.current.getCamera();
+      if (camera) {
+        const newLatDelta = currentRegion.latitudeDelta * 2;
+        const newLngDelta = currentRegion.longitudeDelta * 2;
+        
+        // Limit max zoom out
+        if (newLatDelta < 0.5) {
+          setCurrentRegion({
+            latitudeDelta: newLatDelta,
+            longitudeDelta: newLngDelta,
+          });
+
+          mapRef.current.animateToRegion(
+            {
+              latitude: camera.center.latitude,
+              longitude: camera.center.longitude,
+              latitudeDelta: newLatDelta,
+              longitudeDelta: newLngDelta,
+            },
+            300
+          );
+        }
+      }
+    }
   };
 
   if (loading || !currentLocation) {
@@ -463,12 +521,20 @@ const NavigationMapScreen: React.FC = () => {
           latitudeDelta: LATITUDE_DELTA,
           longitudeDelta: LONGITUDE_DELTA,
         }}
-        showsUserLocation={true}
+        showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={true}
-        showsTraffic={true}
+        showsTraffic={false}
+        showsBuildings={false}
+        showsIndoors={false}
         followsUserLocation={followUser}
         onPanDrag={() => setFollowUser(false)}
+        onRegionChangeComplete={(region) => {
+          setCurrentRegion({
+            latitudeDelta: region.latitudeDelta,
+            longitudeDelta: region.longitudeDelta,
+          });
+        }}
       >
         {/* Current Location Marker */}
         {currentLocation && (
@@ -476,11 +542,7 @@ const NavigationMapScreen: React.FC = () => {
             coordinate={currentLocation}
             anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={styles.currentLocationMarker}>
-              <View style={[styles.currentLocationArrow, { transform: [{ rotate: `${heading}deg` }] }]}>
-                <Ionicons name="navigate" size={24} color={Colors.primary} />
-              </View>
-            </View>
+            <NavigationMarker type="current" size={20} />
           </Marker>
         )}
 
@@ -493,13 +555,9 @@ const NavigationMapScreen: React.FC = () => {
             }}
             title="Pickup Location"
             description={pickupLocation.address}
+            anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={styles.markerContainer}>
-              <View style={[styles.markerPin, { backgroundColor: '#4CAF50' }]}>
-                <Ionicons name="storefront" size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.markerArrow} />
-            </View>
+            <NavigationMarker type="pickup" size={20} />
           </Marker>
         )}
 
@@ -512,13 +570,9 @@ const NavigationMapScreen: React.FC = () => {
             }}
             title="Delivery Location"
             description={deliveryLocation.address}
+            anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={styles.markerContainer}>
-              <View style={[styles.markerPin, { backgroundColor: '#F44336' }]}>
-                <Ionicons name="location" size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.markerArrow} />
-            </View>
+            <NavigationMarker type="delivery" size={20} />
           </Marker>
         )}
 
@@ -526,7 +580,7 @@ const NavigationMapScreen: React.FC = () => {
         {routeCoordinates.length > 1 && (
           <Polyline
             coordinates={routeCoordinates}
-            strokeColor="#4285F4"
+            strokeColor="#FFD700"
             strokeWidth={5}
             lineJoin="round"
             lineCap="round"
@@ -540,7 +594,7 @@ const NavigationMapScreen: React.FC = () => {
         style={styles.topGradient}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
@@ -690,53 +744,6 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 40,
   },
-  currentLocationMarker: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  currentLocationArrow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  markerContainer: {
-    alignItems: 'center',
-  },
-  markerPin: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  markerArrow: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 12,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#4CAF50',
-    marginTop: -2,
-  },
   navInfoCard: {
     position: 'absolute',
     top: 140,
@@ -784,7 +791,7 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 20,
-    top: 240,
+    bottom: 30,
     gap: 12,
   },
   mapControlButton: {

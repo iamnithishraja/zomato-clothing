@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Linking,
   Animated,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,6 +47,24 @@ const OrderDetailsScreen: React.FC = () => {
   useEffect(() => {
     loadDeliveryDetails();
   }, [loadDeliveryDetails]);
+
+  const deliverySteps = [
+    { key: 'Pending', label: 'Pending', icon: 'time-outline' },
+    { key: 'Accepted', label: 'Accepted', icon: 'checkmark-circle-outline' },
+    { key: 'PickedUp', label: 'Picked Up', icon: 'cube-outline' },
+    { key: 'OnTheWay', label: 'On The Way', icon: 'bicycle-outline' },
+    { key: 'Delivered', label: 'Delivered', icon: 'checkmark-done-circle' },
+  ];
+
+  const getStepStatus = (stepKey: string, currentStatus: string): 'completed' | 'current' | 'pending' => {
+    const stepOrder = ['Pending', 'Accepted', 'PickedUp', 'OnTheWay', 'Delivered'];
+    const currentIndex = stepOrder.indexOf(currentStatus);
+    const stepIndex = stepOrder.indexOf(stepKey);
+    
+    if (stepIndex < currentIndex) return 'completed';
+    if (stepIndex === currentIndex) return 'current';
+    return 'pending';
+  };
 
   const animateProgress = (status: string) => {
     const progressMap: { [key: string]: number } = {
@@ -257,22 +274,50 @@ const OrderDetailsScreen: React.FC = () => {
           <View style={{ width: 40 }} />
         </View>
 
-        {/* Progress Bar */}
+        {/* Delivery Steps Progress */}
         <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <Animated.View
-              style={[
-                styles.progressFill,
-                {
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
-              ]}
-            />
+          <View style={styles.stepsContainer}>
+            {deliverySteps.map((step, index) => {
+              const stepStatus = getStepStatus(step.key, delivery.status);
+              const isLast = index === deliverySteps.length - 1;
+              
+              return (
+                <View key={step.key} style={styles.stepWrapper}>
+                  <View style={styles.stepItem}>
+                    {/* Step Circle with Icon */}
+                    <View style={[
+                      styles.stepCircle,
+                      stepStatus === 'completed' && styles.stepCircleCompleted,
+                      stepStatus === 'current' && styles.stepCircleCurrent,
+                    ]}>
+                      <Ionicons 
+                        name={step.icon as any} 
+                        size={20} 
+                        color={stepStatus === 'pending' ? '#999' : '#FFFFFF'} 
+                      />
+                    </View>
+                    
+                    {/* Step Label */}
+                    <Text style={[
+                      styles.stepLabel,
+                      stepStatus === 'current' && styles.stepLabelCurrent,
+                      stepStatus === 'completed' && styles.stepLabelCompleted,
+                    ]}>
+                      {step.label}
+                    </Text>
+                  </View>
+                  
+                  {/* Connection Line */}
+                  {!isLast && (
+                    <View style={[
+                      styles.stepLine,
+                      stepStatus === 'completed' && styles.stepLineCompleted,
+                    ]} />
+                  )}
+                </View>
+              );
+            })}
           </View>
-          <Text style={styles.progressText}>{delivery.status}</Text>
         </View>
       </LinearGradient>
 
@@ -437,26 +482,62 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
   },
   progressContainer: {
-    gap: 12,
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(45, 45, 45, 0.2)',
-    borderRadius: 3,
-    overflow: 'hidden',
+  stepsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#2D2D2D',
-    borderRadius: 3,
+  stepWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  progressText: {
-    fontSize: 14,
+  stepItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
+  },
+  stepCircleCompleted: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  stepCircleCurrent: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  stepLabel: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#2D2D2D',
+    color: '#999',
     textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    maxWidth: 60,
+  },
+  stepLabelCompleted: {
+    color: '#4CAF50',
+  },
+  stepLabelCurrent: {
+    color: '#2196F3',
+    fontWeight: '700',
+  },
+  stepLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 4,
+  },
+  stepLineCompleted: {
+    backgroundColor: '#4CAF50',
   },
   content: {
     flex: 1,

@@ -388,6 +388,7 @@ async function updateDeliveryStatus(req: Request, res: Response) {
         isBusy: false,
         $unset: { currentOrder: 1 }
       });
+      console.log(`✅ [Delivery] Delivery partner ${delivery.deliveryPerson} is now available (order cancelled)`);
     }
 
     // Mark delivery partner as not busy after successful delivery
@@ -396,6 +397,7 @@ async function updateDeliveryStatus(req: Request, res: Response) {
         isBusy: false,
         $unset: { currentOrder: 1 }
       });
+      console.log(`✅ [Delivery] Delivery partner ${delivery.deliveryPerson} is now available (order delivered)`);
     }
 
     return res.status(200).json({
@@ -759,6 +761,7 @@ async function getDeliveryLocation(req: Request, res: Response) {
 
 /**
  * Toggle delivery partner's online/offline status
+ * Uses isActive field: true = online, false = offline
  * When going online, triggers automatic assignment of nearby orders
  */
 async function toggleOnlineStatus(req: Request, res: Response) {
@@ -782,14 +785,54 @@ async function toggleOnlineStatus(req: Request, res: Response) {
       });
     }
 
-    // Update delivery partner's online status
-    await UserModel.findByIdAndUpdate(user._id, {
-      isActive: isOnline
+    // Get current user status
+    const currentUser = await UserModel.findById(user._id);
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // If going offline, check if they have an ACCEPTED (not just pending) delivery
+    if (!isOnline) {
+      const activeDelivery = await DeliveryModel.findOne({
+        deliveryPerson: user._id,
+        status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+      });
+
+      if (activeDelivery) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot go offline while you have an active delivery. Please complete or cancel it first."
+        });
+      }
+    }
+
+    // Update delivery partner's online status using isActive field
+    // Always check and clear isBusy flag if no active deliveries
+    const hasActiveDelivery = await DeliveryModel.findOne({
+      deliveryPerson: user._id,
+      status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
     });
+
+    const updateData: any = { isActive: isOnline };
+    
+    // Clear isBusy flag when:
+    // 1. Going online (always start fresh)
+    // 2. Going offline (clean up state)
+    // 3. No active deliveries (clear stuck state)
+    if (isOnline || !hasActiveDelivery) {
+      updateData.isBusy = false;
+      updateData.$unset = { currentOrder: 1 };
+      console.log(`🧹 [Delivery] Clearing busy status for ${user.name} (online: ${isOnline}, hasActive: ${!!hasActiveDelivery})`);
+    }
+    
+    await UserModel.findByIdAndUpdate(user._id, updateData);
 
     // If going online, check for nearby orders and auto-assign
     if (isOnline) {
-      console.log(`🟢 [Delivery] ${user.name} (${user._id}) went online`);
+      console.log(`🟢 [Delivery] ${user.name} (${user._id}) went online - ready for orders`);
       
       // Dynamically import to avoid circular dependencies
       const { assignOrdersToNewlyOnlinePartner } = await import('../services/orderAssignmentService');
@@ -811,7 +854,8 @@ async function toggleOnlineStatus(req: Request, res: Response) {
     return res.status(200).json({
       success: true,
       message: `You are now ${isOnline ? 'online' : 'offline'}`,
-      isOnline
+      isOnline,
+      isActive: isOnline
     });
 
   } catch (error) {
@@ -823,10 +867,125 @@ async function toggleOnlineStatus(req: Request, res: Response) {
   }
 }
 
+/**
+ * Reject delivery assignment before accepting it
+ * This allows delivery person to reject an order that was auto-assigned to them
+ * The order will be automatically reassigned to another available delivery partner
+ */
+async function rejectDeliveryAssignment(req: Request, res: Response) {
+  try {
+    const user = (req as any).user;
+    const { deliveryId } = req.params;
+    const { reason } = req.body;
+
+    // Check if user is a delivery person
+    if (user.role !== 'Delivery') {
+      return res.status(403).json({
+        success: false,
+        message: "Only delivery persons can reject assignments"
+      });
+    }
+
+    // Find the delivery
+    const delivery = await DeliveryModel.findById(deliveryId);
+    if (!delivery) {
+      return res.status(404).json({
+        success: false,
+        message: "Delivery not found"
+      });
+    }
+
+    // Check if this delivery belongs to the user
+    if (delivery.deliveryPerson.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only reject your own delivery assignments"
+      });
+    }
+
+    // Check if delivery is still in Pending status (not yet accepted)
+    if (delivery.status !== 'Pending') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reject delivery with status: ${delivery.status}. You can only reject pending assignments.`
+      });
+    }
+
+    // Find the order
+    const order = await OrderModel.findById(delivery.order);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
+
+    // Cancel the delivery
+    delivery.status = 'Cancelled';
+    (delivery as any).cancellationReason = reason || 'Rejected by delivery partner';
+    await delivery.save();
+
+    // Reset order back to ReadyForPickup and remove delivery person using findByIdAndUpdate
+    await OrderModel.findByIdAndUpdate(delivery.order, {
+      status: 'ReadyForPickup',
+      $unset: { deliveryPerson: 1 },
+      $push: {
+        statusHistory: {
+          status: 'ReadyForPickup',
+          timestamp: new Date(),
+          updatedBy: user._id,
+          note: `Delivery rejected by ${user.name || 'delivery partner'}${reason ? `: ${reason}` : ''}`
+        }
+      }
+    });
+
+    // Mark delivery partner as not busy and clear current order
+    await UserModel.findByIdAndUpdate(user._id, {
+      isBusy: false,
+      $unset: { currentOrder: 1 }
+    });
+
+    console.log(`✅ [Delivery] Delivery partner ${user._id} is now available (order rejected)`);
+    console.log(`🔄 [Delivery] Order ${order._id} rejected by ${user.name}, triggering auto-reassignment`);
+
+    // Trigger automatic reassignment in background
+    try {
+      const { processUnassignedOrders } = await import('../services/orderAssignmentService');
+      // Don't wait for this, let it run in background
+      processUnassignedOrders()
+        .then(() => {
+          console.log(`✅ [Delivery] Reassignment triggered after rejection by ${user.name}`);
+        })
+        .catch((error) => {
+          console.error(`❌ [Delivery] Error during reassignment after rejection:`, error);
+        });
+    } catch (importError) {
+      console.error(`❌ [Delivery] Error importing assignment service:`, importError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Delivery assignment rejected. Order will be reassigned to another delivery partner.",
+      order: {
+        _id: order._id,
+        status: order.status
+      }
+    });
+
+  } catch (error) {
+    console.error("Error rejecting delivery assignment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
+
 export {
   createDelivery,
   getDeliveryById,
   updateDeliveryStatus,
+  rejectDeliveryAssignment,
   getDeliveriesForDeliveryPerson,
   rateDelivery,
   getDeliveryStats,

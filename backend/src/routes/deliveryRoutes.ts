@@ -3,6 +3,7 @@ import {
   createDelivery,
   getDeliveryById,
   updateDeliveryStatus,
+  rejectDeliveryAssignment,
   getDeliveriesForDeliveryPerson,
   rateDelivery,
   getDeliveryStats,
@@ -30,6 +31,9 @@ router.post("/toggle-online", isAuthenticated, requireRole(['Delivery']), toggle
 
 // Get deliveries for delivery person - only for delivery persons
 router.get("/", isAuthenticated, requireRole(['Delivery']), getDeliveriesForDeliveryPerson);
+
+// Reject delivery assignment - only for delivery persons
+router.post("/:deliveryId/reject", isAuthenticated, requireRole(['Delivery']), rejectDeliveryAssignment);
 
 // Get delivery partner's location by ID - accessible by all authenticated users
 router.get("/location/:deliveryPersonId", isAuthenticated, getDeliveryLocation);

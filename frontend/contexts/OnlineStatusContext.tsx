@@ -97,11 +97,11 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
             text: 'Go Offline',
             onPress: async () => {
               try {
-                // Stop location tracking
-                await stopLocationTracking();
-                
                 // Notify backend that delivery person is now offline
                 await apiClient.post('/api/v1/delivery/toggle-online', { isOnline: false });
+                
+                // If successful, stop location tracking
+                await stopLocationTracking();
                 
                 // Update local state
                 await setOnline(false);
@@ -111,6 +111,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 console.error('Error going offline:', error);
                 const errorMsg = error.response?.data?.message || 'Failed to go offline. Please try again.';
                 Alert.alert('Error', errorMsg);
+                // Don't stop location tracking if backend call failed
               }
             }
           }

@@ -57,7 +57,15 @@ export async function processUnassignedOrders(): Promise<void> {
 
     console.log(`📦 [Assignment Service] Found ${unassignedOrders.length} unassigned order(s)`);
 
-    // Find available delivery partners (not busy and active)
+    // Find all delivery partners who are online (isActive)
+    const allOnlinePartners = await UserModel.find({
+      role: 'Delivery',
+      isActive: true
+    }).lean();
+
+    console.log(`👥 [Assignment Service] Found ${allOnlinePartners.length} online delivery partner(s)`);
+
+    // Filter to only those who are not busy
     const availableDeliveryPartners = await UserModel.find({
       role: 'Delivery',
       isActive: true,
@@ -65,11 +73,11 @@ export async function processUnassignedOrders(): Promise<void> {
     }).lean();
 
     if (availableDeliveryPartners.length === 0) {
-      console.log('⚠️ [Assignment Service] No delivery partners available');
+      console.log(`⚠️ [Assignment Service] No delivery partners available (${allOnlinePartners.length} online but all busy)`);
       return;
     }
 
-    console.log(`👥 [Assignment Service] Found ${availableDeliveryPartners.length} available delivery partner(s)`);
+    console.log(`✅ [Assignment Service] Found ${availableDeliveryPartners.length} available delivery partner(s)`);
 
     let assignedCount = 0;
     let failedCount = 0;
@@ -118,14 +126,14 @@ export async function processUnassignedOrders(): Promise<void> {
             }
           }
 
-          // If no partner found within 5km, check if order is older than 15 minutes
+          // If no partner found within 5km, check if order is older than 60 seconds
           // Then expand search radius to 10km
           if (!selectedDeliveryPartner) {
             const orderAge = Date.now() - order.createdAt.getTime();
-            const fifteenMinutes = 15 * 60 * 1000;
+            const sixtySeconds = 60 * 1000;
 
-            if (orderAge > fifteenMinutes) {
-              console.log(`⏰ [Assignment Service] Order ${order._id} is older than 15 minutes, expanding radius to 10km`);
+            if (orderAge > sixtySeconds) {
+              console.log(`⏰ [Assignment Service] Order ${order._id} is older than 60 seconds, expanding radius to 10km`);
 
               for (const partner of availableDeliveryPartners) {
                 const partnerStatus = await UserModel.findById(partner._id).select('isBusy').lean();
@@ -147,26 +155,118 @@ export async function processUnassignedOrders(): Promise<void> {
               }
             }
           }
-        } else {
-          // No location data, assign randomly from available partners
-          console.log(`📍 [Assignment Service] No pickup location for order ${order._id}, assigning randomly`);
-          
-          // Filter still available partners
-          const stillAvailable = [];
-          for (const partner of availableDeliveryPartners) {
-            const partnerStatus = await UserModel.findById(partner._id).select('isBusy').lean();
-            if (!partnerStatus?.isBusy) {
-              stillAvailable.push(partner);
+
+          // If still no partner found, assign to the CLOSEST available partner regardless of distance
+          if (!selectedDeliveryPartner) {
+            console.log(`🌍 [Assignment Service] No partner within radius for order ${order._id}, finding closest partner regardless of distance...`);
+
+            for (const partner of availableDeliveryPartners) {
+              const partnerStatus = await UserModel.findById(partner._id).select('isBusy').lean();
+              if (partnerStatus?.isBusy) continue;
+
+              if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+                const distance = calculateDistance(
+                  pickupLat,
+                  pickupLng,
+                  partner.currentLocation.lat,
+                  partner.currentLocation.lng
+                );
+
+                // Find minimum distance regardless of how far
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  selectedDeliveryPartner = partner;
+                }
+              }
+            }
+
+            if (selectedDeliveryPartner) {
+              console.log(`📍 [Assignment Service] Closest partner found at ${minDistance.toFixed(2)}km away`);
             }
           }
+        } else {
+          // No location data, find closest available partner based on their location
+          console.log(`📍 [Assignment Service] No pickup location for order ${order._id}, finding closest available partner...`);
+          
+          // Find partner with smallest location coordinates (closest to origin as tiebreaker)
+          for (const partner of availableDeliveryPartners) {
+            const partnerStatus = await UserModel.findById(partner._id).select('isBusy').lean();
+            if (partnerStatus?.isBusy) continue;
 
-          if (stillAvailable.length > 0) {
-            selectedDeliveryPartner = stillAvailable[Math.floor(Math.random() * stillAvailable.length)];
+            if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+              // Calculate distance from origin (0,0) as a tiebreaker
+              const distance = Math.sqrt(
+                Math.pow(partner.currentLocation.lat, 2) + 
+                Math.pow(partner.currentLocation.lng, 2)
+              );
+              
+              if (distance < minDistance) {
+                minDistance = distance;
+                selectedDeliveryPartner = partner;
+              }
+            }
+          }
+          
+          // If still no one selected, just take first available
+          if (!selectedDeliveryPartner) {
+            for (const partner of availableDeliveryPartners) {
+              const partnerStatus = await UserModel.findById(partner._id).select('isBusy').lean();
+              if (!partnerStatus?.isBusy) {
+                selectedDeliveryPartner = partner;
+                console.log(`✅ [Assignment Service] Assigned to first available partner (no location data)`);
+                break;
+              }
+            }
           }
         }
 
         // If a delivery partner was found, assign the order
         if (selectedDeliveryPartner) {
+          // Double-check order is still unassigned (prevent race condition)
+          const orderCheck = await OrderModel.findOne({ 
+            _id: order._id, 
+            status: 'ReadyForPickup',
+            deliveryPerson: { $exists: false }
+          });
+          
+          if (!orderCheck) {
+            console.log(`⚠️ [Assignment Service] Order ${order._id} was already assigned, skipping`);
+            continue;
+          }
+
+          // Double-check delivery partner is still available (prevent race condition)
+          const partnerCheck = await UserModel.findOne({
+            _id: selectedDeliveryPartner._id,
+            role: 'Delivery',
+            isActive: true,
+            isBusy: false
+          });
+          
+          if (!partnerCheck) {
+            console.log(`⚠️ [Assignment Service] Delivery partner ${selectedDeliveryPartner._id} is no longer available, skipping`);
+            continue;
+          }
+
+          // Extra safety: Check if partner actually has any active deliveries
+          const activeDeliveryCheck = await DeliveryModel.findOne({
+            deliveryPerson: selectedDeliveryPartner._id,
+            status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+          });
+
+          if (activeDeliveryCheck) {
+            console.log(`⚠️ [Assignment Service] Delivery partner ${selectedDeliveryPartner._id} has active delivery, clearing stuck busy flag`);
+            // They have an active delivery, make sure isBusy is true
+            await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, { isBusy: true });
+            continue;
+          } else if (partnerCheck.isBusy) {
+            // They're marked busy but have no active delivery - clear it
+            console.log(`🧹 [Assignment Service] Delivery partner ${selectedDeliveryPartner._id} marked busy with no active delivery, clearing stuck flag`);
+            await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, { 
+              isBusy: false,
+              $unset: { currentOrder: 1 }
+            });
+          }
+
           // Assign delivery partner to order
           order.deliveryPerson = selectedDeliveryPartner._id as any;
           order.status = 'Assigned';
@@ -288,8 +388,70 @@ export async function assignOrdersToNewlyOnlinePartner(deliveryPersonId: Types.O
       }
     }
 
+    // If no order found within 5km, find the CLOSEST order regardless of distance
+    if (!nearestOrder) {
+      console.log(`🌍 [Assignment Service] No order within 5km, finding closest order regardless of distance...`);
+      
+      for (const order of unassignedOrders) {
+        if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
+          const distance = calculateDistance(
+            deliveryPerson.currentLocation.lat,
+            deliveryPerson.currentLocation.lng,
+            order.pickupLocation.lat,
+            order.pickupLocation.lng
+          );
+
+          // Find minimum distance regardless of how far
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestOrder = order;
+          }
+        }
+      }
+
+      if (nearestOrder) {
+        console.log(`📍 [Assignment Service] Closest order found at ${minDistance.toFixed(2)}km away`);
+      }
+    }
+
     // If found, assign the order
     if (nearestOrder) {
+      // Double-check order is still unassigned (prevent race condition)
+      const orderCheck = await OrderModel.findOne({ 
+        _id: nearestOrder._id, 
+        status: 'ReadyForPickup',
+        deliveryPerson: { $exists: false }
+      });
+      
+      if (!orderCheck) {
+        console.log(`⚠️ [Assignment Service] Order ${nearestOrder._id} was already assigned`);
+        return 0;
+      }
+
+      // Double-check delivery partner is still available (prevent race condition)
+      const partnerCheck = await UserModel.findOne({
+        _id: deliveryPerson._id,
+        role: 'Delivery',
+        isActive: true,
+        isBusy: false
+      });
+      
+      if (!partnerCheck) {
+        console.log(`⚠️ [Assignment Service] Delivery partner ${deliveryPerson._id} is no longer available`);
+        return 0;
+      }
+
+      // Extra safety: Check if partner actually has any active deliveries
+      const activeDeliveryCheck = await DeliveryModel.findOne({
+        deliveryPerson: deliveryPerson._id,
+        status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+      });
+
+      if (activeDeliveryCheck) {
+        console.log(`⚠️ [Assignment Service] Newly online partner ${deliveryPerson._id} already has active delivery`);
+        return 0;
+      }
+
       const store = nearestOrder.store as any;
 
       nearestOrder.deliveryPerson = deliveryPerson._id as any;

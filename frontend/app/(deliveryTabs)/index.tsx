@@ -113,7 +113,7 @@ export default function DeliveryHome() {
           </LinearGradient>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
+        {/* <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/delivery' as any)}>
           <LinearGradient
             colors={['#FF9800', '#F57C00']}
             style={styles.statGradient}
@@ -124,7 +124,7 @@ export default function DeliveryHome() {
               <Text style={styles.statLabel}>Rating</Text>
             </View>
           </LinearGradient>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         
         <TouchableOpacity style={styles.statCard} activeOpacity={0.8} onPress={() => router.push('/(deliveryTabs)/settlement' as any)}>
           <LinearGradient

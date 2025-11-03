@@ -301,18 +301,55 @@ export async function markReadyForPickup(req: Request, res: Response) {
             }
           }
 
-          // If no partner found within 5km, select random from available
-          if (!selectedDeliveryPartner && availableDeliveryPartners.length > 0) {
-            console.log("No delivery partner within 5km, selecting random available partner");
-            selectedDeliveryPartner = availableDeliveryPartners[
-              Math.floor(Math.random() * availableDeliveryPartners.length)
-            ];
+          // If no partner found within 5km, find the CLOSEST partner regardless of distance
+          if (!selectedDeliveryPartner) {
+            console.log("🌍 [Ready For Pickup] No partner within 5km, finding closest available partner...");
+            
+            for (const partner of availableDeliveryPartners) {
+              if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+                const distance = calculateDistance(
+                  pickupLat,
+                  pickupLng,
+                  partner.currentLocation.lat,
+                  partner.currentLocation.lng
+                );
+
+                // Find minimum distance regardless of how far
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  selectedDeliveryPartner = partner;
+                }
+              }
+            }
+
+            if (selectedDeliveryPartner) {
+              console.log(`✅ [Ready For Pickup] Closest partner assigned at ${minDistance.toFixed(2)}km away`);
+            }
           }
         } else {
-          // No location data, select random from available partners
-          selectedDeliveryPartner = availableDeliveryPartners[
-            Math.floor(Math.random() * availableDeliveryPartners.length)
-          ];
+          // No location data, find closest available partner based on their location
+          console.log("📍 [Ready For Pickup] No pickup location, finding closest available partner...");
+          
+          for (const partner of availableDeliveryPartners) {
+            if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+              // Calculate distance from origin (0,0) as a tiebreaker
+              const distance = Math.sqrt(
+                Math.pow(partner.currentLocation.lat, 2) + 
+                Math.pow(partner.currentLocation.lng, 2)
+              );
+              
+              if (distance < minDistance) {
+                minDistance = distance;
+                selectedDeliveryPartner = partner;
+              }
+            }
+          }
+          
+          // If still no one selected, just take first available
+          if (!selectedDeliveryPartner && availableDeliveryPartners.length > 0) {
+            selectedDeliveryPartner = availableDeliveryPartners[0];
+            console.log(`✅ [Ready For Pickup] Assigned to first available partner (no location data)`);
+          }
         }
 
         if (selectedDeliveryPartner) {

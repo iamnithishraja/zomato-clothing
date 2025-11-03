@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   Animated,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,7 @@ const OrderDetailsScreen: React.FC = () => {
   const [delivery, setDelivery] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [codModalVisible, setCodModalVisible] = useState(false);
   const progressAnim = new Animated.Value(0);
 
   const loadDeliveryDetails = useCallback(async () => {
@@ -95,7 +97,47 @@ const OrderDetailsScreen: React.FC = () => {
     }
   };
 
-  const handleCollectCOD = async () => {
+  const handleRejectDelivery = () => {
+    Alert.alert(
+      'Reject Delivery',
+      'Are you sure you want to reject this delivery? It will be reassigned to another delivery partner.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setProcessing(true);
+              const response = await apiClient.post(`/api/v1/delivery/${deliveryId}/reject`, {
+                reason: 'Unable to deliver at this time'
+              });
+
+              if (response.data.success) {
+                Alert.alert('Success', 'Delivery rejected. Order will be reassigned.', [
+                  {
+                    text: 'OK',
+                    onPress: () => router.back()
+                  }
+                ]);
+              }
+            } catch (error: any) {
+              console.error('Error rejecting delivery:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to reject delivery');
+            } finally {
+              setProcessing(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const showCODModal = () => {
+    setCodModalVisible(true);
+  };
+
+  const handleConfirmCODCollection = async () => {
     try {
       const order = delivery?.order;
       const orderId = order && (typeof order === 'object' ? order._id : order);
@@ -103,6 +145,7 @@ const OrderDetailsScreen: React.FC = () => {
 
       setProcessing(true);
       await apiClient.post(`/api/v1/cod/${orderId}/collect`);
+      setCodModalVisible(false);
       Alert.alert('Success', 'COD collected successfully!');
       await loadDeliveryDetails();
     } catch (error: any) {
@@ -181,15 +224,27 @@ const OrderDetailsScreen: React.FC = () => {
     switch (delivery.status) {
       case 'Pending':
         return (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => handleStatusUpdate('Accepted')}
-          >
-            <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.buttonGradient}>
-              <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Accept Delivery</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.pendingActions}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1 }]}
+              onPress={() => handleStatusUpdate('Accepted')}
+            >
+              <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.buttonGradient}>
+                <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+                <Text style={styles.buttonText}>Accept</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1 }]}
+              onPress={handleRejectDelivery}
+            >
+              <LinearGradient colors={['#F44336', '#D32F2F']} style={styles.buttonGradient}>
+                <Ionicons name="close-circle" size={24} color="#FFFFFF" />
+                <Text style={styles.buttonText}>Reject</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         );
       
       case 'Accepted':
@@ -223,11 +278,11 @@ const OrderDetailsScreen: React.FC = () => {
           return (
             <TouchableOpacity
               style={styles.primaryButton}
-              onPress={handleCollectCOD}
+              onPress={showCODModal}
             >
               <LinearGradient colors={['#FF9800', '#F57C00']} style={styles.buttonGradient}>
                 <Ionicons name="cash" size={24} color="#FFFFFF" />
-                <Text style={styles.buttonText}>Collect ₹{formatINR(order.totalAmount)}</Text>
+                <Text style={styles.buttonText}>Collect ₹{formatINR(order.totalAmount)} Cash</Text>
               </LinearGradient>
             </TouchableOpacity>
           );
@@ -436,6 +491,75 @@ const OrderDetailsScreen: React.FC = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* COD Collection Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={codModalVisible}
+        onRequestClose={() => setCodModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <LinearGradient
+              colors={['#FF9800', '#F57C00']}
+              style={styles.modalHeader}
+            >
+              <View style={styles.cashIconContainer}>
+                <Ionicons name="cash" size={48} color="#FFFFFF" />
+              </View>
+              <Text style={styles.modalTitle}>Collect Cash Payment</Text>
+            </LinearGradient>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Amount to Collect</Text>
+              <View style={styles.amountDisplay}>
+                <Text style={styles.currencySymbol}>₹</Text>
+                <Text style={styles.amountText}>
+                  {formatINR(delivery?.order?.totalAmount || 0)}
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoCard}>
+                <Ionicons name="information-circle" size={20} color="#FF9800" />
+                <Text style={styles.modalInfoText}>
+                  Please confirm you have collected the full payment from the customer
+                </Text>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setCodModalVisible(false)}
+                  disabled={processing}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalConfirmButton}
+                  onPress={handleConfirmCODCollection}
+                  disabled={processing}
+                >
+                  <LinearGradient
+                    colors={['#4CAF50', '#2E7D32']}
+                    style={styles.modalConfirmGradient}
+                  >
+                    {processing ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+                        <Text style={styles.modalConfirmText}>Confirm</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -720,6 +844,10 @@ const styles = StyleSheet.create({
   actionContainer: {
     marginTop: 8,
   },
+  pendingActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   primaryButton: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -769,6 +897,133 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#4CAF50',
+  },
+  // COD Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  modalHeader: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  cashIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: '#999',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  amountDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'baseline',
+    marginBottom: 24,
+    paddingVertical: 16,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 16,
+  },
+  currencySymbol: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FF9800',
+    marginRight: 8,
+  },
+  amountText: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#FF9800',
+    letterSpacing: -1,
+  },
+  modalInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    gap: 12,
+  },
+  modalInfoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#F57C00',
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#666',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  modalConfirmGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  modalConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

@@ -92,32 +92,83 @@ export async function autoAssignDeliveryPartner(req: Request, res: Response) {
         }
       }
 
-      // If no partner found within 5km, mark order as waiting
+      // If no partner found within 5km, find the CLOSEST partner regardless of distance
       if (!selectedDeliveryPartner) {
-        order.status = "ReadyForPickup"; // Keep status as ReadyForPickup
-        order.statusHistory.push({
-          status: "ReadyForPickup",
-          timestamp: new Date(),
-          note: "Waiting for delivery partner - none available within 5km radius"
-        });
-        await order.save();
+        console.log("🌍 [Auto-Assign] No partner within 5km, finding closest available partner...");
         
-        return res.status(200).json({
-          success: false,
-          message: "No delivery partners available within 5km radius. Order marked as waiting.",
-          waitingForDeliveryPartner: true
-        });
+        for (const partner of availableDeliveryPartners) {
+          if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+            const distance = calculateDistance(
+              pickupLat,
+              pickupLng,
+              partner.currentLocation.lat,
+              partner.currentLocation.lng
+            );
+
+            // Find minimum distance regardless of how far
+            if (distance < minDistance) {
+              minDistance = distance;
+              selectedDeliveryPartner = partner;
+            }
+          }
+        }
+
+        if (selectedDeliveryPartner) {
+          console.log(`✅ [Auto-Assign] Closest partner assigned at ${minDistance.toFixed(2)}km away`);
+        }
       }
     } else {
-      // No location data available, assign randomly from available partners
-      console.log("No pickup location available, selecting random delivery partner");
-      selectedDeliveryPartner = availableDeliveryPartners[
-        Math.floor(Math.random() * availableDeliveryPartners.length)
-      ];
+      // No location data available, still try to find closest partner if they have location
+      console.log("📍 [Auto-Assign] No pickup location, finding closest available partner by their location...");
+      
+      // Try to find partner closest to their own location (lowest distance from origin)
+      for (const partner of availableDeliveryPartners) {
+        if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
+          // Calculate distance from origin (0,0) as a tiebreaker
+          const distance = Math.sqrt(
+            Math.pow(partner.currentLocation.lat, 2) + 
+            Math.pow(partner.currentLocation.lng, 2)
+          );
+          
+          if (distance < minDistance) {
+            minDistance = distance;
+            selectedDeliveryPartner = partner;
+          }
+        }
+      }
+      
+      // If still no one selected, just take first available
+      if (!selectedDeliveryPartner && availableDeliveryPartners.length > 0) {
+        selectedDeliveryPartner = availableDeliveryPartners[0];
+        console.log(`✅ [Auto-Assign] Assigned to first available partner (no location data)`);
+      }
     }
 
     if (!selectedDeliveryPartner) {
       return sendErrorResponse(res, 500, "Failed to select delivery partner");
+    }
+
+    // Double-check order is still unassigned (prevent race condition)
+    const orderCheck = await OrderModel.findOne({ 
+      _id: order._id, 
+      status: "ReadyForPickup",
+      deliveryPerson: { $exists: false }
+    });
+    
+    if (!orderCheck) {
+      return sendErrorResponse(res, 400, "Order was already assigned to another delivery partner");
+    }
+
+    // Double-check delivery partner is still available (prevent race condition)
+    const partnerCheck = await UserModel.findOne({
+      _id: selectedDeliveryPartner._id,
+      role: "Delivery",
+      isActive: true,
+      isBusy: false
+    });
+    
+    if (!partnerCheck) {
+      return sendErrorResponse(res, 400, "Selected delivery partner is no longer available. Please try again.");
     }
 
     // Assign delivery partner to order and mark partner as busy
@@ -196,16 +247,27 @@ export async function manuallyAssignDeliveryPartner(req: Request, res: Response)
       return sendErrorResponse(res, 404, "Order not found");
     }
 
-    // Find delivery person
+    // Find delivery person and check if they're available
     const deliveryPerson = await UserModel.findById(deliveryPersonId);
     if (!deliveryPerson || deliveryPerson.role !== "Delivery") {
       return sendErrorResponse(res, 404, "Delivery person not found");
     }
 
+    // Check if delivery person is online (isActive)
+    if (!deliveryPerson.isActive) {
+      return sendErrorResponse(res, 400, "Delivery person is currently offline");
+    }
+
+    // Warn if delivery person is busy (but allow manual override)
+    if (deliveryPerson.isBusy) {
+      console.warn(`⚠️ Manually assigning order ${orderId} to busy delivery partner ${deliveryPersonId}`);
+    }
+
     // Assign delivery partner to order
     order.deliveryPerson = deliveryPerson._id as any;
+    order.status = "Assigned";
     order.statusHistory.push({
-      status: order.status,
+      status: "Assigned",
       timestamp: new Date(),
       note: `Delivery partner ${deliveryPerson.name || 'Unknown'} manually assigned`
     });

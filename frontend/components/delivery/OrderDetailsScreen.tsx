@@ -210,6 +210,7 @@ const OrderDetailsScreen: React.FC = () => {
   const order = typeof delivery.order === 'object' ? delivery.order : null;
   const store = order?.store;
   const customer = order?.user;
+  const canShowCustomerAndDelivery = ['Accepted', 'PickedUp', 'OnTheWay', 'Delivered'].includes(delivery.status);
 
   const getNextAction = () => {
     if (processing) {
@@ -383,8 +384,8 @@ const OrderDetailsScreen: React.FC = () => {
           <Text style={styles.orderNumber}>#{order?.orderNumber || delivery._id.slice(-8)}</Text>
         </View>
 
-        {/* Customer Info */}
-        {customer && (
+        {/* Customer Info - visible after acceptance */}
+        {canShowCustomerAndDelivery && customer && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Customer Information</Text>
             <View style={styles.customerInfo}>
@@ -428,25 +429,27 @@ const OrderDetailsScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Delivery Location */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Delivery Location</Text>
-            <TouchableOpacity
-              style={styles.navigateButton}
-              onPress={() => openNavigation('delivery')}
-            >
-              <Ionicons name="navigate" size={16} color="#FFD700" />
-              <Text style={styles.navigateText}>Navigate</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.locationCard}>
-            <View style={styles.locationIcon}>
-              <Ionicons name="location" size={20} color="#F44336" />
+        {/* Delivery Location - visible after acceptance */}
+        {canShowCustomerAndDelivery && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Delivery Location</Text>
+              <TouchableOpacity
+                style={styles.navigateButton}
+                onPress={() => openNavigation('delivery')}
+              >
+                <Ionicons name="navigate" size={16} color="#FFD700" />
+                <Text style={styles.navigateText}>Navigate</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.locationAddress}>{delivery.deliveryAddress}</Text>
+            <View style={styles.locationCard}>
+              <View style={styles.locationIcon}>
+                <Ionicons name="location" size={20} color="#F44336" />
+              </View>
+              <Text style={styles.locationAddress}>{delivery.deliveryAddress}</Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Payment Info */}
         <View style={styles.card}>

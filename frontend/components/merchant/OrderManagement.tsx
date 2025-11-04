@@ -101,8 +101,11 @@ const OrderManagement: React.FC = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadOrders();
-    setRefreshing(false);
+    try {
+      await loadOrders();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadOrders]);
 
   useEffect(() => {

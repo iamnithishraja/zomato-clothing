@@ -103,8 +103,11 @@ export default function StoreDetailScreen() {
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadStoreData();
-    setIsRefreshing(false);
+    try {
+      await loadStoreData();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [loadStoreData]);
 
   // CategoryIcons filter handler

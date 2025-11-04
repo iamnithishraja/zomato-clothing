@@ -151,15 +151,6 @@ export default function CategoryScreen() {
     }
   }, [products]);
 
-  // Handle specification selection from SpecificationIcons
-  const handleSpecificationSelect = useCallback((spec: string, category: string) => {
-    // If the same specification is selected, deselect it
-    if (selectedSpecification?.value === spec && selectedSpecification?.category === category) {
-      setSelectedSpecification(null);
-    } else {
-      setSelectedSpecification({ value: spec, category });
-    }
-  }, [selectedSpecification]);
 
   // Handle filter selection from FilterButtons
   const handleFilterSelect = useCallback((filterId: string) => {
@@ -252,8 +243,11 @@ export default function CategoryScreen() {
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadProducts(), loadStores()]);
-    setIsRefreshing(false);
+    try {
+      await Promise.all([loadProducts(), loadStores()]);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [loadProducts, loadStores]);
 
   // Handle product press

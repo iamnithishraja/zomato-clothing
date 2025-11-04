@@ -47,8 +47,11 @@ export default function DeliveryHome() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadDeliveryStats();
-    setRefreshing(false);
+    try {
+      await loadDeliveryStats();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadDeliveryStats]);
 
   const getGreeting = () => {

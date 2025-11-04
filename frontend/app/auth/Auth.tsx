@@ -361,9 +361,6 @@ const Auth = () => {
                       </LinearGradient>
                     </TouchableOpacity>
                   </Animated.View>
-
-                  {/* Bottom Terms - Inside ScrollView */}
-                  <TermsSection />
                 </ScrollView>
               )}
             </View>

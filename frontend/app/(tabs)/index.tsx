@@ -44,8 +44,8 @@ export default function HomeScreen() {
   const [isCategorySticky, setIsCategorySticky] = useState(false);
 
   // --- Load data ---
-  const loadData = useCallback(async () => {
-    if (hasLoadedData) return;
+  const loadData = useCallback(async (force: boolean = false) => {
+    if (hasLoadedData && !force) return;
     try {
       const bestSellerResponse = await apiClient.get('/api/v1/store/bestsellers', {
         params: { limit: 4 },
@@ -75,9 +75,11 @@ export default function HomeScreen() {
   // --- Refresh handler ---
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    setHasLoadedData(false);
-    await loadData();
-    setIsRefreshing(false);
+    try {
+      await loadData(true);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [loadData]);
 
   // --- Search handler ---
@@ -131,7 +133,7 @@ export default function HomeScreen() {
   // --- Store press handler ---
   const handleStorePress = useCallback(
     (store: Store) => {
-      router.push({ pathname: '/store/[storeId]', params: { storeId: store._id } });
+      router.push(`/store/${store._id}` as any);
     },
     [router]
   );

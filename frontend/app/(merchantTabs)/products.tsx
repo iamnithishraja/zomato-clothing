@@ -46,9 +46,11 @@ export default function MerchantProducts() {
     { key: 'kids', label: 'Kids' }
   ];
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (isRefresh: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (!isRefresh) {
+        setIsLoading(true);
+      }
       const response = await apiClient.get('/api/v1/product/merchant');
       if (response.data.success) {
         setProducts(response.data.products);
@@ -60,7 +62,6 @@ export default function MerchantProducts() {
       Alert.alert('Error', 'Failed to fetch products. Please try again.');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, []);
 
@@ -68,9 +69,13 @@ export default function MerchantProducts() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    fetchProducts();
+    try {
+      await fetchProducts(true);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [fetchProducts]);
 
   const handleCreateProduct = () => {

@@ -34,8 +34,11 @@ export default function OrderScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadOrders();
-    setRefreshing(false);
+    try {
+      await loadOrders();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadOrders]);
 
   useEffect(() => {

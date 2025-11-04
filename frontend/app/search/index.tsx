@@ -101,10 +101,13 @@ export default function SearchScreen() {
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    if (searchQuery.trim()) {
-      await performSearch(searchQuery.trim());
+    try {
+      if (searchQuery.trim()) {
+        await performSearch(searchQuery.trim());
+      }
+    } finally {
+      setIsRefreshing(false);
     }
-    setIsRefreshing(false);
   }, [searchQuery, performSearch]);
 
   // Get total count

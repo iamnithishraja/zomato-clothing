@@ -19,7 +19,7 @@ import geocodeRoute from "./routes/geocodeRoutes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
 import { startAssignmentScheduler } from "./services/assignmentScheduler";
-// import { sanitizeInput } from "./middleware/sanitize"; // Disabled for now, will enable in production
+import { sanitizeInput } from "./middleware/sanitize";
 
 dotenv.config();
 const app = express();
@@ -49,9 +49,12 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Input sanitization middleware - DISABLED FOR DEVELOPMENT
-// TODO: Enable in production by uncommenting the line below
-// app.use(sanitizeInput);
+// Input sanitization middleware
+// Note: Disabled in development, enabled in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(sanitizeInput);
+  console.log('✓ Input sanitization enabled for production');
+}
 
 // Global request timeout middleware (30 seconds default)
 app.use(requestTimeout(30000));

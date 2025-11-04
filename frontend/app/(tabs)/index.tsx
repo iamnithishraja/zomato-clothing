@@ -3,14 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   RefreshControl,
   SafeAreaView,
   StatusBar,
   Alert,
-  Animated,
 } from 'react-native';
-import type { ListRenderItem } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
@@ -40,10 +38,10 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasLoadedData, setHasLoadedData] = useState(false);
 
-  // --- Scroll animation values ---
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const clampedScrollY = Animated.diffClamp(scrollY, 0, 300);
-  const bannerHeight = 320;
+  // --- Scroll tracking ---
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [isSearchBarSticky, setIsSearchBarSticky] = useState(false);
+  const [isCategorySticky, setIsCategorySticky] = useState(false);
 
   // --- Load data ---
   const loadData = useCallback(async () => {
@@ -144,73 +142,74 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Scroll animations ---
-  const bannerTranslateY = clampedScrollY.interpolate({
-    inputRange: [0, bannerHeight],
-    outputRange: [0, -bannerHeight],
-    extrapolate: 'clamp',
-  });
+  // --- Scroll handler for sticky behavior ---
+  const handleScroll = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    
+    // Make search bar sticky after scrolling past banner (around 280px)
+    setIsSearchBarSticky(offsetY > 280);
+    
+    // Make category icons sticky after scrolling past search bar area (around 350px)
+    setIsCategorySticky(offsetY > 350);
+  };
 
-  const stickySearchOpacity = clampedScrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-  const stickyIconsOpacity = clampedScrollY.interpolate({
-    inputRange: [50, 150],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const [isScrolled, setIsScrolled] = useState(false);
-  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  // --- Fixed scroll event ---
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: true,
-      listener: (e: any) => {
-        const offsetY = e.nativeEvent.contentOffset.y;
-        if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
-        scrollTimeout.current = setTimeout(() => {
-          setIsScrolled(offsetY > 80);
-        }, 50);
-      },
-    }
-  );
-
-  const renderStoreCard: ListRenderItem<Store> = useCallback(
-    ({ item }) => (
-      <View style={styles.storeCardContainer}>
-        <ModernStoreCard store={item} onPress={handleStorePress} />
-      </View>
-    ),
-    [handleStorePress]
-  );
-
-  const renderHeader = useCallback(
-    () => (
-      <>
-        {/* --- Promotional Banner --- */}
-        <Animated.View
+      {/* --- Sticky Search Bar (appears on scroll) --- */}
+      {isSearchBarSticky && (
+        <View
           style={[
-            styles.bannerContainer,
-            { transform: [{ translateY: bannerTranslateY }] },
+            styles.stickySearchBar,
+            {
+              paddingTop: Math.max(insets.top, 14),
+            },
           ]}
         >
-          <PromotionalBanner
-            onOrderPress={handleOrderPress}
-            selectedLocation={selectedLocation}
-            onLocationSelect={setSelectedLocation}
+          <SearchBar
             onSearch={handleSearch}
+            placeholder="Search stores and products..."
+            initialValue={searchQuery}
+            showNavigation={true}
           />
-        </Animated.View>
+        </View>
+      )}
 
-        {/* --- Category Icons --- */}
+      {/* --- Sticky Category Icons (appears on scroll) --- */}
+      {isCategorySticky && (
+        <View style={styles.stickyCategoryIcons}>
+          <CategoryIcons showHeader={false} screenType="home" />
+        </View>
+      )}
+
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* --- Promotional Banner --- */}
+        <PromotionalBanner
+          onOrderPress={handleOrderPress}
+          selectedLocation={selectedLocation}
+          onLocationSelect={setSelectedLocation}
+          onSearch={handleSearch}
+        />
+
+        {/* --- Category Icons (original position) --- */}
         <CategoryIcons showHeader={true} screenType="home" />
 
         {/* --- Best Seller Carousel --- */}
@@ -231,75 +230,14 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-      </>
-    ),
-    [
-      selectedLocation,
-      handleSearch,
-      bestSellerStores,
-      handleStorePress,
-      selectedFilter,
-      handleFilterChange,
-      searchQuery,
-      handleOrderPress,
-      bannerTranslateY,
-    ]
-  );
 
-  const AnimatedFlatList: any = Animated.createAnimatedComponent(FlatList as any);
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-
-      {/* --- Sticky Search Bar --- */}
-      <Animated.View
-        style={[
-          styles.stickySearchBar,
-          {
-            paddingTop: Math.max(insets.top, 14),
-            opacity: stickySearchOpacity,
-          },
-        ]}
-        pointerEvents={isScrolled ? 'auto' : 'none'}
-      >
-        <SearchBar
-          onSearch={handleSearch}
-          placeholder="Search stores and products..."
-          initialValue={searchQuery}
-          showNavigation={true}
-        />
-      </Animated.View>
-
-      {/* --- Sticky Category Icons --- */}
-      <Animated.View
-        style={[
-          styles.stickyCategoryIcons,
-          { paddingTop: 30, opacity: stickyIconsOpacity },
-        ]}
-        pointerEvents={isScrolled ? 'auto' : 'none'}
-      >
-        <CategoryIcons showHeader={false} screenType="home" />
-      </Animated.View>
-
-      <AnimatedFlatList
-        data={stores}
-        renderItem={renderStoreCard}
-        keyExtractor={(item: Store) => item._id}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.flatListContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-      />
+        {/* --- Store Cards --- */}
+        {stores.map((store) => (
+          <View key={store._id} style={styles.storeCardContainer}>
+            <ModernStoreCard store={store} onPress={handleStorePress} />
+          </View>
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -309,44 +247,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  bannerContainer: {
-    zIndex: 5,
-    elevation: 5,
-  },
   stickySearchBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     backgroundColor: Colors.background,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 8,
     paddingHorizontal: 16,
-    zIndex: 20,
-    elevation: 20,
+    zIndex: 100,
+    elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   stickyCategoryIcons: {
     position: 'absolute',
-    top: 70,
+    top: 80,
     left: 0,
     right: 0,
     backgroundColor: Colors.background,
-    zIndex: 19,
-    elevation: 19,
+    zIndex: 99,
+    elevation: 9,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    paddingVertical: 8,
   },
-  flatListContent: {
+  scrollContent: {
     paddingBottom: 100,
-    paddingTop: 0,
   },
-  storeCardContainer: {},
+  storeCardContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
   storesSection: {
     marginTop: 14,
     paddingHorizontal: 16,

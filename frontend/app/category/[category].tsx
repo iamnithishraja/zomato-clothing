@@ -520,11 +520,12 @@ export default function CategoryScreen() {
         {!storesLoading && stores.length > 0 && (
           <>
             {stores.map((store) => (
-              <ModernStoreCard
-                key={String(store._id)}
-                store={store as any}
-                onPress={(s) => router.push(`/store/${s._id}?subcategory=${encodeURIComponent(selectedCategory || formattedCategoryName)}` as any)}
-              />
+              <View key={String(store._id)} style={styles.storeCardWrapper}>
+                <ModernStoreCard
+                  store={store as any}
+                  onPress={(s) => router.push(`/store/${s._id}?subcategory=${encodeURIComponent(selectedCategory || formattedCategoryName)}` as any)}
+                />
+              </View>
             ))}
           </>
         )}
@@ -678,6 +679,10 @@ const styles = StyleSheet.create({
   storesGrid: {
     paddingHorizontal: 0,
     paddingBottom: 8,
+  },
+  storeCardWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
   storesWrap: {
     flexDirection: 'row',

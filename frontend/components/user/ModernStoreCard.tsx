@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Image,
+  ScrollView,
   Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Store } from '@/types/store';
@@ -15,11 +18,12 @@ interface ModernStoreCardProps {
   onPress: (store: Store) => void;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-const cardWidth = screenWidth - 32; // Full width minus margins
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => {
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -48,59 +52,130 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
     return stars;
   };
 
-  const formatAddress = (address: string) => {
-    if (!address) return 'Location not specified';
-    const words = address.split(' ');
-    if (words.length > 4) {
-      return words.slice(0, 4).join(' ') + '...';
+  // Get image array (ensure at least one element)
+  const storeImages = store.storeImages && store.storeImages.length > 0 
+    ? store.storeImages 
+    : [];
+
+  // Handle image scroll
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const imageWidth = SCREEN_WIDTH - 32; // Account for card padding
+    const index = Math.round(contentOffsetX / imageWidth);
+    setCurrentImageIndex(index);
+    
+    // Reset auto-scroll timer when user manually scrolls
+    resetAutoScroll();
+  };
+
+  // Auto-scroll to next image
+  const scrollToNextImage = () => {
+    if (storeImages.length <= 1) return;
+
+    const nextIndex = (currentImageIndex + 1) % storeImages.length;
+    const imageWidth = SCREEN_WIDTH - 32;
+    
+    scrollViewRef.current?.scrollTo({
+      x: nextIndex * imageWidth,
+      animated: true,
+    });
+    
+    setCurrentImageIndex(nextIndex);
+  };
+
+  // Reset auto-scroll timer
+  const resetAutoScroll = () => {
+    if (autoScrollTimer.current) {
+      clearInterval(autoScrollTimer.current);
     }
-    return address;
+    
+    if (storeImages.length > 1) {
+      autoScrollTimer.current = setInterval(() => {
+        scrollToNextImage();
+      }, 5000); // 5 seconds
+    }
   };
 
+  // Setup auto-scroll
+  useEffect(() => {
+    if (storeImages.length > 1) {
+      if (autoScrollTimer.current) {
+        clearInterval(autoScrollTimer.current);
+      }
+      
+      autoScrollTimer.current = setInterval(() => {
+        scrollToNextImage();
+      }, 5000);
+    }
 
-  const handleFavoritePress = () => {
-    setIsFavorite(!isFavorite);
-  };
+    return () => {
+      if (autoScrollTimer.current) {
+        clearInterval(autoScrollTimer.current);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeImages.length, currentImageIndex]);
 
   return (
-    <TouchableOpacity
-      style={[styles.container, { width: cardWidth }]}
-      onPress={() => onPress(store)}
-      activeOpacity={0.9}
-    >
-      {/* Main Card Content */}
-      <View style={styles.cardContent}>
-        {/* Cover Image Section */}
-        <View style={styles.imageSection}>
-          {store.storeImages && store.storeImages.length > 0 ? (
-            <Image
-              source={{ uri: store.storeImages[0] }}
-              style={styles.storeImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.placeholderImage}>
-              <Ionicons name="storefront-outline" size={60} color="#9CA3AF" />
-            </View>
-          )}
-          
+    <View style={styles.container}>
+      {/* Image Slider Section - Separate from card click */}
+      <View style={styles.imageSection}>
+        {storeImages.length > 0 ? (
+          <>
+            <ScrollView
+              ref={scrollViewRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              onScrollBeginDrag={resetAutoScroll}
+              onScrollEndDrag={resetAutoScroll}
+              style={styles.imageScrollView}
+              decelerationRate="fast"
+              snapToInterval={SCREEN_WIDTH - 32}
+              snapToAlignment="start"
+              bounces={false}
+            >
+              {storeImages.map((imageUri, index) => (
+                <Image
+                  key={index}
+                  source={{ uri: imageUri }}
+                  style={styles.storeImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
 
-          {/* Favorite Button */}
-          <TouchableOpacity 
-            style={styles.favoriteButton} 
-            activeOpacity={0.7}
-            onPress={handleFavoritePress}
-          >
-            <Ionicons 
-              name={isFavorite ? "heart" : "heart-outline"} 
-              size={24} 
-              color={isFavorite ? "#EF4444" : "#FFFFFF"} 
-            />
-          </TouchableOpacity>
+            {/* Image Dots Indicator */}
+            {storeImages.length > 1 && (
+              <View style={styles.dotsContainer} pointerEvents="none">
+                {storeImages.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.dot,
+                      currentImageIndex === index && styles.activeDot,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.placeholderImage}>
+            <Ionicons name="storefront-outline" size={60} color="#9CA3AF" />
+          </View>
+        )}
+      </View>
 
-        </View>
+      {/* Card Content - Clickable */}
+      <TouchableOpacity
+        style={styles.cardContent}
+        onPress={() => onPress(store)}
+        activeOpacity={0.9}
+      >
 
-        {/* Content Section */}
         <View style={styles.contentSection}>
           {/* Store Name and Rating Row */}
           <View style={styles.topRow}>
@@ -127,27 +202,24 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
             </Text>
           )}
 
-          {/* Bottom Row - Location on Right */}
+          {/* Bottom Row - Location from Left */}
           <View style={styles.bottomRow}>
             <View style={styles.locationContainer}>
               <Ionicons name="location-outline" size={14} color="#6B7280" />
               <Text style={styles.locationText} numberOfLines={1}>
-                {formatAddress(store.address)}
+                {store.address || 'Location not specified'}
               </Text>
             </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
-    marginHorizontal: 16,
-  },
-  cardContent: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     shadowColor: '#000',
@@ -159,13 +231,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.05)',
   },
+  cardContent: {
+    backgroundColor: 'transparent',
+  },
   imageSection: {
     height: 140,
     position: 'relative',
+    zIndex: 10,
+  },
+  imageScrollView: {
+    height: 140,
   },
   storeImage: {
-    width: '100%',
-    height: '100%',
+    width: SCREEN_WIDTH - 32,
+    height: 140,
   },
   placeholderImage: {
     width: '100%',
@@ -174,14 +253,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  favoriteButton: {
+  dotsContainer: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
+    bottom: 8,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  activeDot: {
+    backgroundColor: '#FFFFFF',
+    width: 20,
+    borderRadius: 3,
   },
   contentSection: {
     padding: 12,
@@ -227,18 +318,20 @@ const styles = StyleSheet.create({
   },
   bottomRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   locationText: {
     fontSize: 11,
     fontWeight: '500',
     color: '#6B7280',
     marginLeft: 4,
+    flex: 1,
   },
 });
 

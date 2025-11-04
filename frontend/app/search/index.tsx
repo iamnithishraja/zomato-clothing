@@ -115,10 +115,12 @@ export default function SearchScreen() {
   // Render mixed item (stores and products combined)
   const renderStoreItem: ListRenderItem<{ store: Store; matchedSubcategory?: string }> = ({ item }) => {
     return (
-      <ModernStoreCard 
-        store={item.store} 
-        onPress={(s: Store) => handleStorePress(s, item.matchedSubcategory)} 
-      />
+      <View style={styles.storeCardWrapper}>
+        <ModernStoreCard 
+          store={item.store} 
+          onPress={(s: Store) => handleStorePress(s, item.matchedSubcategory)} 
+        />
+      </View>
     );
   };
 
@@ -323,5 +325,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     maxWidth: 280,
+  },
+  storeCardWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
 });

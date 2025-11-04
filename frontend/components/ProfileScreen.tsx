@@ -14,7 +14,7 @@ import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
 type ProfileScreenProps = { openStore?: boolean };
 
 const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
-  const { user, logout, isAuthenticated, updateUser } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { getCurrentLocation } = useLocation();
   const router = useRouter();
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -28,6 +28,7 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
 
   // Avatar state
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarOptionsModalVisible, setAvatarOptionsModalVisible] = useState(false);
 
   // Addresses state
   const initialAddresses = useMemo(() => user?.addresses || [], [user?.addresses]);
@@ -70,7 +71,7 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
         if (resp.data?.success) {
           setStoreDetails(resp.data.store);
         }
-      } catch (_err: any) {
+      } catch {
         // If 404, store not created yet – keep null
       }
     };
@@ -177,8 +178,8 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     }
   };
 
-  // Image picker functionality
-  const handleImagePicker = async () => {
+  // Image picker functionality for avatar
+  const handleAvatarPicker = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -200,6 +201,86 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
       console.error('Image picker error:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
+  };
+
+  // Delete file from R2 storage
+  const deleteFileFromR2 = async (fileUrl: string) => {
+    try {
+      console.log('Deleting file from R2:', fileUrl);
+      
+      const response = await apiClient.delete('/api/v1/upload/file', {
+        data: { fileUrl }
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to delete file');
+      }
+
+      console.log('File deleted successfully from R2');
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting file from R2:', error);
+      
+      let errorMessage = 'Failed to delete file from storage.';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 400) {
+          errorMessage = data?.message || 'Invalid request.';
+        } else if (status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to delete this file.';
+        } else if (status === 404) {
+          errorMessage = 'File not found. It may already be deleted.';
+        } else if (status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      Alert.alert('Delete Error', errorMessage);
+      return false;
+    }
+  };
+
+  // Delete avatar
+  const handleDeleteAvatar = () => {
+    Alert.alert(
+      'Delete Avatar',
+      'Are you sure you want to remove your profile picture?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!user?.avatar) return;
+            
+            try {
+              setIsUploadingAvatar(true);
+              setAvatarOptionsModalVisible(false);
+              
+              // Delete from R2 storage first
+              const deleted = await deleteFileFromR2(user.avatar);
+              
+              if (deleted) {
+                // Then update user profile to null
+                await saveAvatar(null);
+              }
+            } catch (error) {
+              console.error('Error deleting avatar:', error);
+              Alert.alert('Error', 'Failed to delete avatar. Please try again.');
+            } finally {
+              setIsUploadingAvatar(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const uploadAvatarImage = async (asset: ImagePicker.ImagePickerAsset) => {
@@ -259,6 +340,7 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
       console.log('Avatar uploaded successfully to R2');
       // Update user avatar
       await saveAvatar(publicUrl);
+      setAvatarOptionsModalVisible(false);
       
     } catch (error: any) {
       console.error('Avatar upload error:', error);
@@ -534,46 +616,97 @@ const notAuthenticatedView = (
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Hero Header */}
-        <LinearGradient
-          colors={Colors.gradients.primary as [string, string]}
-          style={styles.heroHeader}
-        >
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarWrapper}>
-              {user.avatar ? (
-                <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons
-                    name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
-                    size={50}
-                    color={Colors.textPrimary}
-                  />
+        {/* Hero Header - Role Based */}
+        {user.role === 'Merchant' && storeDetails?.storeImage ? (
+          // Merchant with Store Image Background
+          <View style={styles.heroHeader}>
+            <Image 
+              source={{ uri: storeDetails.storeImage }} 
+              style={styles.headerBackgroundImage}
+              blurRadius={3}
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.7)']}
+              style={styles.headerOverlay}
+            >
+              <View style={styles.avatarContainer}>
+                <TouchableOpacity 
+                  style={styles.avatarWrapper}
+                  onPress={() => setAvatarOptionsModalVisible(true)}
+                  activeOpacity={0.9}
+                >
+                  {user.avatar ? (
+                    <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Ionicons
+                        name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                        size={50}
+                        color={Colors.textPrimary}
+                      />
+                    </View>
+                  )}
+                  <View style={styles.editAvatarButton}>
+                    {isUploadingAvatar ? (
+                      <ActivityIndicator size={18} color="#FFF" />
+                    ) : (
+                      <Ionicons name="camera" size={18} color="#FFF" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+                
+                <View style={styles.userInfoContainer}>
+                  <Text style={styles.heroName}>{user?.name || 'User'}</Text>
+                  <View style={styles.roleChip}>
+                    <Ionicons name={getRoleIcon(user?.role)} size={14} color={Colors.textPrimary} />
+                    <Text style={styles.roleText}>{getRoleDisplayName(user?.role)}</Text>
+                  </View>
                 </View>
-              )}
+              </View>
+            </LinearGradient>
+          </View>
+        ) : (
+          // User and Delivery (or Merchant without store) - Gradient Background
+          <LinearGradient
+            colors={Colors.gradients.primary as [string, string]}
+            style={styles.heroHeader}
+          >
+            <View style={styles.avatarContainer}>
               <TouchableOpacity 
-                style={styles.editAvatarButton}
-                onPress={handleImagePicker}
-                disabled={isUploadingAvatar}
+                style={styles.avatarWrapper}
+                onPress={() => setAvatarOptionsModalVisible(true)}
+                activeOpacity={0.9}
               >
-                {isUploadingAvatar ? (
-                  <ActivityIndicator size={16} color={Colors.textPrimary} />
+                {user.avatar ? (
+                  <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
                 ) : (
-                  <Ionicons name="camera" size={16} color={Colors.textPrimary} />
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons
+                      name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                      size={50}
+                      color={Colors.textPrimary}
+                    />
+                  </View>
                 )}
+                <View style={styles.editAvatarButton}>
+                  {isUploadingAvatar ? (
+                    <ActivityIndicator size={18} color="#FFF" />
+                  ) : (
+                    <Ionicons name="camera" size={18} color="#FFF" />
+                  )}
+                </View>
               </TouchableOpacity>
-            </View>
-            
-            <View style={styles.userInfoContainer}>
-              <Text style={styles.heroName}>{user?.name || 'User'}</Text>
-              <View style={styles.roleChip}>
-                <Ionicons name={getRoleIcon(user?.role)} size={12} color={Colors.textPrimary} />
-                <Text style={styles.roleText}>{getRoleDisplayName(user?.role)}</Text>
+              
+              <View style={styles.userInfoContainer}>
+                <Text style={styles.heroName}>{user?.name || 'User'}</Text>
+                <View style={styles.roleChip}>
+                  <Ionicons name={getRoleIcon(user?.role)} size={14} color={Colors.textPrimary} />
+                  <Text style={styles.roleText}>{getRoleDisplayName(user?.role)}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        </LinearGradient>
+          </LinearGradient>
+        )}
 
         <View style={styles.content}>
           {/* Quick Stats */}
@@ -1251,6 +1384,90 @@ const notAuthenticatedView = (
           }}
         />
       </Modal>
+
+      {/* Avatar Options Modal - WhatsApp/Instagram Style */}
+      <Modal
+        visible={avatarOptionsModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setAvatarOptionsModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.avatarModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setAvatarOptionsModalVisible(false)}
+        >
+          <View style={styles.avatarModalContainer}>
+            <View style={styles.avatarModalContent}>
+              {/* Preview Section */}
+              <View style={styles.avatarPreviewSection}>
+                {user.avatar ? (
+                  <Image source={{ uri: user.avatar }} style={styles.avatarModalPreview} />
+                ) : (
+                  <View style={styles.avatarModalPreviewPlaceholder}>
+                    <Ionicons
+                      name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : 'person'}
+                      size={80}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Options */}
+              <View style={styles.avatarModalOptions}>
+                <TouchableOpacity 
+                  style={styles.avatarOptionButton}
+                  onPress={() => {
+                    setAvatarOptionsModalVisible(false);
+                    setTimeout(() => handleAvatarPicker(), 300);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.avatarOptionIconBox, { backgroundColor: '#E3F2FD' }]}>
+                    <Ionicons name="images" size={24} color="#2196F3" />
+                  </View>
+                  <Text style={styles.avatarOptionText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+
+                {user.avatar && (
+                  <>
+                    <View style={styles.avatarModalDivider} />
+                    <TouchableOpacity 
+                      style={styles.avatarOptionButton}
+                      onPress={() => {
+                        setAvatarOptionsModalVisible(false);
+                        setTimeout(() => handleDeleteAvatar(), 300);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.avatarOptionIconBox, { backgroundColor: '#FFEBEE' }]}>
+                        <Ionicons name="trash" size={24} color="#F44336" />
+                      </View>
+                      <Text style={[styles.avatarOptionText, { color: Colors.error }]}>
+                        Remove Photo
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <View style={styles.avatarModalDivider} />
+                
+                <TouchableOpacity 
+                  style={styles.avatarOptionButton}
+                  onPress={() => setAvatarOptionsModalVisible(false)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.avatarOptionIconBox, { backgroundColor: '#F5F5F5' }]}>
+                    <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                  </View>
+                  <Text style={styles.avatarOptionText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -1269,6 +1486,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  headerOverlay: {
+    paddingTop: 60,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
   },
   avatarContainer: {
     flexDirection: 'row',
@@ -1297,16 +1530,21 @@ const styles = StyleSheet.create({
   },
   editAvatarButton: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: Colors.textPrimary,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   userInfoContainer: {
     flex: 1,
@@ -1320,17 +1558,20 @@ const styles = StyleSheet.create({
   roleChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
-    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   roleText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textPrimary,
+    letterSpacing: 0.5,
   },
   content: {
     padding: 20,
@@ -2031,6 +2272,84 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
+  },
+  // Avatar Options Modal Styles
+  avatarModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  avatarModalContainer: {
+    width: '100%',
+    maxWidth: 400,
+  },
+  avatarModalContent: {
+    backgroundColor: Colors.background,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  avatarPreviewSection: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: '#F8F9FA',
+  },
+  avatarModalPreview: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 4,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  avatarModalPreviewPlaceholder: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#FFF',
+  },
+  avatarModalOptions: {
+    backgroundColor: Colors.background,
+  },
+  avatarOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  avatarOptionIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  avatarModalDivider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 20,
   },
 });
 

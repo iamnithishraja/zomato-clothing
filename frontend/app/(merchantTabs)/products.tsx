@@ -24,8 +24,10 @@ interface Product {
   category: string;
   images: string[];
   price: number;
+  discountPercentage?: number;
+  isOnSale?: boolean;
   sizes: string[];
-  quantity: number;
+  availableQuantity: number;
   createdAt: string;
   updatedAt: string;
 }

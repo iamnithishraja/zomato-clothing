@@ -20,7 +20,7 @@ interface Product {
   discountPercentage?: number;
   isOnSale?: boolean;
   sizes: string[];
-  quantity: number;
+  availableQuantity: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,8 +106,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <Text style={styles.categoryText}>{product.category}</Text>
           </View>
           <View style={styles.quantityBadge}>
-            <Ionicons name="cube-outline" size={12} color={Colors.textSecondary} />
-            <Text style={styles.quantityText}>{product.quantity}</Text>
+            <Text style={styles.quantityText}>Qty: {product.availableQuantity || 0}</Text>
           </View>
         </View>
 
@@ -254,16 +253,18 @@ const styles = StyleSheet.create({
   quantityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
   quantityText: {
-    fontSize: 11,
-    color: Colors.textPrimary,
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#1E40AF',
+    fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   sizesContainer: {

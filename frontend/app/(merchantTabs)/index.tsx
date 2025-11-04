@@ -107,9 +107,9 @@ export default function MerchantHome() {
             <Text style={styles.greeting}>{getGreeting()}</Text>
             <Text style={styles.userName}>{user?.name || 'Store Owner'}</Text>
           </View>
-          <View style={styles.notificationIcon}>
+          {/* <View style={styles.notificationIcon}>
             <Ionicons name="notifications" size={24} color={Colors.textPrimary} />
-          </View>
+          </View> */}
         </View>
       </LinearGradient>
 

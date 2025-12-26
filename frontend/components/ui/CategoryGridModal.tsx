@@ -2,11 +2,13 @@ import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Image, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import type { ImageSourcePropType } from 'react-native';
 
 export type GridItem = {
   key: string;
   label: string;
-  iconUri?: string; // use existing mapping when available
+  iconUri?: string; // legacy string URI
+  iconSource?: ImageSourcePropType; // preferred: local require or { uri }
   iconName?: string; // Ionicons name fallback
 };
 
@@ -44,15 +46,33 @@ const CategoryGridModal: React.FC<CategoryGridModalProps> = ({ visible, title, i
           contentContainerStyle={styles.gridContent}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.tile} onPress={() => onSelect(item)} activeOpacity={0.7}>
-              {item.iconUri ? (
-                <Image source={{ uri: item.iconUri }} style={styles.tileIcon} resizeMode="contain" />
-              ) : item.iconName ? (
-                <View style={[styles.tileIcon, styles.iconCircle]}>
-                  <Ionicons name={item.iconName as any} size={22} color={Colors.textPrimary} />
-                </View>
-              ) : (
-                <View style={[styles.tileIcon, styles.iconFallback]} />
-              )}
+              {(() => {
+                const source: ImageSourcePropType | undefined = item.iconSource
+                  ? item.iconSource
+                  : item.iconUri
+                    ? { uri: item.iconUri }
+                    : undefined;
+
+                if (source) {
+                  return (
+                    <Image
+                      source={source}
+                      style={styles.tileIcon}
+                      resizeMode="contain"
+                    />
+                  );
+                }
+
+                if (item.iconName) {
+                  return (
+                    <View style={[styles.tileIcon, styles.iconCircle]}>
+                      <Ionicons name={item.iconName as any} size={22} color={Colors.textPrimary} />
+                    </View>
+                  );
+                }
+
+                return <View style={[styles.tileIcon, styles.iconFallback]} />;
+              })()}
               <Text style={styles.tileLabel} numberOfLines={2}>{item.label}</Text>
             </TouchableOpacity>
           )}

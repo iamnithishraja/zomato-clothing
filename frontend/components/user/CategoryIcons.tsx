@@ -14,6 +14,7 @@ import { Colors } from '@/constants/colors';
 import { PRODUCT_SUBCATEGORIES } from '@/types/product';
 import { useAuth } from '@/contexts/AuthContext';
 import CategoryGridModal, { GridItem } from '@/components/ui/CategoryGridModal';
+import type { ImageSourcePropType } from 'react-native';
 
 interface CategoryIconsProps {
   onCategoryPress?: (subcategory: string) => void; // Made optional since we'll use navigation
@@ -60,45 +61,57 @@ const getAllSubcategories = (userGender?: 'Male' | 'Female' | 'Other') => {
   return uniqueSubcategories.sort();
 };
 
+// Local category art for the common items; fall back to remote icons for everything else
+const LOCAL_CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
+  Jeans: require('@/assets/images/jeans.png'),
+  Shirts: require('@/assets/images/shirt.png'),
+  Shorts: require('@/assets/images/shorts.png'),
+  'T-Shirts': require('@/assets/images/t-shirt.png'),
+  Pants: require('@/assets/images/pants.png'),
+  
+};
+
+const remote = (uri: string): ImageSourcePropType => ({ uri });
+
 // Image mapping for subcategories with fashion category images
-export const getImageForSubcategory = (subcategory: string): string => {
-  const imageMap: { [key: string]: string } = {
+export const getImageForSubcategory = (subcategory: string): ImageSourcePropType => {
+  const imageMap: { [key: string]: ImageSourcePropType } = {
     // Tops & Shirts
-    'Shirts': 'https://cdn-icons-png.flaticon.com/128/3046/3046982.png',
-    'T-Shirts': 'https://cdn-icons-png.flaticon.com/128/1867/1867565.png',
-    'Tops': 'https://cdn-icons-png.flaticon.com/128/1983/1983486.png',
-    'Hoodies': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
-    'Sweatshirts': 'https://cdn-icons-png.flaticon.com/128/5980/5980981.png',
-    'Sweaters': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
-    'Cardigans': 'https://cdn-icons-png.flaticon.com/128/5258/5258076.png',
+    Shirts: LOCAL_CATEGORY_IMAGES.Shirts,
+    'T-Shirts': LOCAL_CATEGORY_IMAGES['T-Shirts'],
+    Tops: remote('https://cdn-icons-png.flaticon.com/128/1983/1983486.png'),
+    Hoodies: remote('https://cdn-icons-png.flaticon.com/128/5258/5258076.png'),
+    Sweatshirts: remote('https://cdn-icons-png.flaticon.com/128/5980/5980981.png'),
+    Sweaters: remote('https://cdn-icons-png.flaticon.com/128/5258/5258076.png'),
+    Cardigans: remote('https://cdn-icons-png.flaticon.com/128/5258/5258076.png'),
     
     // Bottoms
-    'Pants': 'https://cdn-icons-png.flaticon.com/128/776/776623.png',
-    'Jeans': 'https://cdn-icons-png.flaticon.com/128/2122/2122621.png',
-    'Shorts': 'https://cdn-icons-png.flaticon.com/128/3345/3345385.png',
-    'Leggings': 'https://cdn-icons-png.flaticon.com/128/10805/10805502.png',
-    'Skirts': 'https://cdn-icons-png.flaticon.com/128/2161/2161241.png',
+    Pants: LOCAL_CATEGORY_IMAGES.Pants,
+    Jeans: LOCAL_CATEGORY_IMAGES.Jeans,
+    Shorts: LOCAL_CATEGORY_IMAGES.Shorts,
+    Leggings: remote('https://cdn-icons-png.flaticon.com/128/10805/10805502.png'),
+    Skirts: remote('https://cdn-icons-png.flaticon.com/128/2161/2161241.png'),
     
     // Outerwear
-    'Jackets': 'https://cdn-icons-png.flaticon.com/128/2806/2806051.png',
-    'Blazers': 'https://cdn-icons-png.flaticon.com/128/2589/2589797.png',
-    'Coats': 'https://cdn-icons-png.flaticon.com/128/2390/2390061.png',
-    'Suits': 'https://cdn-icons-png.flaticon.com/128/3074/3074252.png',
+    Jackets: remote('https://cdn-icons-png.flaticon.com/128/2806/2806051.png'),
+    Blazers: remote('https://cdn-icons-png.flaticon.com/128/2589/2589797.png'),
+    Coats: remote('https://cdn-icons-png.flaticon.com/128/2390/2390061.png'),
+    Suits: remote('https://cdn-icons-png.flaticon.com/128/3074/3074252.png'),
     
     // Dresses & Ethnic
-    'Dresses': 'https://cdn-icons-png.flaticon.com/128/2682/2682178.png',
-    'Sarees': 'https://cdn-icons-png.flaticon.com/128/17981/17981822.png',
-    'Kurtas': 'https://cdn-icons-png.flaticon.com/128/9992/9992462.png',
+    Dresses: remote('https://cdn-icons-png.flaticon.com/128/2682/2682178.png'),
+    Sarees: remote('https://cdn-icons-png.flaticon.com/128/17981/17981822.png'),
+    Kurtas: remote('https://cdn-icons-png.flaticon.com/128/9992/9992462.png'),
     
     // Additional categories
-    'Underwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
-    'Sleepwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
-    'Activewear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
-    'Swimwear': 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png',
-    'Ethnic Wear': 'https://cdn-icons-png.flaticon.com/128/9992/9992462.png',
+    Underwear: remote('https://cdn-icons-png.flaticon.com/128/13434/13434972.png'),
+    Sleepwear: remote('https://cdn-icons-png.flaticon.com/128/13434/13434972.png'),
+    Activewear: remote('https://cdn-icons-png.flaticon.com/128/13434/13434972.png'),
+    Swimwear: remote('https://cdn-icons-png.flaticon.com/128/13434/13434972.png'),
+    'Ethnic Wear': remote('https://cdn-icons-png.flaticon.com/128/9992/9992462.png'),
   };
   
-  return imageMap[subcategory] || 'https://cdn-icons-png.flaticon.com/128/13434/13434972.png';
+  return imageMap[subcategory] || remote('https://cdn-icons-png.flaticon.com/128/13434/13434972.png');
 };
 
 const CategoryIcons: React.FC<CategoryIconsProps> = ({ 
@@ -162,7 +175,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
     }
   };
   const modalItems: GridItem[] = useMemo(() => (
-    SUBCATEGORIES.map((sc) => ({ key: sc, label: sc, iconUri: getImageForSubcategory(sc) }))
+    SUBCATEGORIES.map((sc) => ({ key: sc, label: sc, iconSource: getImageForSubcategory(sc) }))
   ), [SUBCATEGORIES]);
 
   const handleSelectFromModal = (item: GridItem) => {
@@ -209,7 +222,7 @@ const CategoryIcons: React.FC<CategoryIconsProps> = ({
             >
               <View style={styles.iconContainer}>
                 <Image
-                  source={{ uri: getImageForSubcategory(subcategory) }}
+                  source={getImageForSubcategory(subcategory)}
                   style={styles.categoryImage}
                   resizeMode="contain"
                   onError={() => console.log(`Failed to load image for ${subcategory}`)}
@@ -281,8 +294,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   categoryImage: {
-    width: 40,
-    height: 40,
+    width: 68,
+    height: 68,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

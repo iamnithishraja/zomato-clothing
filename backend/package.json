@@ -42,7 +42,6 @@
     "natural": "^6.12.0",
     "node-cache": "^5.1.2",
     "path-to-regexp": "^8.2.0",
-    "pdf-text-reader": "^5.1.0",
     "razorpay": "^2.9.6",
     "resend": "^4.5.1",
     "similarity": "^1.2.1",

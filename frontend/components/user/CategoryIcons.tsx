@@ -63,11 +63,11 @@ const getAllSubcategories = (userGender?: 'Male' | 'Female' | 'Other') => {
 
 // Local category art for the common items; fall back to remote icons for everything else
 const LOCAL_CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
-  Jeans: require('@/assets/images/jeans.png'),
-  Shirts: require('@/assets/images/shirt.png'),
-  Shorts: require('@/assets/images/shorts.png'),
-  'T-Shirts': require('@/assets/images/t-shirt.png'),
-  Pants: require('@/assets/images/pants.png'),
+  Jeans: { uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/jeans.png' },
+  Shirts: { uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/shirt.png' },
+  Shorts: { uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/shorts.png' },
+  'T-Shirts': { uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/tshirt.png' },
+  Pants: { uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/pants.png' },
   
 };
 

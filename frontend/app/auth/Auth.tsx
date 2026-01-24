@@ -200,7 +200,7 @@ const Auth = () => {
     <View style={styles.container}>
       {/* Background Image - Top 50% only - Creates visual appeal and branding */}
       <ImageBackground
-        source={require('../../assets/images/locals3.png')}
+        source={{ uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/locals3.png' }}
         style={styles.backgroundImage}
         resizeMode="cover"
       />

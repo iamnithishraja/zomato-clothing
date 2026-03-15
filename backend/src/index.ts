@@ -16,6 +16,7 @@ import storeRatingRoute from "./routes/storeRatingRoutes";
 import deliveryAssignmentRoute from "./routes/deliveryAssignmentRoutes";
 import directionsRoute from "./routes/directionsRoutes";
 import geocodeRoute from "./routes/geocodeRoutes";
+import adminRoute from "./admin/admin.routes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
 import { startAssignmentScheduler } from "./services/assignmentScheduler";
@@ -77,6 +78,7 @@ app.use("/api/v1/stores", storeRatingRoute);
 app.use("/api/v1/delivery-assignment", deliveryAssignmentRoute);
 app.use("/api/v1", directionsRoute);
 app.use("/api/v1", geocodeRoute);
+app.use("/api/v1/admin", adminRoute);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);

@@ -116,7 +116,12 @@ export default function MerchantOrderDetails() {
       'Pending': '#FF9800',
       'Accepted': '#2196F3',
       'Processing': '#9C27B0',
-      'Ready': '#4CAF50',
+      'ReadyForPickup': '#4CAF50',
+      'Assigned': '#03A9F4',
+      'PickedUp': '#1976D2',
+      'OnTheWay': '#7B1FA2',
+      'Shipped': '#00BCD4',
+      'Delivered': '#4CAF50',
       'Completed': '#4CAF50',
       'Rejected': '#F44336',
       'Cancelled': '#757575'

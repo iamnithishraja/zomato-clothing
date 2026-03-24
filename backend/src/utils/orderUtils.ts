@@ -12,8 +12,9 @@ export async function generateOrderNumber(storeId: Types.ObjectId | string): Pro
   const storeIdShort = storeId.toString().slice(-6).toUpperCase();
   
   // Find the last order for this store today
-  const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-  const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+  // Using separate Date instances to avoid mutation issues with setHours()
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
   
   const lastOrder = await OrderModel.findOne({
     store: storeId,

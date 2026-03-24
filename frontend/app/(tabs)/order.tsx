@@ -48,7 +48,13 @@ export default function OrderScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return Colors.warning;
+      case 'Accepted': return '#4CAF50';
+      case 'Rejected': return Colors.error;
       case 'Processing': return Colors.info;
+      case 'ReadyForPickup': return '#9C27B0';
+      case 'Assigned': return '#03A9F4';
+      case 'PickedUp': return '#2196F3';
+      case 'OnTheWay': return '#7B1FA2';
       case 'Shipped': return Colors.primary;
       case 'Delivered': return Colors.success;
       case 'Cancelled': return Colors.error;
@@ -59,7 +65,13 @@ export default function OrderScreen() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Pending': return 'time-outline';
+      case 'Accepted': return 'checkmark-circle-outline';
+      case 'Rejected': return 'close-circle-outline';
       case 'Processing': return 'cog-outline';
+      case 'ReadyForPickup': return 'cube-outline';
+      case 'Assigned': return 'person-outline';
+      case 'PickedUp': return 'bag-check-outline';
+      case 'OnTheWay': return 'bicycle-outline';
       case 'Shipped': return 'car-outline';
       case 'Delivered': return 'checkmark-circle-outline';
       case 'Cancelled': return 'close-circle-outline';
@@ -79,7 +91,9 @@ export default function OrderScreen() {
   const statusFilters = [
     { key: null, label: 'All' },
     { key: 'Pending', label: 'Pending' },
+    { key: 'Accepted', label: 'Accepted' },
     { key: 'Processing', label: 'Processing' },
+    { key: 'Assigned', label: 'Assigned' },
     { key: 'Shipped', label: 'Shipped' },
     { key: 'Delivered', label: 'Delivered' },
     { key: 'Cancelled', label: 'Cancelled' }

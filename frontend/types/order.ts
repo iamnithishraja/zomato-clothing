@@ -23,6 +23,7 @@ export interface Order {
   orderItems: OrderItem[];
   totalAmount: number;
   shippingAddress: string;
+  deliveryContactPhone?: string;
   orderDate: string;
   status: 'Pending' | 'Accepted' | 'Rejected' | 'Processing' | 'ReadyForPickup' | 'Assigned' | 'PickedUp' | 'OnTheWay' | 'Shipped' | 'Delivered' | 'Cancelled';
   paymentMethod: 'COD' | 'Online';
@@ -65,6 +66,7 @@ export interface CreateOrderRequest {
     notes?: string;
   }[];
   shippingAddress: string;
+  deliveryContactPhone: string;
   paymentMethod: 'COD' | 'Online';
 }
 

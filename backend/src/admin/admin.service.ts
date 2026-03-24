@@ -38,10 +38,10 @@ export class AdminService {
     await admin.save();
 
     // Generate token
-    const token = generateAdminToken(admin._id);
+    const token = generateAdminToken(admin._id.toString());
 
     // Remove password from response
-    const adminResponse = admin.toObject();
+    const adminResponse: any = admin.toObject();
     delete adminResponse.password;
     delete adminResponse.otp;
 
@@ -80,10 +80,10 @@ export class AdminService {
     await admin.save();
 
     // Generate token
-    const token = generateAdminToken(admin._id);
+    const token = generateAdminToken(admin._id.toString());
 
     // Remove password from response
-    const adminResponse = admin.toObject();
+    const adminResponse: any = admin.toObject();
     delete adminResponse.password;
     delete adminResponse.otp;
 
@@ -153,10 +153,10 @@ export class AdminService {
     await admin.save();
 
     // Generate token
-    const token = generateAdminToken(admin._id);
+    const token = generateAdminToken(admin._id.toString());
 
     // Remove password from response
-    const adminResponse = admin.toObject();
+    const adminResponse: any = admin.toObject();
     delete adminResponse.password;
     delete adminResponse.otp;
 
@@ -175,7 +175,7 @@ export class AdminService {
     }
 
     // Remove sensitive data
-    const adminResponse = admin.toObject();
+    const adminResponse: any = admin.toObject();
     delete adminResponse.password;
     delete adminResponse.otp;
 

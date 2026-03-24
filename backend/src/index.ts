@@ -19,7 +19,7 @@ import geocodeRoute from "./routes/geocodeRoutes";
 import adminRoute from "./admin/admin.routes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
-import { startAssignmentScheduler } from "./services/assignmentScheduler";
+import { startAssignmentScheduler, stopAssignmentScheduler } from "./services/assignmentScheduler";
 import { sanitizeInput } from "./middleware/sanitize";
 
 dotenv.config();
@@ -47,8 +47,8 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Input sanitization middleware
 // Note: Disabled in development, enabled in production
@@ -80,6 +80,32 @@ app.use("/api/v1", directionsRoute);
 app.use("/api/v1", geocodeRoute);
 app.use("/api/v1/admin", adminRoute);
 
-app.listen(process.env.PORT, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  stopAssignmentScheduler();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received. Shutting down gracefully...');
+  stopAssignmentScheduler();
+  process.exit(0);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  stopAssignmentScheduler();
+  process.exit(1);
 });

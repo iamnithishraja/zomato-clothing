@@ -37,6 +37,11 @@ const getStatusColor = (status: string) => {
       return '#2196F3';
     case 'ReadyForPickup':
       return '#9C27B0';
+    case 'Assigned':
+      return '#00ACC1';
+    case 'PickedUp':
+    case 'OnTheWay':
+      return '#FF7043';
     case 'Shipped':
       return '#00BCD4';
     case 'Delivered':
@@ -59,6 +64,12 @@ const getStatusIcon = (status: string) => {
       return 'sync-outline';
     case 'ReadyForPickup':
       return 'cube-outline';
+    case 'Assigned':
+      return 'person-outline';
+    case 'PickedUp':
+      return 'bag-check-outline';
+    case 'OnTheWay':
+      return 'bicycle-outline';
     case 'Shipped':
       return 'car-outline';
     case 'Delivered':
@@ -180,6 +191,8 @@ const OrderManagement: React.FC = () => {
     { key: 'Accepted', label: 'Accepted', icon: 'checkmark-circle-outline' },
     { key: 'Processing', label: 'Processing', icon: 'sync-outline' },
     { key: 'ReadyForPickup', label: 'Ready', icon: 'cube-outline' },
+    { key: 'Assigned', label: 'Assigned', icon: 'person-outline' },
+    { key: 'Delivered', label: 'Delivered', icon: 'checkmark-done-outline' },
   ];
 
   const getOrderStats = () => {

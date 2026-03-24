@@ -48,6 +48,14 @@ const deliverySchema: Schema = new Schema(
     review: { 
       type: String,
       trim: true
+    },
+    deliveryNotes: {
+      type: String,
+      trim: true
+    },
+    cancellationReason: {
+      type: String,
+      trim: true
     }
   },
   { 

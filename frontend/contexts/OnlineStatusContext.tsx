@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
+import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
 
 interface OnlineStatusContextType {
@@ -10,7 +11,7 @@ interface OnlineStatusContextType {
   toggleOnlineStatus: () => Promise<void>;
   setOnline: (status: boolean) => Promise<void>;
   startTracking: () => Promise<void>;
-  stopTracking: () => Promise<void>;
+  stopTracking: () => void;
 }
 
 const OnlineStatusContext = createContext<OnlineStatusContextType | undefined>(undefined);
@@ -19,12 +20,16 @@ const ONLINE_STATUS_KEY = '@delivery_online_status';
 
 export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOnline, setIsOnlineState] = useState(false);
+  const { user } = useAuth();
+  const isDeliveryUser = user?.role === 'Delivery';
   const { isTracking, startTracking: startLocationTracking, stopTracking: stopLocationTracking } = useLocationTracking({ 
     enableTracking: false 
   });
 
-  // Load saved online status on mount
+  // Load saved online status on mount — only for delivery users
   useEffect(() => {
+    if (!isDeliveryUser) return;
+
     const loadOnlineStatus = async () => {
       try {
         const savedStatus = await AsyncStorage.getItem(ONLINE_STATUS_KEY);
@@ -41,7 +46,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
     loadOnlineStatus();
-  }, []);
+  }, [isDeliveryUser]);
 
   // Save online status whenever it changes
   const setOnline = useCallback(async (status: boolean) => {
@@ -54,6 +59,8 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const toggleOnlineStatus = useCallback(async () => {
+    if (!isDeliveryUser) return;
+
     if (!isOnline) {
       // Going online - start location tracking
       Alert.alert(
@@ -118,7 +125,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ]
       );
     }
-  }, [isOnline, startLocationTracking, stopLocationTracking, setOnline]);
+  }, [isOnline, isDeliveryUser, startLocationTracking, stopLocationTracking, setOnline]);
 
   return (
     <OnlineStatusContext.Provider 

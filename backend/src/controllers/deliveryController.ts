@@ -747,7 +747,7 @@ async function getDeliveryLocation(req: Request, res: Response) {
     }
 
     const deliveryPerson = await UserModel.findById(deliveryPersonId)
-      .select('name phone currentLocation isBusy currentOrder');
+      .select('name phone role currentLocation isBusy currentOrder');
 
     if (!deliveryPerson || deliveryPerson.role !== 'Delivery') {
       return res.status(404).json({
@@ -828,22 +828,23 @@ async function toggleOnlineStatus(req: Request, res: Response) {
     }
 
     // Update delivery partner's online status using isActive field
-    // Always check and clear isBusy flag if no active deliveries
+    // Only clear isBusy flag if they genuinely have no active deliveries
     const hasActiveDelivery = await DeliveryModel.findOne({
       deliveryPerson: user._id,
-      status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+      status: { $in: ['Pending', 'Accepted', 'PickedUp', 'OnTheWay'] }
     });
 
     const updateData: any = { isActive: isOnline };
     
-    // Clear isBusy flag when:
-    // 1. Going online (always start fresh)
-    // 2. Going offline (clean up state)
-    // 3. No active deliveries (clear stuck state)
-    if (isOnline || !hasActiveDelivery) {
+    // Only clear isBusy and currentOrder if no active deliveries exist
+    // This prevents double-assignment when a partner toggles online while
+    // already having an active delivery
+    if (!hasActiveDelivery) {
       updateData.isBusy = false;
       updateData.$unset = { currentOrder: 1 };
-      console.log(`🧹 [Delivery] Clearing busy status for ${user.name} (online: ${isOnline}, hasActive: ${!!hasActiveDelivery})`);
+      console.log(`🧹 [Delivery] Clearing busy status for ${user.name} (no active deliveries)`);
+    } else {
+      console.log(`ℹ️ [Delivery] Keeping busy status for ${user.name} (has active delivery: ${hasActiveDelivery._id})`);
     }
     
     await UserModel.findByIdAndUpdate(user._id, updateData);
@@ -940,7 +941,7 @@ async function rejectDeliveryAssignment(req: Request, res: Response) {
 
     // Cancel the delivery
     delivery.status = 'Cancelled';
-    (delivery as any).cancellationReason = reason || 'Rejected by delivery partner';
+    delivery.cancellationReason = reason || 'Rejected by delivery partner';
     await delivery.save();
 
     // Reset order back to ReadyForPickup and remove delivery person using findByIdAndUpdate

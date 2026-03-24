@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 
 /**
  * Get directions from Google Directions API
@@ -28,7 +28,7 @@ export async function getDirections(req: Request, res: Response) {
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin as string)}&destination=${encodeURIComponent(destination as string)}&key=${apiKey}&mode=driving&alternatives=false`;
 
     const response = await fetch(url);
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (data.status === 'OK' && data.routes && data.routes.length > 0) {
       const route = data.routes[0];

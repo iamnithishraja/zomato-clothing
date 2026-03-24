@@ -1,8 +1,8 @@
-import mongoose from "mongoose";
+import mongoose, { type Document } from "mongoose";
 import type { User } from "./user";
 
 export interface IOrderItem {
-  product: mongoose.Schema.Types.ObjectId;
+  product: mongoose.Types.ObjectId;
   quantity: number;
   price: number; // Price at the time of order
 }
@@ -10,16 +10,17 @@ export interface IOrderItem {
 export interface IOrderStatusHistory {
   status: string;
   timestamp: Date;
-  updatedBy?: mongoose.Schema.Types.ObjectId | User;
+  updatedBy?: mongoose.Types.ObjectId | User;
   note?: string;
 }
 
-export interface IOrder {
+export interface IOrder extends Document {
   orderNumber?: string;
-  user: mongoose.Schema.Types.ObjectId | User;
-  store: mongoose.Schema.Types.ObjectId;
+  user: mongoose.Types.ObjectId | User;
+  store: mongoose.Types.ObjectId;
   orderItems: IOrderItem[];
   shippingAddress: string;
+  deliveryContactPhone: string;
   itemsTotal: number;
   deliveryFee: number;
   totalAmount: number;
@@ -29,8 +30,8 @@ export interface IOrder {
   rejectionReason?: string;
   paymentMethod: "COD" | "Online";
   paymentStatus: "Pending" | "Completed" | "Failed" | "Refunded";
-  paymentId?: mongoose.Schema.Types.ObjectId;
-  deliveryPerson?: mongoose.Schema.Types.ObjectId | User;
+  paymentId?: mongoose.Types.ObjectId;
+  deliveryPerson?: mongoose.Types.ObjectId | User;
   deliveryDate?: Date;
   pickupLocation?: {
     lat?: number;
@@ -53,3 +54,4 @@ export interface IOrder {
   createdAt: Date;
   updatedAt: Date;
 }
+

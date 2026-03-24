@@ -10,8 +10,8 @@ export const VALIDATION_CONSTANTS = {
     "Underwear", "Sleepwear", "Activewear", "Swimwear", "Ethnic Wear"
   ],
   WORKING_DAYS: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-  ORDER_STATUSES: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
-  DELIVERY_STATUSES: ["Pending", "Accepted", "PickedUp", "Delivered", "Cancelled"],
+  ORDER_STATUSES: ["Pending", "Accepted", "Rejected", "Processing", "ReadyForPickup", "Assigned", "PickedUp", "OnTheWay", "Shipped", "Delivered", "Cancelled"],
+  DELIVERY_STATUSES: ["Pending", "Accepted", "PickedUp", "OnTheWay", "Delivered", "Cancelled"],
   PAYMENT_METHODS: ["COD", "Online"]
 };
 

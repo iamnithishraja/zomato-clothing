@@ -44,6 +44,12 @@ const getStatusColor = (status: string) => {
       return '#2196F3';
     case 'ReadyForPickup':
       return '#9C27B0';
+    case 'Assigned':
+      return '#03A9F4';
+    case 'PickedUp':
+      return '#1976D2';
+    case 'OnTheWay':
+      return '#7B1FA2';
     case 'Shipped':
       return '#00BCD4';
     case 'Delivered':
@@ -66,6 +72,12 @@ const getStatusIcon = (status: string) => {
       return 'construct-outline';
     case 'ReadyForPickup':
       return 'cube-outline';
+    case 'Assigned':
+      return 'person-outline';
+    case 'PickedUp':
+      return 'bag-check-outline';
+    case 'OnTheWay':
+      return 'bicycle-outline';
     case 'Shipped':
       return 'bicycle-outline';
     case 'Delivered':
@@ -85,7 +97,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
 
   // Flipkart-style status steps (end-state delivered)
   const statusSteps = useMemo(() => (
-    ['Pending', 'Accepted', 'Processing', 'ReadyForPickup', 'Shipped', 'Delivered']
+    ['Pending', 'Accepted', 'Processing', 'ReadyForPickup', 'Assigned', 'PickedUp', 'OnTheWay', 'Delivered']
   ), []);
 
   const currentStepIndex = useMemo(() => {
@@ -249,6 +261,9 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
               {order.status === 'Accepted' && 'Order accepted by merchant'}
               {order.status === 'Processing' && 'Your order is being prepared'}
               {order.status === 'ReadyForPickup' && 'Ready for delivery pickup'}
+              {order.status === 'Assigned' && 'Delivery partner assigned'}
+              {order.status === 'PickedUp' && 'Order picked up by delivery partner'}
+              {order.status === 'OnTheWay' && 'Delivery partner is on the way'}
               {order.status === 'Shipped' && 'Out for delivery'}
               {order.status === 'Delivered' && `Delivered on ${formatDate(order.deliveryDate || order.updatedAt)}`}
               {order.status === 'Cancelled' && 'Order cancelled'}

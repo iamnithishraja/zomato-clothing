@@ -10,24 +10,8 @@ import UserModel from '../Models/userModel';
 import DeliveryModel from '../Models/deliveryModel';
 import StoreModel from '../Models/storeModel';
 import { notifyDeliveryAssigned } from '../utils/notificationUtils';
+import { calculateDistance } from '../utils/locationUtils';
 
-/**
- * Calculate distance between two coordinates using Haversine formula
- */
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-  return distance;
-}
 
 /**
  * Auto-assign orders that are ready for pickup but don't have delivery partner assigned
@@ -43,7 +27,10 @@ export async function processUnassignedOrders(): Promise<void> {
     // 3. Are not cancelled
     const unassignedOrders = await OrderModel.find({
       status: 'ReadyForPickup',
-      deliveryPerson: { $exists: false }
+      $or: [
+        { deliveryPerson: { $exists: false } },
+        { deliveryPerson: null }
+      ]
     })
       .populate('store', 'address storeName')
       .populate('user', '_id name')
@@ -226,7 +213,10 @@ export async function processUnassignedOrders(): Promise<void> {
           const orderCheck = await OrderModel.findOne({ 
             _id: order._id, 
             status: 'ReadyForPickup',
-            deliveryPerson: { $exists: false }
+            $or: [
+              { deliveryPerson: { $exists: false } },
+              { deliveryPerson: null }
+            ]
           });
           
           if (!orderCheck) {
@@ -250,7 +240,7 @@ export async function processUnassignedOrders(): Promise<void> {
           // Extra safety: Check if partner actually has any active deliveries
           const activeDeliveryCheck = await DeliveryModel.findOne({
             deliveryPerson: selectedDeliveryPartner._id,
-            status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+            status: { $in: ['Pending', 'Accepted', 'PickedUp', 'OnTheWay'] }
           });
 
           if (activeDeliveryCheck) {
@@ -356,7 +346,10 @@ export async function assignOrdersToNewlyOnlinePartner(deliveryPersonId: Types.O
     // Find unassigned orders
     const unassignedOrders = await OrderModel.find({
       status: 'ReadyForPickup',
-      deliveryPerson: { $exists: false }
+      $or: [
+        { deliveryPerson: { $exists: false } },
+        { deliveryPerson: null }
+      ]
     })
       .populate('store', 'address storeName')
       .populate('user', '_id name')
@@ -420,7 +413,10 @@ export async function assignOrdersToNewlyOnlinePartner(deliveryPersonId: Types.O
       const orderCheck = await OrderModel.findOne({ 
         _id: nearestOrder._id, 
         status: 'ReadyForPickup',
-        deliveryPerson: { $exists: false }
+        $or: [
+          { deliveryPerson: { $exists: false } },
+          { deliveryPerson: null }
+        ]
       });
       
       if (!orderCheck) {
@@ -444,7 +440,7 @@ export async function assignOrdersToNewlyOnlinePartner(deliveryPersonId: Types.O
       // Extra safety: Check if partner actually has any active deliveries
       const activeDeliveryCheck = await DeliveryModel.findOne({
         deliveryPerson: deliveryPerson._id,
-        status: { $in: ['Accepted', 'PickedUp', 'OnTheWay'] }
+        status: { $in: ['Pending', 'Accepted', 'PickedUp', 'OnTheWay'] }
       });
 
       if (activeDeliveryCheck) {

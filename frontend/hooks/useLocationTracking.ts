@@ -23,6 +23,9 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const updateTimer = useRef<NodeJS.Timeout | null>(null);
   const lastSentLocation = useRef<LocationCoords | null>(null);
+  // Use a ref to hold the latest location so the setInterval callback always
+  // reads the most recent value instead of a stale closure capture.
+  const currentLocationRef = useRef<LocationCoords | null>(null);
 
   // Request location permissions
   const requestPermissions = useCallback(async () => {
@@ -112,14 +115,18 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
             lat: location.coords.latitude,
             lng: location.coords.longitude,
           };
+          // Update both the state (for UI) and the ref (for the interval callback)
           setCurrentLocation(coords);
+          currentLocationRef.current = coords;
         }
       );
 
-      // Set up periodic backend updates
+      // Set up periodic backend updates using the ref so
+      // the interval always reads the latest coordinates
       updateTimer.current = setInterval(() => {
-        if (currentLocation) {
-          sendLocationUpdate(currentLocation);
+        const latestLocation = currentLocationRef.current;
+        if (latestLocation) {
+          sendLocationUpdate(latestLocation);
         }
       }, updateInterval);
 
@@ -129,7 +136,7 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
       setError('Failed to start location tracking');
       setIsTracking(false);
     }
-  }, [isTracking, requestPermissions, sendLocationUpdate, updateInterval, currentLocation]);
+  }, [isTracking, requestPermissions, sendLocationUpdate, updateInterval]);
 
   // Stop tracking location
   const stopTracking = useCallback(() => {
@@ -144,6 +151,7 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
     }
 
     setIsTracking(false);
+    currentLocationRef.current = null;
     console.log('🛑 Location tracking stopped');
   }, []);
 
@@ -165,6 +173,7 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
       };
 
       setCurrentLocation(coords);
+      currentLocationRef.current = coords;
       return coords;
     } catch (err: any) {
       console.error('Error getting current location:', err);
@@ -202,4 +211,3 @@ export const useLocationTracking = (options: UseLocationTrackingOptions = { enab
     requestPermissions,
   };
 };
-

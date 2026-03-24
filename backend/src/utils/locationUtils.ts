@@ -22,8 +22,8 @@ export function extractCoordinatesFromMapLink(mapLink: string): { lat: number; l
     const qMatch = mapLink.match(qPattern);
     if (qMatch) {
       return {
-        lat: parseFloat(qMatch[1]),
-        lng: parseFloat(qMatch[2])
+        lat: parseFloat(qMatch[1]!),
+        lng: parseFloat(qMatch[2]!)
       };
     }
 
@@ -32,8 +32,8 @@ export function extractCoordinatesFromMapLink(mapLink: string): { lat: number; l
     const atMatch = mapLink.match(atPattern);
     if (atMatch) {
       return {
-        lat: parseFloat(atMatch[1]),
-        lng: parseFloat(atMatch[2])
+        lat: parseFloat(atMatch[1]!),
+        lng: parseFloat(atMatch[2]!)
       };
     }
 
@@ -42,8 +42,8 @@ export function extractCoordinatesFromMapLink(mapLink: string): { lat: number; l
     const placeMatch = mapLink.match(placePattern);
     if (placeMatch) {
       return {
-        lat: parseFloat(placeMatch[1]),
-        lng: parseFloat(placeMatch[2])
+        lat: parseFloat(placeMatch[1]!),
+        lng: parseFloat(placeMatch[2]!)
       };
     }
 
@@ -52,8 +52,8 @@ export function extractCoordinatesFromMapLink(mapLink: string): { lat: number; l
     const llMatch = mapLink.match(llPattern);
     if (llMatch) {
       return {
-        lat: parseFloat(llMatch[1]),
-        lng: parseFloat(llMatch[2])
+        lat: parseFloat(llMatch[1]!),
+        lng: parseFloat(llMatch[2]!)
       };
     }
 
@@ -84,7 +84,7 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
     
     const response = await fetch(url);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.status === 'OK' && data.results && data.results.length > 0) {
       const location = data.results[0].geometry.location;
@@ -183,3 +183,20 @@ export function isValidCoordinates(coords: any): boolean {
   return true;
 }
 
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ * Returns distance in kilometers
+ */
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}

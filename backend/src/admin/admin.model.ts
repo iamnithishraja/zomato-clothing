@@ -1,4 +1,24 @@
-import mongoose from "mongoose";
+import mongoose, { type Document } from "mongoose";
+
+// Document interface with custom methods
+export interface IAdminDocument extends Document {
+  username: string;
+  email: string;
+  password: string;
+  phone?: string | null;
+  isActive: boolean;
+  lastLogin?: Date | null;
+  otp?: {
+    code?: string | null;
+    expiry?: Date | null;
+  } | null;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+  generateOTP(): string;
+  verifyOTP(candidateOtp: string): boolean;
+  clearOTP(): void;
+}
 
 const adminSchema = new mongoose.Schema({
   username: {
@@ -100,6 +120,6 @@ adminSchema.methods.clearOTP = function(): void {
   };
 };
 
-const AdminModel = mongoose.models.Admin || mongoose.model('Admin', adminSchema);
+const AdminModel = mongoose.model<IAdminDocument>('Admin', adminSchema);
 
 export default AdminModel;

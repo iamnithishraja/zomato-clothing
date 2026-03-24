@@ -1,9 +1,9 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IPayment extends Document {
-  order: mongoose.Schema.Types.ObjectId;
-  user: mongoose.Schema.Types.ObjectId;
-  store: mongoose.Schema.Types.ObjectId;
+  order: mongoose.Types.ObjectId;
+  user: mongoose.Types.ObjectId;
+  store: mongoose.Types.ObjectId;
   amount: number;
   paymentMethod: "COD" | "Online";
   paymentStatus: "Pending" | "Completed" | "Failed" | "Refunded" | "PartialRefund";
@@ -25,7 +25,7 @@ export interface IPayment extends Document {
   refundTransactionId?: string;
   
   // COD specific
-  codCollectedBy?: mongoose.Schema.Types.ObjectId; // Delivery person who collected
+  codCollectedBy?: mongoose.Types.ObjectId; // Delivery person who collected
   codCollectedAt?: Date;
   codSubmittedToStore?: boolean;
   codSubmittedAt?: Date;

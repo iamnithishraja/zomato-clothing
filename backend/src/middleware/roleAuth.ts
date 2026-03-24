@@ -7,7 +7,7 @@ import type { UserRole } from "../types/user";
  * @param allowedRoles - Array of roles that are allowed to access the route
  */
 export function requireRole(allowedRoles: UserRole[]) {
-    return (req: CustomRequest, res: Response, next: NextFunction) => {
+    return (req: CustomRequest, res: Response, next: NextFunction): void | Response => {
         try {
             if (!req.user) {
                 return res.status(401).json({
@@ -23,7 +23,7 @@ export function requireRole(allowedRoles: UserRole[]) {
                 });
             }
 
-            next();
+            return next(); // ✅ fix
         } catch (error) {
             console.error("Role authorization error:", error);
             return res.status(500).json({
@@ -59,7 +59,7 @@ export const requireAnyRole = requireRole(['User', 'Merchant', 'Delivery']);
  * This should be used after requireMerchant middleware
  */
 export function requireMerchantOwnership(resourceField: string = 'merchantId') {
-    return (req: CustomRequest, res: Response, next: NextFunction) => {
+    return (req: CustomRequest, res: Response, next: NextFunction): void | Response => {
         try {
             if (!req.user) {
                 return res.status(401).json({
@@ -76,8 +76,11 @@ export function requireMerchantOwnership(resourceField: string = 'merchantId') {
             }
 
             // Check if the resource belongs to the merchant
-            const resourceId = req.params.id || req.body[resourceField] || req.query[resourceField];
-            
+            const resourceId =
+                req.params.id ||
+                req.body[resourceField] ||
+                req.query[resourceField];
+
             if (!resourceId) {
                 return res.status(400).json({
                     success: false,
@@ -87,8 +90,8 @@ export function requireMerchantOwnership(resourceField: string = 'merchantId') {
 
             // Store the merchant ID for use in controllers
             (req.user as any).merchantId = req.user._id;
-            
-            next();
+
+            return next(); // ✅ fix
         } catch (error) {
             console.error("Merchant ownership check error:", error);
             return res.status(500).json({

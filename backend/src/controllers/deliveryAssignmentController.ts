@@ -5,24 +5,8 @@ import DeliveryModel from "../Models/deliveryModel";
 import StoreModel from "../Models/storeModel";
 import { sendErrorResponse } from "../utils/validation";
 import { notifyDeliveryAssigned } from "../utils/notificationUtils";
+import { calculateDistance } from "../utils/locationUtils";
 import type { Types } from "mongoose";
-
-/**
- * Calculate distance between two coordinates using Haversine formula
- * Returns distance in kilometers
- */
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the Earth in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-  return distance;
-}
 
 /**
  * Auto-assign nearest available delivery partner within 5km radius
@@ -152,7 +136,10 @@ export async function autoAssignDeliveryPartner(req: Request, res: Response) {
     const orderCheck = await OrderModel.findOne({ 
       _id: order._id, 
       status: "ReadyForPickup",
-      deliveryPerson: { $exists: false }
+      $or: [
+        { deliveryPerson: { $exists: false } },
+        { deliveryPerson: null }
+      ]
     });
     
     if (!orderCheck) {
@@ -272,6 +259,12 @@ export async function manuallyAssignDeliveryPartner(req: Request, res: Response)
       note: `Delivery partner ${deliveryPerson.name || 'Unknown'} manually assigned`
     });
     await order.save();
+
+    // Mark delivery partner as busy and set current order
+    await UserModel.findByIdAndUpdate(deliveryPerson._id, {
+      isBusy: true,
+      currentOrder: order._id
+    });
 
     // Create or update delivery record
     let delivery = await DeliveryModel.findOne({ order: order._id });

@@ -26,13 +26,13 @@ const verifyOtpSchema = z.object({
 });
 
 // Admin signup
-export async function adminSignup(req: Request, res: Response) {
+export async function adminSignup(req: Request, res: Response): Promise<Response> {
   try {
     const validatedData = signupSchema.parse(req.body);
     
     const result = await AdminService.createAdmin(validatedData);
     
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Admin account created successfully',
       data: result
@@ -44,11 +44,11 @@ export async function adminSignup(req: Request, res: Response) {
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors
+        errors: error.issues
       });
     }
     
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error.message || 'Failed to create admin account'
     });
@@ -56,13 +56,13 @@ export async function adminSignup(req: Request, res: Response) {
 }
 
 // Admin login with password
-export async function adminLoginPassword(req: Request, res: Response) {
+export async function adminLoginPassword(req: Request, res: Response): Promise<Response> {
   try {
     const validatedData = loginPasswordSchema.parse(req.body);
     
     const result = await AdminService.loginWithPassword(validatedData);
     
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: result
@@ -74,11 +74,11 @@ export async function adminLoginPassword(req: Request, res: Response) {
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors
+        errors: error.issues
       });
     }
     
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       message: error.message || 'Login failed'
     });
@@ -86,13 +86,13 @@ export async function adminLoginPassword(req: Request, res: Response) {
 }
 
 // Request OTP for admin login
-export async function adminRequestOtp(req: Request, res: Response) {
+export async function adminRequestOtp(req: Request, res: Response): Promise<Response> {
   try {
     const validatedData = requestOtpSchema.parse(req.body);
     
     await AdminService.requestOTP(validatedData.phone);
     
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'OTP sent successfully'
     });
@@ -103,11 +103,11 @@ export async function adminRequestOtp(req: Request, res: Response) {
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors
+        errors: error.issues
       });
     }
     
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error.message || 'Failed to send OTP'
     });
@@ -115,13 +115,13 @@ export async function adminRequestOtp(req: Request, res: Response) {
 }
 
 // Verify OTP and login
-export async function adminVerifyOtp(req: Request, res: Response) {
+export async function adminVerifyOtp(req: Request, res: Response): Promise<Response> {
   try {
     const validatedData = verifyOtpSchema.parse(req.body);
     
     const result = await AdminService.verifyOTPAndLogin(validatedData.phone, validatedData.otp);
     
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: result
@@ -133,11 +133,11 @@ export async function adminVerifyOtp(req: Request, res: Response) {
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors
+        errors: error.issues
       });
     }
     
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       message: error.message || 'OTP verification failed'
     });
@@ -145,7 +145,7 @@ export async function adminVerifyOtp(req: Request, res: Response) {
 }
 
 // Get admin profile
-export async function getAdminProfile(req: CustomRequest, res: Response) {
+export async function getAdminProfile(req: CustomRequest, res: Response): Promise<Response> {
   try {
     if (!req.admin) {
       return res.status(401).json({
@@ -156,7 +156,7 @@ export async function getAdminProfile(req: CustomRequest, res: Response) {
     
     const admin = await AdminService.getAdminProfile(req.admin._id);
     
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Admin profile retrieved successfully',
       data: { admin }
@@ -164,7 +164,7 @@ export async function getAdminProfile(req: CustomRequest, res: Response) {
   } catch (error: any) {
     console.error('Get admin profile error:', error);
     
-    res.status(404).json({
+    return res.status(404).json({
       success: false,
       message: error.message || 'Failed to get admin profile'
     });

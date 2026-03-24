@@ -40,7 +40,7 @@ export async function isAdminAuthenticated(
       return;
     }
     
-    const admin: Admin | null = await AdminModel.findById(decoded.adminId);
+    const admin = await AdminModel.findById(decoded.adminId);
     
     if (!admin) {
       res.status(401).json({ success: false, message: "Admin not found" });
@@ -57,7 +57,7 @@ export async function isAdminAuthenticated(
     }
     
     // Remove sensitive data from request object
-    const adminResponse = admin.toObject();
+    const adminResponse: any = admin.toObject();
     delete adminResponse.password;
     delete adminResponse.otp;
     

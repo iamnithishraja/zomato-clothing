@@ -6,8 +6,6 @@ import { sendErrorResponse } from "../utils/validation";
 import Razorpay from "razorpay";
 import { releaseInventory } from "../utils/orderUtils";
 import { notifyOrderAccepted, notifyOrderRejected, notifyOrderReady } from "../utils/notificationUtils";
-import type { Types } from "mongoose";
-import z from "zod";
 
 /**
  * Accept order by merchant
@@ -243,163 +241,22 @@ export async function markReadyForPickup(req: Request, res: Response) {
       store.storeName
     );
 
-    // Auto-assign delivery partner using proximity-based algorithm
+    // Auto-assign delivery partner using the centralized assignment service
+    // This runs in the background so the merchant response is not delayed
     try {
-      const UserModel = (await import("../Models/userModel")).default;
-      const DeliveryModel = (await import("../Models/deliveryModel")).default;
-      const { notifyDeliveryAssigned } = await import("../utils/notificationUtils");
-
-      // Calculate distance between two coordinates using Haversine formula
-      const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-        const R = 6371; // Radius of the Earth in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = 
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-      };
-
-      // Get pickup location coordinates
-      let pickupLat: number | null = null;
-      let pickupLng: number | null = null;
-
-      if (order.pickupLocation?.lat && order.pickupLocation?.lng) {
-        pickupLat = order.pickupLocation.lat;
-        pickupLng = order.pickupLocation.lng;
-      }
-
-      // Find available delivery partners (not busy and active)
-      const availableDeliveryPartners = await UserModel.find({
-        role: "Delivery",
-        isActive: true,
-        isBusy: false
-      }).lean();
-
-      if (availableDeliveryPartners.length > 0) {
-        let selectedDeliveryPartner = null;
-        let minDistance = Infinity;
-
-        // If we have pickup location, find the nearest delivery partner within 5km
-        if (pickupLat && pickupLng) {
-          for (const partner of availableDeliveryPartners) {
-            if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
-              const distance = calculateDistance(
-                pickupLat,
-                pickupLng,
-                partner.currentLocation.lat,
-                partner.currentLocation.lng
-              );
-
-              // Only consider partners within 5km radius
-              if (distance <= 5 && distance < minDistance) {
-                minDistance = distance;
-                selectedDeliveryPartner = partner;
-              }
-            }
-          }
-
-          // If no partner found within 5km, find the CLOSEST partner regardless of distance
-          if (!selectedDeliveryPartner) {
-            console.log("🌍 [Ready For Pickup] No partner within 5km, finding closest available partner...");
-            
-            for (const partner of availableDeliveryPartners) {
-              if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
-                const distance = calculateDistance(
-                  pickupLat,
-                  pickupLng,
-                  partner.currentLocation.lat,
-                  partner.currentLocation.lng
-                );
-
-                // Find minimum distance regardless of how far
-                if (distance < minDistance) {
-                  minDistance = distance;
-                  selectedDeliveryPartner = partner;
-                }
-              }
-            }
-
-            if (selectedDeliveryPartner) {
-              console.log(`✅ [Ready For Pickup] Closest partner assigned at ${minDistance.toFixed(2)}km away`);
-            }
-          }
-        } else {
-          // No location data, find closest available partner based on their location
-          console.log("📍 [Ready For Pickup] No pickup location, finding closest available partner...");
-          
-          for (const partner of availableDeliveryPartners) {
-            if (partner.currentLocation?.lat && partner.currentLocation?.lng) {
-              // Calculate distance from origin (0,0) as a tiebreaker
-              const distance = Math.sqrt(
-                Math.pow(partner.currentLocation.lat, 2) + 
-                Math.pow(partner.currentLocation.lng, 2)
-              );
-              
-              if (distance < minDistance) {
-                minDistance = distance;
-                selectedDeliveryPartner = partner;
-              }
-            }
-          }
-          
-          // If still no one selected, just take first available
-          if (!selectedDeliveryPartner && availableDeliveryPartners.length > 0) {
-            selectedDeliveryPartner = availableDeliveryPartners[0];
-            console.log(`✅ [Ready For Pickup] Assigned to first available partner (no location data)`);
-          }
-        }
-
-        if (selectedDeliveryPartner) {
-          // Assign delivery partner to order and mark as Assigned
-          order.deliveryPerson = selectedDeliveryPartner._id as any;
-          order.status = "Assigned";
-          order.statusHistory.push({
-            status: "Assigned",
-            timestamp: new Date(),
-            note: `Delivery partner ${selectedDeliveryPartner.name || 'Unknown'} auto-assigned${pickupLat && pickupLng && minDistance !== Infinity ? ` (${minDistance.toFixed(2)}km away)` : ''}`
-          });
-          await order.save();
-
-          // Mark delivery partner as busy and set current order
-          await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, {
-            isBusy: true,
-            currentOrder: order._id
-          });
-
-          // Create delivery record
-          const delivery = new DeliveryModel({
-            deliveryPerson: selectedDeliveryPartner._id,
-            order: order._id,
-            pickupAddress: store.address || "Store address",
-            deliveryAddress: order.shippingAddress,
-            estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-            deliveryFee: order.deliveryFee,
-            status: "Pending"
-          });
-          await delivery.save();
-
-          // Notify delivery partner
-          await notifyDeliveryAssigned(
-            order._id,
-            order.orderNumber || order._id.toString().slice(-8),
-            order.user as any,
-            selectedDeliveryPartner._id,
-            selectedDeliveryPartner.name || "Delivery Partner",
-            store._id
-          );
-
-          console.log(`✅ Delivery partner ${selectedDeliveryPartner.name} auto-assigned to order ${order._id}${minDistance !== Infinity ? ` (${minDistance.toFixed(2)}km away)` : ''}`);
-        } else {
-          console.log(`❌ No suitable delivery partner found for order ${order._id}`);
-        }
-      } else {
-        console.log(`⚠️ No delivery partners available for order ${order._id}`);
-      }
-    } catch (assignError) {
-      console.error("❌ Error auto-assigning delivery partner:", assignError);
+      const { processUnassignedOrders } = await import("../services/orderAssignmentService");
+      
+      // Fire-and-forget: the centralized service has all the safety checks
+      // (race condition double-check, active delivery check, proximity algorithm)
+      processUnassignedOrders()
+        .then(() => {
+          console.log(`✅ [Ready For Pickup] Assignment service triggered for order ${order._id}`);
+        })
+        .catch((assignError) => {
+          console.error(`❌ [Ready For Pickup] Assignment service error for order ${order._id}:`, assignError);
+        });
+    } catch (importError) {
+      console.error("❌ Error importing assignment service:", importError);
       // Don't fail the entire request if auto-assignment fails
     }
 

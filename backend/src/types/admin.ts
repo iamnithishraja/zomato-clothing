@@ -1,10 +1,12 @@
 export interface Admin {
-  _id: string;
+  _id: any;
   username: string;
   email: string;
-  phone?: string;
+  password?: string;
+  phone?: string | null;
   isActive: boolean;
-  lastLogin?: Date;
+  lastLogin?: Date | null;
+  otp?: any;
   createdAt: Date;
   updatedAt: Date;
 }

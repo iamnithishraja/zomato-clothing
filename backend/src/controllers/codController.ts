@@ -3,8 +3,6 @@ import OrderModel from "../Models/orderModel";
 import PaymentModel from "../Models/paymentModel";
 import DeliveryModel from "../Models/deliveryModel";
 import { sendErrorResponse } from "../utils/validation";
-import type { Types } from "mongoose";
-import z from "zod";
 
 /**
  * Mark COD as collected by delivery person

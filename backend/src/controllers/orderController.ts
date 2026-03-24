@@ -345,6 +345,7 @@ async function createOrder(req: Request, res: Response) {
       deliveryFee,
       totalAmount,
       shippingAddress: shippingAddress.trim(),
+      deliveryContactPhone: deliveryContactPhone.trim(),
       paymentMethod,
       paymentStatus: paymentMethod === "COD" ? "Pending" : "Pending",
       pickupLocation: pickupLocation || undefined,

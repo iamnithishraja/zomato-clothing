@@ -26,6 +26,8 @@ const getStatusColor = (status: string) => {
       return '#FFA500';
     case 'Accepted':
       return '#4CAF50';
+    case 'Assigned':
+      return '#03A9F4';
     case 'PickedUp':
       return '#2196F3';
     case 'OnTheWay':
@@ -88,6 +90,16 @@ const DeliveryDashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Auto-refresh deliveries every 15 seconds for real-time updates
+  // This ensures delivery partners see new assignments without manual refresh
+  useEffect(() => {
+    const pollingInterval = setInterval(() => {
+      loadData();
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(pollingInterval);
   }, [loadData]);
 
   const handleUpdateStatus = async (deliveryId: string, newStatus: string) => {
@@ -213,7 +225,7 @@ const DeliveryDashboard: React.FC = () => {
               >
                 <Ionicons name="cash-outline" size={32} color="#FFFFFF" />
                 <Text style={styles.statNumber}>₹{formatINR(stats.totalEarnings || 0)}</Text>
-                <Text style={styles.statLabel}>Deliverys</Text>
+                <Text style={styles.statLabel}>Earnings</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>

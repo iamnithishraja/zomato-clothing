@@ -127,7 +127,7 @@ export default function Login() {
     setError('');
     try {
       await loginWithPassword(passwordForm);
-      navigate('/dashboard');
+      navigate('/dashboard/analytics');
     } catch (err: any) { setError(err.message); }
   }, [passwordForm, loginWithPassword, navigate]);
 
@@ -140,7 +140,7 @@ export default function Login() {
         setOtpStep('verify');
       } else {
         await verifyOTP(otpForm.phone, otpForm.otp);
-        navigate('/dashboard');
+        navigate('/dashboard/analytics');
       }
     } catch (err: any) { setError(err.message); }
   }, [otpStep, otpForm, requestOTP, verifyOTP, navigate]);
@@ -194,11 +194,9 @@ export default function Login() {
           background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
         }} />
         {/* Left Panel */}
-        <div style={{
-          flex: 1, display: 'none', background: '#2D2D2D',
-          flexDirection: 'column', justifyContent: 'space-between',
-          padding: '48px', position: 'relative', overflow: 'hidden',
-        }} className="left-panel">
+        <div
+          className="left-panel relative hidden min-h-screen w-full max-w-none flex-1 flex-col justify-between overflow-hidden bg-[#2D2D2D] p-10 sm:p-12 lg:flex xl:p-14"
+        >
           {/* Decorative circles */}
           <div style={{
             position: 'absolute', top: -80, right: -80,

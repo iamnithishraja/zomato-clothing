@@ -1,0 +1,414 @@
+import { useEffect, useState, useMemo } from 'react';
+import {
+  Users,
+  ShoppingCart,
+  Store,
+  Truck,
+  TrendingUp,
+  UserPlus,
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
+import { fetchAnalyticsOverview } from '../../services/dashboardApi';
+import PageShell from '@/components/admin/PageShell';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import StatCard from '@/components/admin/StatCard';
+import PanelCard from '@/components/admin/PanelCard';
+import LoadingState from '@/components/admin/LoadingState';
+import ErrorState from '@/components/admin/ErrorState';
+import SegmentedControl from '@/components/admin/SegmentedControl';
+import { chartTheme } from '@/lib/admin-theme';
+import { chartTooltip, pieLegendFormatter } from '@/lib/chart-common';
+import { useAuthStore } from '@/store/authStore';
+
+interface AnalyticsData {
+  totalUsers: number;
+  totalMerchants: number;
+  totalDeliveryPartners: number;
+  totalCustomers: number;
+  totalOrders: number;
+  totalStores: number;
+  newUsersLast30Days: number;
+  roleBreakdown: Record<string, number>;
+  ordersTrend: {
+    daily: { date: string; count: number; revenue: number }[];
+    weekly: { week: number; year: number; count: number; revenue: number }[];
+    monthly: { month: string; count: number; revenue: number }[];
+  };
+  categoryWiseSales: { category: string; totalSold: number; totalRevenue: number }[];
+}
+
+type TrendView = 'daily' | 'weekly' | 'monthly';
+
+const ROLE_COLORS = ['#b45309', '#15803d', '#0369a1', '#7c3aed', '#c2410c', '#57534e'];
+
+export default function AnalyticsSection() {
+  const { admin } = useAuthStore();
+  const displayName = admin?.username?.trim() || 'there';
+
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [trendView, setTrendView] = useState<TrendView>('daily');
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  const load = () => {
+    setLoading(true);
+    setError('');
+    fetchAnalyticsOverview()
+      .then(setData)
+      .catch(e =>
+        setError(e?.response?.data?.message || e.message || 'Failed to load analytics'),
+      )
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const trendChartData = useMemo(() => {
+    if (!data) return [];
+    const raw =
+      trendView === 'daily'
+        ? data.ordersTrend.daily
+        : trendView === 'weekly'
+          ? data.ordersTrend.weekly
+          : data.ordersTrend.monthly;
+    return raw.map((item: any) => {
+      let periodLabel: string;
+      let detailName: string;
+      if (trendView === 'daily') {
+        periodLabel = item.date?.slice(5) ?? '';
+        detailName = item.date ?? periodLabel;
+      } else if (trendView === 'weekly') {
+        periodLabel = `W${item.week} · ${item.year ?? ''}`.trim();
+        detailName = `Week ${item.week}, ${item.year ?? ''}`;
+      } else {
+        periodLabel = item.month ?? '';
+        detailName = item.month ?? '';
+        try {
+          if (item.month && item.month.length >= 7) {
+            const d = new Date(item.month + '-01');
+            periodLabel = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+            detailName = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+          }
+        } catch {
+          /* keep raw */
+        }
+      }
+      return {
+        periodLabel,
+        detailName,
+        orders: item.count,
+        revenue: item.revenue ?? 0,
+      };
+    });
+  }, [data, trendView]);
+
+  const rolePieData = useMemo(() => {
+    if (!data?.roleBreakdown) return [];
+    return Object.entries(data.roleBreakdown).map(([name, value]) => ({
+      name: name || 'Unknown',
+      value,
+    }));
+  }, [data]);
+
+  const categoryChartData = useMemo(() => {
+    if (!data?.categoryWiseSales?.length) return [];
+    return data.categoryWiseSales.slice(0, 12).map(c => {
+      const raw = c.category != null ? String(c.category) : 'Unknown';
+      return {
+        name: raw,
+        revenue: c.totalRevenue,
+        sold: c.totalSold,
+      };
+    });
+  }, [data]);
+
+  if (loading && !data) {
+    return (
+      <PageShell>
+        <LoadingState />
+      </PageShell>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <PageShell>
+        <ErrorState message={error} onRetry={load} />
+      </PageShell>
+    );
+  }
+
+  if (!data) return null;
+
+  const denseTrend = trendChartData.length > 12;
+
+  return (
+    <PageShell>
+      <AdminPageHeader
+        title={`${greeting}, ${displayName}`}
+        description="Platform snapshot — order cadence, role mix, and category revenue. Names and counts appear in chart legends and tooltips."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          icon={Users}
+          label="Total users"
+          value={data.totalUsers}
+          hint={`+${data.newUsersLast30Days.toLocaleString('en-IN')} in the last 30 days`}
+          iconClassName="bg-sky-100 text-sky-800"
+        />
+        <StatCard
+          icon={ShoppingCart}
+          label="Orders"
+          value={data.totalOrders}
+          iconClassName="bg-amber-100 text-amber-900"
+        />
+        <StatCard
+          icon={Store}
+          label="Stores"
+          value={data.totalStores}
+          iconClassName="bg-emerald-100 text-emerald-800"
+        />
+        <StatCard
+          icon={Truck}
+          label="Delivery partners"
+          value={data.totalDeliveryPartners}
+          iconClassName="bg-violet-100 text-violet-800"
+        />
+        <StatCard
+          icon={UserPlus}
+          label="Customers"
+          value={data.totalCustomers}
+          iconClassName="bg-rose-100 text-rose-800"
+        />
+        <StatCard
+          icon={Users}
+          label="Merchants"
+          value={data.totalMerchants}
+          iconClassName="bg-orange-100 text-orange-900"
+        />
+      </div>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <PanelCard
+          className="lg:col-span-2"
+          title="Order volume"
+          description="Orders per period — point + line (not a solid block)"
+          action={
+            <SegmentedControl
+              value={trendView}
+              onChange={setTrendView}
+              options={[
+                { value: 'daily', label: 'Daily' },
+                { value: 'weekly', label: 'Weekly' },
+                { value: 'monthly', label: 'Monthly' },
+              ]}
+            />
+          }
+        >
+          {trendChartData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-stone-500">No trend data yet.</p>
+          ) : (
+            <div className="h-[340px] w-full min-w-0 sm:h-[360px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={trendChartData}
+                  margin={{ top: 16, right: 20, left: 8, bottom: denseTrend ? 52 : 32 }}
+                >
+                  <CartesianGrid stroke={chartTheme.grid} strokeDasharray="4 4" vertical={false} />
+                  <XAxis
+                    dataKey="periodLabel"
+                    tick={{ fill: chartTheme.axis, fontSize: 11 }}
+                    axisLine={{ stroke: '#d6d3d1' }}
+                    tickLine={false}
+                    interval={denseTrend ? 'preserveStartEnd' : 0}
+                    angle={denseTrend ? -40 : 0}
+                    textAnchor={denseTrend ? 'end' : 'middle'}
+                    height={denseTrend ? 48 : 28}
+                  />
+                  <YAxis
+                    tick={{ fill: chartTheme.axis, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={44}
+                    label={{
+                      value: 'Orders',
+                      angle: -90,
+                      position: 'insideLeft',
+                      fill: chartTheme.axis,
+                      fontSize: 11,
+                    }}
+                  />
+                  <Tooltip
+                    {...chartTooltip}
+                    labelFormatter={(_l, payload) =>
+                      (payload?.[0]?.payload as { detailName?: string })?.detailName ?? ''
+                    }
+                    formatter={(value: number) => [
+                      `${value.toLocaleString('en-IN')} orders`,
+                      'Volume',
+                    ]}
+                  />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="orders"
+                    name="Orders"
+                    stroke={chartTheme.accent}
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: chartTheme.accent, stroke: '#fff', strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </PanelCard>
+
+        <PanelCard
+          title="Users by role"
+          description="Each slice is labeled in the legend with role name and count"
+        >
+          {rolePieData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-stone-500">No role data.</p>
+          ) : (
+            <div className="h-[360px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <Pie
+                    data={rolePieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="42%"
+                    innerRadius={52}
+                    outerRadius={76}
+                    paddingAngle={2}
+                    stroke="#fff"
+                    strokeWidth={2}
+                  >
+                    {rolePieData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={ROLE_COLORS[i % ROLE_COLORS.length]}
+                        fillOpacity={0.92}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    {...chartTooltip}
+                    formatter={(v: number, name: string) => [
+                      `${v.toLocaleString('en-IN')} users`,
+                      name,
+                    ]}
+                  />
+                  <Legend
+                    layout="vertical"
+                    verticalAlign="bottom"
+                    align="center"
+                    wrapperStyle={{ fontSize: 12 }}
+                    formatter={pieLegendFormatter}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </PanelCard>
+      </div>
+
+      <div className="mt-8">
+        <PanelCard
+          title="Category revenue"
+          description="Category names on the left; bar ends at revenue (₹)"
+          action={
+            <span className="hidden items-center gap-1 text-xs font-medium text-stone-500 sm:inline-flex">
+              <TrendingUp className="h-3.5 w-3.5" />
+              Non-cancelled order lines
+            </span>
+          }
+        >
+          {categoryChartData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-stone-500">No category sales yet.</p>
+          ) : (
+            <div className="h-[380px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categoryChartData}
+                  layout="vertical"
+                  margin={{ top: 12, right: 28, left: 8, bottom: 12 }}
+                >
+                  <defs>
+                    <linearGradient id="catBar" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#15803d" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#15803d" stopOpacity={0.95} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={chartTheme.grid} strokeDasharray="4 4" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: chartTheme.axis, fontSize: 11 }}
+                    tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`}
+                    axisLine={{ stroke: '#d6d3d1' }}
+                    tickLine={false}
+                    label={{
+                      value: 'Revenue (₹)',
+                      position: 'insideBottomRight',
+                      offset: -4,
+                      fill: chartTheme.axis,
+                      fontSize: 11,
+                    }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={148}
+                    tick={{ fill: chartTheme.axis, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <Tooltip
+                    {...chartTooltip}
+                    formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'Revenue']}
+                    labelFormatter={(_l, p) => (p?.[0]?.payload as { name?: string })?.name ?? ''}
+                  />
+                  <Bar
+                    dataKey="revenue"
+                    name="Revenue"
+                    fill="url(#catBar)"
+                    radius={[0, 6, 6, 0]}
+                    maxBarSize={22}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </PanelCard>
+      </div>
+    </PageShell>
+  );
+}

@@ -25,6 +25,61 @@ const verifyOtpSchema = z.object({
   otp: z.string().length(6, 'OTP must be 6 digits')
 });
 
+const paginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(50_000).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional();
+
+const transactionsQuerySchema = paginationQuerySchema
+  .extend({
+    status: z.string().trim().max(64).optional(),
+    method: z.enum(['COD', 'Online']).optional(),
+    dateFrom: dateYmd,
+    dateTo: dateYmd,
+  })
+  .refine(d => !d.dateFrom || !d.dateTo || d.dateFrom <= d.dateTo, {
+    path: ['dateTo'],
+    message: 'dateTo must be on or after dateFrom',
+  });
+
+const ordersQuerySchema = paginationQuerySchema
+  .extend({
+    status: z.string().trim().max(64).optional(),
+    search: z.string().trim().max(200).optional(),
+    dateFrom: dateYmd,
+    dateTo: dateYmd,
+    paymentMethod: z.enum(['COD', 'Online']).optional(),
+    paymentStatus: z.enum(['Pending', 'Completed', 'Failed', 'Refunded']).optional(),
+  })
+  .refine(d => !d.dateFrom || !d.dateTo || d.dateFrom <= d.dateTo, {
+    path: ['dateTo'],
+    message: 'dateTo must be on or after dateFrom',
+  });
+
+const usersQuerySchema = paginationQuerySchema.extend({
+  role: z.string().trim().max(32).optional(),
+  search: z.string().trim().max(200).optional(),
+});
+
+const deliveryPartnersQuerySchema = paginationQuerySchema.extend({
+  status: z.string().trim().max(32).optional(),
+});
+
+const storePerformanceQuerySchema = paginationQuerySchema.extend({
+  sortBy: z.enum(['totalRevenue', 'totalOrders', 'returnRate', 'rating']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+
+const mongoIdParamSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{24}$/i, 'Invalid id'),
+});
+
+const forceCancelBodySchema = z.object({
+  reason: z.string().max(2000).optional(),
+});
+
 // Admin signup
 export async function adminSignup(req: Request, res: Response): Promise<Response> {
   try {
@@ -167,6 +222,340 @@ export async function getAdminProfile(req: CustomRequest, res: Response): Promis
     return res.status(404).json({
       success: false,
       message: error.message || 'Failed to get admin profile'
+    });
+  }
+}
+
+// ─── Dashboard Controllers ─────────────────────────────────────────────────
+
+// Analytics Overview
+export async function getAnalyticsOverview(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const data = await AdminService.getAnalyticsOverview();
+    return res.status(200).json({
+      success: true,
+      message: 'Analytics overview retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Analytics overview error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get analytics overview',
+    });
+  }
+}
+
+// Finance Summary
+export async function getFinanceSummary(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const data = await AdminService.getFinanceSummary();
+    return res.status(200).json({
+      success: true,
+      message: 'Finance summary retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Finance summary error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get finance summary',
+    });
+  }
+}
+
+// Transactions List
+export async function getTransactions(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = transactionsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const { page, limit, status, method, dateFrom, dateTo } = parsed.data;
+    const data = await AdminService.getTransactions({
+      page,
+      limit,
+      status,
+      method,
+      dateFrom,
+      dateTo,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Transactions retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Transactions error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get transactions',
+    });
+  }
+}
+
+// All Orders
+export async function getAllOrders(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = ordersQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const { page, limit, status, search, dateFrom, dateTo, paymentMethod, paymentStatus } =
+      parsed.data;
+    const data = await AdminService.getAllOrders({
+      page,
+      limit,
+      status,
+      search,
+      dateFrom,
+      dateTo,
+      paymentMethod,
+      paymentStatus,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Orders retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('All orders error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get orders',
+    });
+  }
+}
+
+// Get Order By ID
+export async function getAdminOrderById(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = mongoIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order id',
+        errors: parsed.error.issues,
+      });
+    }
+    const { id } = parsed.data;
+    const data = await AdminService.getOrderById(id);
+    return res.status(200).json({
+      success: true,
+      message: 'Order retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Get order by ID error:', error);
+    const statusCode = error.message === 'Order not found' ? 404 : 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to get order',
+    });
+  }
+}
+
+// Force Cancel Order
+export async function forceCancelOrder(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const idParsed = mongoIdParamSchema.safeParse(req.params);
+    if (!idParsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order id',
+        errors: idParsed.error.issues,
+      });
+    }
+    const { id } = idParsed.data;
+    const bodyParsed = forceCancelBodySchema.safeParse(req.body ?? {});
+    if (!bodyParsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: bodyParsed.error.issues,
+      });
+    }
+    const { reason } = bodyParsed.data;
+    const data = await AdminService.forceCancelOrder(id, reason ?? '');
+    return res.status(200).json({
+      success: true,
+      message: 'Order cancelled successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Force cancel order error:', error);
+    const statusCode = error.message === 'Order not found' ? 404 : 400;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to cancel order',
+    });
+  }
+}
+
+// All Users
+export async function getAllUsers(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = usersQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const { page, limit, role, search } = parsed.data;
+    const data = await AdminService.getAllUsers({
+      page,
+      limit,
+      role,
+      search,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Users retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('All users error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get users',
+    });
+  }
+}
+
+// User Stats
+export async function getAdminUserStats(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const data = await AdminService.getUserStats();
+    return res.status(200).json({
+      success: true,
+      message: 'User stats retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('User stats error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get user stats',
+    });
+  }
+}
+
+// Delivery Partners
+export async function getDeliveryPartners(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = deliveryPartnersQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const { page, limit, status } = parsed.data;
+    const data = await AdminService.getDeliveryPartners({
+      page,
+      limit,
+      status,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery partners retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Delivery partners error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get delivery partners',
+    });
+  }
+}
+
+// Delivery Stats
+export async function getDeliveryStats(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const data = await AdminService.getDeliveryStats();
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery stats retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Delivery stats error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get delivery stats',
+    });
+  }
+}
+
+// Store Performance
+export async function getStorePerformance(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = storePerformanceQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const { page, limit, sortBy, sortOrder } = parsed.data;
+    const data = await AdminService.getStorePerformance({
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Store performance retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Store performance error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get store performance',
+    });
+  }
+}
+
+// Single store — overview & performance
+export async function getAdminStoreDetail(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = mongoIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid store id',
+        errors: parsed.error.issues,
+      });
+    }
+    const data = await AdminService.getStoreDetail(parsed.data.id);
+    return res.status(200).json({
+      success: true,
+      message: 'Store detail retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Store detail error:', error);
+    if (error.message === 'Store not found') {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get store detail',
     });
   }
 }

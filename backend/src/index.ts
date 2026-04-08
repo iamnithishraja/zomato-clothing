@@ -61,7 +61,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use(requestTimeout(30000));
 
 app.get("/", (req, res) => {
-  res.send("Hello World");
+  res.send("LOcal backend is running !!!!");
 });
 
 app.use("/api/v1/user", userRoute);

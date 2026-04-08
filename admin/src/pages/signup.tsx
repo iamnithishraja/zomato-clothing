@@ -160,7 +160,7 @@ export default function Signup() {
         username: form.username, email: form.email,
         password: form.password, phone: form.phone || undefined,
       });
-      navigate('/dashboard');
+      navigate('/dashboard/analytics');
     } catch (err: any) { setError(err.message); }
   }, [form, signup, navigate]);
 

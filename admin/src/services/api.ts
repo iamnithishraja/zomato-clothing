@@ -23,18 +23,28 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Response interceptor — auth failures (never redirect on login/signup failures)
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
+  response => response,
+  error => {
+    const status = error.response?.status;
+    const url = String(error.config?.url ?? '');
+
+    const isAuthRoute =
+      url.includes('/api/v1/admin/auth/login-password') ||
+      url.includes('/api/v1/admin/auth/signup') ||
+      url.includes('/api/v1/admin/auth/request-otp') ||
+      url.includes('/api/v1/admin/auth/verify-otp');
+
+    if ((status === 401 || status === 403) && !isAuthRoute) {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('adminUser');
-      window.location.href = '/login';
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

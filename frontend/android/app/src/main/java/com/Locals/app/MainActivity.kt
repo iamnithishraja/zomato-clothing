@@ -1,4 +1,4 @@
-package com.Locals.app
+package com.Locals1.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

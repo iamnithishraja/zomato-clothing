@@ -1,4 +1,4 @@
-package com.Locals.app
+package com.Locals1.app
 
 import android.app.Application
 import android.content.res.Configuration

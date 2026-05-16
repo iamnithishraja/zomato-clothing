@@ -2,7 +2,7 @@
   "expo": {
     "name": "Locals",
     "slug": "Locals",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "Locals",
@@ -11,7 +11,7 @@
     "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.Locals.app",
+      "bundleIdentifier": "com.Locals1.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to show nearby stores and deliver to the right address."
@@ -26,7 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.Locals.app",
+      "package": "com.Locals1.app",
       "enableProguardInReleaseBuilds": true,
       "enableShrinkResourcesInReleaseBuilds": true,
       "enableSeparateBuildPerCPUArchitecture": true,

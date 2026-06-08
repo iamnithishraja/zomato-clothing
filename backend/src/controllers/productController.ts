@@ -59,6 +59,16 @@ async function createProduct(req: Request, res: Response) {
       finalIsOnSale = true;
     }
 
+    // Clean specifications before save
+    let cleanedSpecifications = specifications;
+    if (specifications) {
+      const cleaned: Record<string, string> = {};
+      if (specifications.material?.trim()) cleaned.material = specifications.material.trim();
+      if (specifications.fit?.trim()) cleaned.fit = specifications.fit.trim();
+      if (specifications.pattern?.trim()) cleaned.pattern = specifications.pattern.trim();
+      cleanedSpecifications = Object.keys(cleaned).length ? cleaned : undefined;
+    }
+
     // Create product
     const product = await ProductModel.create({
       merchantId: user._id,
@@ -73,7 +83,7 @@ async function createProduct(req: Request, res: Response) {
       isOnSale: finalIsOnSale,
       sizes: sizes || [],
       availableQuantity,
-      specifications: specifications || undefined,
+      specifications: cleanedSpecifications || undefined,
       season: season || undefined,
       isNewArrival: isNewArrival || false,
       isBestSeller: isBestSeller || false
@@ -274,11 +284,24 @@ async function updateProduct(req: Request, res: Response) {
       updateData.isOnSale = finalIsOnSale;
     }
 
+    // Clean specifications — empty fit/pattern strings break Mongoose enum validation
+    if (updateData.specifications) {
+      const specs = updateData.specifications;
+      const cleaned: Record<string, string> = {};
+      if (specs.material?.trim()) cleaned.material = specs.material.trim();
+      if (specs.fit?.trim()) cleaned.fit = specs.fit.trim();
+      if (specs.pattern?.trim()) cleaned.pattern = specs.pattern.trim();
+      updateData.specifications = Object.keys(cleaned).length ? cleaned : undefined;
+    }
+    if (updateData.season === '') {
+      updateData.season = undefined;
+    }
+
     // Update product
     const updatedProduct = await ProductModel.findByIdAndUpdate(
       productId,
       { ...updateData, updatedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('storeId', 'storeName storeImages');
 
     return res.status(200).json({

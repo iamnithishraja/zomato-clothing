@@ -75,12 +75,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Token is invalid, clear storage
             await clearAuthData();
           }
-        } catch (validationError) {
-          // If validation fails due to network issues, still allow login
-          // This provides better UX when backend is temporarily unavailable
-          console.log('⚠️ Token validation failed due to network error, using stored data:', validationError);
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+        } catch (validationError: any) {
+          const status = validationError?.response?.status;
+          if (status === 401 || status === 403) {
+            console.log('Token expired or invalid, clearing auth data');
+            await clearAuthData();
+          } else {
+            console.log('Token validation failed due to network error, using stored data:', validationError);
+            setToken(storedToken);
+            setUser(JSON.parse(storedUser));
+          }
         }
       }
     } catch (error) {
@@ -97,7 +101,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const validateToken = async (tokenToValidate: string): Promise<{ isValid: boolean; userData?: User }> => {
     try {
-      // Make a test request to validate the token and get latest user data
       const response = await apiClient.get('/api/v1/user/profile', {
         headers: {
           Authorization: `Bearer ${tokenToValidate}`
@@ -111,9 +114,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
       }
       return { isValid: false };
-    } catch (error) {
-      console.log('Token validation error:', error);
-      return { isValid: false };
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        return { isValid: false };
+      }
+      throw error;
     }
   };
 

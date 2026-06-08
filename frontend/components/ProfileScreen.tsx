@@ -7,9 +7,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocation } from '../contexts/LocationContext';
 import { useRouter } from 'expo-router';
 import apiClient from '../api/client';
-import * as ImagePicker from 'expo-image-picker';
+import { pickSingleImageFromLibrary } from '@/utils/imagePickerUtils';
+import { normalizeUploadAsset, uriToUploadBlob } from '@/utils/imageUploadUtils';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { Region } from 'react-native-maps';
 import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
+import ManualAddressScreen from '@/components/ui/ManualAddressScreen';
+import { AddressFormData, EMPTY_ADDRESS_FORM } from '@/utils/addressUtils';
 
 type ProfileScreenProps = { openStore?: boolean };
 
@@ -35,18 +39,19 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
   const [addresses, setAddresses] = useState<string[]>(initialAddresses);
   const [isSavingAddresses, setIsSavingAddresses] = useState(false);
 
+  React.useEffect(() => {
+    setAddresses(user?.addresses || []);
+  }, [user?.addresses]);
+
   // Address modal state
   const [addressModalVisible, setAddressModalVisible] = useState(false);
-  const [addressFormData, setAddressFormData] = useState({
-    line1: '',
-    line2: '',
-    city: '',
-    state: '',
-    country: 'India',
-    pincode: ''
-  });
+  const [addressPrefillForm, setAddressPrefillForm] = useState<AddressFormData | undefined>(undefined);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [editingAddressIndex, setEditingAddressIndex] = useState<number | null>(null);
+  const [editingAddressText, setEditingAddressText] = useState<string | undefined>(undefined);
+  const [deleteAccountStep, setDeleteAccountStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   // handled by LocationPickerScreen now
@@ -77,6 +82,32 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     };
     loadStoreDetails();
   }, [user?.role]);
+
+  const getAvatarIconName = () => {
+    if (user?.gender === 'Male') return 'man';
+    if (user?.gender === 'Female') return 'woman';
+    return getRoleIcon(user?.role || 'User');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeletingAccount(true);
+      const response = await apiClient.delete('/api/v1/user/account');
+      if (response.data.success) {
+        setDeleteAccountStep(0);
+        setDeleteConfirmText('');
+        await logout();
+        router.replace('/auth/Auth');
+        Alert.alert('Account Deleted', 'Your account and all associated data have been permanently removed.');
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to delete account');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to delete account. Please try again.');
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -181,21 +212,9 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
   // Image picker functionality for avatar
   const handleAvatarPicker = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload images!');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        await uploadAvatarImage(result.assets[0]);
+      const asset = await pickSingleImageFromLibrary();
+      if (asset) {
+        await uploadAvatarImage(asset);
       }
     } catch (error) {
       console.error('Image picker error:', error);
@@ -283,29 +302,12 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     );
   };
 
-  const uploadAvatarImage = async (asset: ImagePicker.ImagePickerAsset) => {
+  const uploadAvatarImage = async (asset: ImagePickerAsset) => {
     try {
       setIsUploadingAvatar(true);
-      
-      // Derive proper filename like ImageUploader does
-      const deriveFileName = (fileName?: string, uri?: string, mimeType?: string) => {
-        if (fileName) return fileName;
-        if (uri) {
-          const parts = uri.split("/");
-          const last = parts[parts.length - 1] || "";
-          if (last && last.includes(".")) return last;
-        }
-        const timestamp = Date.now();
-        const ext = mimeType?.includes('png') ? 'png' : 'jpg';
-        return `avatar_${timestamp}.${ext}`;
-      };
 
-      const fileName = deriveFileName(asset.fileName || undefined, asset.uri, asset.mimeType);
-      const fileType = asset.mimeType || 'image/jpeg';
-      
-      console.log('Uploading avatar:', { fileType, fileName, assetUri: asset.uri });
-      
-      // Get upload URL from backend
+      const { fileName, fileType, uri } = normalizeUploadAsset(asset, 'avatar_');
+
       const uploadResponse = await apiClient.post('/api/v1/upload/url', {
         fileType,
         fileName,
@@ -313,17 +315,13 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
         isPermanent: true,
       });
 
-      console.log('Upload URL response:', uploadResponse.data);
-
       if (!uploadResponse.data.success) {
         throw new Error(uploadResponse.data.message || 'Failed to get upload URL');
       }
 
       const { uploadUrl, publicUrl } = uploadResponse.data;
 
-      // Upload file to R2
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
+      const blob = await uriToUploadBlob(uri, fileType);
       
       const uploadResult = await fetch(uploadUrl, {
         method: 'PUT',
@@ -400,32 +398,14 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
     ]);
   };
 
-  // Address modal functions
   const openAddressModal = (index?: number) => {
     if (index !== undefined) {
-      // Editing existing address
-      const address = addresses[index];
-      const parts = address.split(', ');
-      setAddressFormData({
-        line1: parts[0] || '',
-        line2: parts[1] || '',
-        city: parts[2] || '',
-        state: parts[3] || '',
-        country: parts[4] || 'India',
-        pincode: parts[5] || ''
-      });
+      setEditingAddressText(addresses[index]);
       setIsEditingAddress(true);
       setEditingAddressIndex(index);
     } else {
-      // Adding new address
-      setAddressFormData({
-        line1: '',
-        line2: '',
-        city: '',
-        state: '',
-        country: 'India',
-        pincode: ''
-      });
+      setEditingAddressText(undefined);
+      setAddressPrefillForm(undefined);
       setIsEditingAddress(false);
       setEditingAddressIndex(null);
     }
@@ -434,16 +414,27 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
 
   const closeAddressModal = () => {
     setAddressModalVisible(false);
-    setAddressFormData({
-      line1: '',
-      line2: '',
-      city: '',
-      state: '',
-      country: 'India',
-      pincode: ''
-    });
+    setAddressPrefillForm(undefined);
+    setEditingAddressText(undefined);
     setIsEditingAddress(false);
     setEditingAddressIndex(null);
+  };
+
+  const saveManualAddress = async (formattedAddress: string) => {
+    let updatedAddresses: string[];
+    if (isEditingAddress && editingAddressIndex !== null) {
+      updatedAddresses = addresses.map((addr, i) =>
+        i === editingAddressIndex ? formattedAddress : addr
+      );
+    } else {
+      if (addresses.length >= 5) {
+        Alert.alert('Limit Reached', 'You can only have up to 5 addresses');
+        return;
+      }
+      updatedAddresses = [...addresses, formattedAddress];
+    }
+    await persistAddresses(updatedAddresses);
+    closeAddressModal();
   };
 
   const openMap = async () => {
@@ -528,62 +519,18 @@ const ProfileScreen = ({ openStore }: ProfileScreenProps) => {
       const locationData = await getCurrentLocation();
       
       if (locationData) {
-        setAddressFormData({
-          line1: locationData.landmark || locationData.street || '',
-          line2: locationData.street && locationData.street !== locationData.landmark ? locationData.street : '',
+        setAddressPrefillForm({
+          houseFlat: locationData.landmark || locationData.street || '',
+          streetArea: locationData.street && locationData.street !== locationData.landmark ? locationData.street : '',
+          landmark: '',
           city: locationData.city,
           state: locationData.state,
-          country: locationData.country,
-          pincode: locationData.pincode || ''
+          country: locationData.country || 'India',
+          pincode: locationData.pincode || '',
         });
-        
-        // Address fields filled from current location
       }
     } catch (error) {
       console.error('Error getting address from location:', error);
-    } finally {
-      setIsSavingAddresses(false);
-    }
-  };
-
-  const saveAddressFromModal = async () => {
-    const { line1, line2, city, state, country, pincode } = addressFormData;
-    
-    if (!line1.trim() || !city.trim() || !state.trim() || !pincode.trim()) {
-      Alert.alert('Validation Error', 'Please fill in all required fields (Line 1, City, State, Pincode)');
-      return;
-    }
-
-    // Create formatted address string
-    const addressParts = [line1.trim()];
-    if (line2.trim()) addressParts.push(line2.trim());
-    addressParts.push(city.trim(), state.trim(), country.trim(), pincode.trim());
-    const formattedAddress = addressParts.join(', ');
-
-    try {
-      setIsSavingAddresses(true);
-      
-      let updatedAddresses;
-      if (isEditingAddress && editingAddressIndex !== null) {
-        // Update existing address
-        updatedAddresses = addresses.map((addr, i) => 
-          i === editingAddressIndex ? formattedAddress : addr
-        );
-      } else {
-        // Add new address
-        if (addresses.length >= 5) {
-          Alert.alert('Limit Reached', 'You can only have up to 5 addresses');
-          return;
-        }
-        updatedAddresses = [...addresses, formattedAddress];
-      }
-
-      await persistAddresses(updatedAddresses);
-      closeAddressModal();
-      
-    } catch (error) {
-      console.error('Error saving address:', error);
-      Alert.alert('Error', 'Failed to save address. Please try again.');
     } finally {
       setIsSavingAddresses(false);
     }
@@ -640,7 +587,7 @@ const notAuthenticatedView = (
                   ) : (
                     <View style={styles.avatarPlaceholder}>
                       <Ionicons
-                        name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                        name={getAvatarIconName()}
                         size={50}
                         color={Colors.textPrimary}
                       />
@@ -682,7 +629,7 @@ const notAuthenticatedView = (
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Ionicons
-                      name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : getRoleIcon(user.role)}
+                      name={getAvatarIconName()}
                       size={50}
                       color={Colors.textPrimary}
                     />
@@ -976,6 +923,13 @@ const notAuthenticatedView = (
 
           {/* Action Buttons */}
           <View style={styles.actionsSection}>
+            <TouchableOpacity style={styles.deleteAccountButton} onPress={() => setDeleteAccountStep(1)}>
+              <View style={styles.deleteAccountInner}>
+                <Ionicons name="trash-outline" size={22} color={Colors.error} />
+                <Text style={styles.deleteAccountText}>Delete Account</Text>
+              </View>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <LinearGradient
                 colors={['#EF5350', '#E53935']}
@@ -1191,152 +1145,24 @@ const notAuthenticatedView = (
         </View>
       </Modal>
 
-      {/* Address Modal */}
-      <Modal visible={addressModalVisible} animationType="slide" transparent onRequestClose={closeAddressModal}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isEditingAddress ? 'Edit Address' : 'Add New Address'}
-              </Text>
-              <TouchableOpacity onPress={closeAddressModal} activeOpacity={0.7}>
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalDivider} />
-
-            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {/* Get Address from Location Button */}
-            <TouchableOpacity
-              style={styles.getLocationButton}
-              onPress={handleGetAddressFromLocation}
-              disabled={isSavingAddresses}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={Colors.gradients.primary as [string, string]}
-                style={styles.getLocationButtonGradient}
-              >
-                {isSavingAddresses ? (
-                  <ActivityIndicator size="small" color={Colors.textPrimary} />
-                ) : (
-                  <Ionicons name="locate" size={18} color={Colors.textPrimary} />
-                )}
-                <Text style={styles.getLocationButtonText}>
-                  {isSavingAddresses ? 'Getting Location...' : 'Get Address from Current Location'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Pick on Map Button */}
-            <TouchableOpacity
-              style={[styles.getLocationButton, { marginTop: 0 }]}
-              onPress={openMap}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={Colors.gradients.primary as [string, string]}
-                style={styles.getLocationButtonGradient}
-              >
-                <Ionicons name="map" size={18} color={Colors.textPrimary} />
-                <Text style={styles.getLocationButtonText}>Pick on Map</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Address Line 1 *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={addressFormData.line1}
-                onChangeText={(text) => setAddressFormData({ ...addressFormData, line1: text })}
-                placeholder="House/Flat number, Street name"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Address Line 2</Text>
-              <TextInput
-                style={styles.textInput}
-                value={addressFormData.line2}
-                onChangeText={(text) => setAddressFormData({ ...addressFormData, line2: text })}
-                placeholder="Landmark, Area (optional)"
-                placeholderTextColor={Colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.inputLabel}>City *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={addressFormData.city}
-                  onChangeText={(text) => setAddressFormData({ ...addressFormData, city: text })}
-                  placeholder="City"
-                  placeholderTextColor={Colors.textSecondary}
-                />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.inputLabel}>State *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={addressFormData.state}
-                  onChangeText={(text) => setAddressFormData({ ...addressFormData, state: text })}
-                  placeholder="State"
-                  placeholderTextColor={Colors.textSecondary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.inputLabel}>Country</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={addressFormData.country}
-                  onChangeText={(text) => setAddressFormData({ ...addressFormData, country: text })}
-                  placeholder="Country"
-                  placeholderTextColor={Colors.textSecondary}
-                />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.inputLabel}>Pincode *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={addressFormData.pincode}
-                  onChangeText={(text) => setAddressFormData({ ...addressFormData, pincode: text })}
-                  placeholder="Pincode"
-                  placeholderTextColor={Colors.textSecondary}
-                  keyboardType="numeric"
-                  maxLength={6}
-                />
-              </View>
-            </View>
-
-            <View style={styles.addressPreview}>
-              <Text style={styles.previewLabel}>Address Preview:</Text>
-              <Text style={styles.previewText}>
-                {(() => {
-                  const { line1, line2, city, state, country, pincode } = addressFormData;
-                  const parts = [line1];
-                  if (line2) parts.push(line2);
-                  parts.push(city, state, country, pincode);
-                  return parts.filter(p => p.trim()).join(', ') || 'Enter address details above';
-                })()}
-              </Text>
-            </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalSaveButton} activeOpacity={0.85} onPress={saveAddressFromModal} disabled={isSavingAddresses}>
-                <Text style={styles.modalSaveButtonText}>
-                  {isSavingAddresses ? 'Saving...' : 'Save Address'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ManualAddressScreen
+        visible={addressModalVisible}
+        onClose={closeAddressModal}
+        title={isEditingAddress ? 'Edit Address' : 'Add New Address'}
+        initialAddress={editingAddressText}
+        initialForm={addressPrefillForm}
+        isSaving={isSavingAddresses}
+        onSave={async (formattedAddress) => {
+          await saveManualAddress(formattedAddress);
+        }}
+        onUseCurrentLocation={handleGetAddressFromLocation}
+        onPickOnMap={() => {
+          setReopenAddressAfterMap(true);
+          setAddressModalVisible(false);
+          openMap();
+        }}
+        isLoadingLocation={isSavingAddresses}
+      />
 
       {/* Fullscreen Map Picker */}
       <Modal
@@ -1364,17 +1190,16 @@ const notAuthenticatedView = (
               setMapVisible(false);
               setIsForStoreAddress(false);
             } else {
-              // Map -> Address modal form (for user addresses)
               const parts = formattedAddress.split(',').map(p => p.trim());
-              setAddressFormData(prev => ({
-                ...prev,
-                line1: parts[0] || prev.line1,
-                line2: parts[1] || prev.line2,
-                city: parts[2] || prev.city,
-                state: parts[3] || prev.state,
-                country: parts[5] || prev.country,
-                pincode: parts[4] || prev.pincode,
-              }));
+              setAddressPrefillForm({
+                houseFlat: parts[0] || '',
+                streetArea: parts[1] || '',
+                landmark: '',
+                city: parts[2] || '',
+                state: parts[3] || '',
+                pincode: parts[4] || '',
+                country: parts[5] || 'India',
+              });
               setMapVisible(false);
               if (reopenAddressAfterMap) {
                 setAddressModalVisible(true);
@@ -1383,6 +1208,79 @@ const notAuthenticatedView = (
             }
           }}
         />
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={deleteAccountStep > 0}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setDeleteAccountStep(0);
+          setDeleteConfirmText('');
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.deleteModalSheet}>
+            <View style={styles.deleteModalIconWrap}>
+              <Ionicons name="warning" size={36} color={Colors.error} />
+            </View>
+            <Text style={styles.deleteModalTitle}>
+              {deleteAccountStep === 1 ? 'Delete your account?' : 'This cannot be undone'}
+            </Text>
+            <Text style={styles.deleteModalText}>
+              {deleteAccountStep === 1
+                ? 'All your profile data, orders, addresses, and uploaded content will be permanently removed.'
+                : 'Type DELETE below to confirm permanent account deletion.'}
+            </Text>
+
+            {deleteAccountStep === 2 && (
+              <TextInput
+                style={styles.deleteConfirmInput}
+                value={deleteConfirmText}
+                onChangeText={setDeleteConfirmText}
+                placeholder="Type DELETE"
+                placeholderTextColor={Colors.textSecondary}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            )}
+
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={styles.deleteCancelButton}
+                onPress={() => {
+                  setDeleteAccountStep(0);
+                  setDeleteConfirmText('');
+                }}
+              >
+                <Text style={styles.deleteCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.deleteConfirmButton,
+                  deleteAccountStep === 2 && deleteConfirmText !== 'DELETE' && styles.deleteConfirmButtonDisabled,
+                ]}
+                disabled={isDeletingAccount || (deleteAccountStep === 2 && deleteConfirmText !== 'DELETE')}
+                onPress={() => {
+                  if (deleteAccountStep === 1) {
+                    setDeleteAccountStep(2);
+                  } else {
+                    handleDeleteAccount();
+                  }
+                }}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.deleteConfirmText}>
+                    {deleteAccountStep === 1 ? 'Continue' : 'Delete Forever'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Avatar Options Modal - WhatsApp/Instagram Style */}
@@ -1406,7 +1304,7 @@ const notAuthenticatedView = (
                 ) : (
                   <View style={styles.avatarModalPreviewPlaceholder}>
                     <Ionicons
-                      name={user.gender === 'Male' ? 'man' : user.gender === 'Female' ? 'woman' : 'person'}
+                      name={getAvatarIconName()}
                       size={80}
                       color={Colors.textSecondary}
                     />
@@ -1851,11 +1749,107 @@ const styles = StyleSheet.create({
   logoutButton: {
     borderRadius: 16,
     overflow: 'hidden',
+    marginTop: 12,
     shadowColor: Colors.error,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+  },
+  deleteAccountButton: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.error,
+    backgroundColor: '#FFF5F5',
+    overflow: 'hidden',
+  },
+  deleteAccountInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.error,
+  },
+  deleteModalSheet: {
+    backgroundColor: Colors.background,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+  },
+  deleteModalIconWrap: {
+    alignSelf: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  deleteModalText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  deleteConfirmInput: {
+    borderWidth: 1.5,
+    borderColor: Colors.error,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    marginBottom: 16,
+    textAlign: 'center',
+    fontWeight: '700',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  deleteCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  deleteConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+  },
+  deleteConfirmButtonDisabled: {
+    opacity: 0.5,
+  },
+  deleteConfirmText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
   },
   logoutGradient: {
     flexDirection: 'row',

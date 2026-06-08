@@ -16,6 +16,7 @@ import apiClient from '@/api/client';
 import { Region } from 'react-native-maps';
 import { useLocation } from '@/contexts/LocationContext';
 import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
+import ManualAddressScreen from '@/components/ui/ManualAddressScreen';
 
 interface Address {
   id: string;
@@ -45,6 +46,8 @@ export default function AddressSelector({
   const [deliveryPhone, setDeliveryPhone] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
+  const [manualAddressVisible, setManualAddressVisible] = useState(false);
+  const [mapPrefillAddress, setMapPrefillAddress] = useState<string | undefined>(undefined);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
@@ -120,6 +123,34 @@ export default function AddressSelector({
     }
   };
 
+  const saveManualAddress = async (formattedAddress: string) => {
+    if (!deliveryPhone || deliveryPhone.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number for delivery contact');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await apiClient.put('/api/v1/user/profile', {
+        addresses: [...(user?.addresses || []), formattedAddress.trim()],
+      });
+
+      if (response.data.success) {
+        await updateUser(response.data.user);
+        onAddNewAddress(formattedAddress.trim(), deliveryPhone);
+        setManualAddressVisible(false);
+        setShowAddForm(false);
+        setModalVisible(false);
+        Alert.alert('Success', 'Address added successfully');
+      }
+    } catch (error) {
+      console.error('Error adding address:', error);
+      Alert.alert('Error', 'Failed to add address');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getDisplayText = () => {
     if (selectedAddress) {
       return selectedAddress.length > 50 
@@ -154,8 +185,9 @@ export default function AddressSelector({
   }, [currentLocation, getCurrentLocation]);
 
   const confirmPickedAddress = async (params: { latitude: number; longitude: number; formattedAddress: string }) => {
-    setNewAddress(params.formattedAddress);
+    setMapPrefillAddress(params.formattedAddress);
     setMapVisible(false);
+    setManualAddressVisible(true);
   };
 
   const handleSavePhoneNumber = async () => {
@@ -352,19 +384,14 @@ export default function AddressSelector({
                 ) : (
                   <View style={styles.addForm}>
                     <Text style={styles.addFormTitle}>Add New Address</Text>
+                    <TouchableOpacity style={styles.mapPickButton} onPress={() => setManualAddressVisible(true)}>
+                      <Ionicons name="create-outline" size={18} color={Colors.buttonPrimary} />
+                      <Text style={styles.mapPickButtonText}>Enter Manually</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.mapPickButton} onPress={openMap}>
                       <Ionicons name="map" size={18} color={Colors.buttonPrimary} />
                       <Text style={styles.mapPickButtonText}>Pick on Map</Text>
                     </TouchableOpacity>
-                    <TextInput
-                      style={styles.addressInput}
-                      placeholder="Enter complete address with landmark"
-                      value={newAddress}
-                      onChangeText={setNewAddress}
-                      multiline
-                      numberOfLines={4}
-                      placeholderTextColor={Colors.textMuted}
-                    />
                     <View style={styles.phoneInputContainer}>
                       <Ionicons name="call-outline" size={20} color={Colors.textMuted} />
                       <TextInput
@@ -397,13 +424,11 @@ export default function AddressSelector({
                         <Text style={styles.cancelButtonText}>Cancel</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.saveButton, !newAddress.trim() && styles.saveButtonDisabled]}
-                        onPress={handleAddNewAddress}
-                        disabled={!newAddress.trim() || isLoading}
+                        style={[styles.saveButton, deliveryPhone.length !== 10 && styles.saveButtonDisabled]}
+                        onPress={() => setManualAddressVisible(true)}
+                        disabled={deliveryPhone.length !== 10}
                       >
-                        <Text style={styles.saveButtonText}>
-                          {isLoading ? 'Saving...' : 'Save Address'}
-                        </Text>
+                        <Text style={styles.saveButtonText}>Continue to Address Form</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -413,6 +438,22 @@ export default function AddressSelector({
           </ScrollView>
         </View>
       </Modal>
+
+      <ManualAddressScreen
+        visible={manualAddressVisible}
+        onClose={() => {
+          setManualAddressVisible(false);
+          setMapPrefillAddress(undefined);
+        }}
+        title="Add Delivery Address"
+        initialAddress={mapPrefillAddress}
+        isSaving={isLoading}
+        showLocationActions={false}
+        onSave={async (formattedAddress) => {
+          await saveManualAddress(formattedAddress);
+          setMapPrefillAddress(undefined);
+        }}
+      />
 
       {/* Optimized Map Picker Modal */}
       <Modal

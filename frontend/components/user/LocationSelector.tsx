@@ -19,6 +19,7 @@ import { Region } from 'react-native-maps';
 import apiClient from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import LocationPickerScreen from '@/components/ui/LocationPickerScreen';
+import ManualAddressScreen from '@/components/ui/ManualAddressScreen';
 
 interface Location {
   id: string;
@@ -41,6 +42,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   // const [searchQuery, setSearchQuery] = useState('');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
+  const [manualAddressVisible, setManualAddressVisible] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -253,6 +255,27 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                 </View>
               </TouchableOpacity>
 
+              {/* Enter Address Manually */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => {
+                  setIsModalVisible(false);
+                  setManualAddressVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionCardContent}>
+                  <View style={[styles.iconCircle, { backgroundColor: Colors.primary + '20' }]}>
+                    <Ionicons name="create-outline" size={22} color={Colors.primary} />
+                  </View>
+                  <View style={styles.actionCardInfo}>
+                    <Text style={styles.actionCardTitle}>Enter Address Manually</Text>
+                    <Text style={styles.actionCardSubtitle}>Fill in house, street, city, pincode</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                </View>
+              </TouchableOpacity>
+
               {/* Add New Address */}
               <TouchableOpacity
                 style={styles.actionCard}
@@ -261,11 +284,11 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
               >
                 <View style={styles.actionCardContent}>
                   <View style={[styles.iconCircle, { backgroundColor: Colors.primary + '20' }]}>
-                    <Ionicons name="add-circle" size={22} color={Colors.primary} />
+                    <Ionicons name="map" size={22} color={Colors.primary} />
                   </View>
                   <View style={styles.actionCardInfo}>
-                    <Text style={styles.actionCardTitle}>Add New Address</Text>
-                    <Text style={styles.actionCardSubtitle}>Select on map</Text>
+                    <Text style={styles.actionCardTitle}>Pick on Map</Text>
+                    <Text style={styles.actionCardSubtitle}>Select location on map</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
                 </View>
@@ -393,6 +416,39 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
           }}
         />
       </Modal>
+
+      <ManualAddressScreen
+        visible={manualAddressVisible}
+        onClose={() => setManualAddressVisible(false)}
+        title="Enter Address"
+        isSaving={isSaving}
+        showLocationActions={false}
+        onSave={async (formattedAddress) => {
+          try {
+            setIsSaving(true);
+            const nextAddresses = [...(user?.addresses || []), formattedAddress];
+            const resp = await apiClient.put('/api/v1/user/profile', { addresses: nextAddresses });
+            if (resp.data?.success) {
+              await updateUser(resp.data.user);
+              const cityPart = formattedAddress.split(',').map((p) => p.trim())[2] || formattedAddress;
+              onLocationSelect({
+                id: 'manual',
+                name: cityPart,
+                city: cityPart,
+                state: '',
+                country: 'India',
+              });
+              setManualAddressVisible(false);
+              Alert.alert('Success', 'Address added successfully');
+            }
+          } catch (error) {
+            console.error('Error saving address:', error);
+            Alert.alert('Error', 'Failed to add address');
+          } finally {
+            setIsSaving(false);
+          }
+        }}
+      />
     </>
   );
 };

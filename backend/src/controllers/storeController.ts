@@ -216,7 +216,7 @@ async function updateStore(req: Request, res: Response) {
     const updatedStore = await StoreModel.findByIdAndUpdate(
       existingStore._id,
       updateData,
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (!updatedStore) {
@@ -356,9 +356,46 @@ async function getAllStores(req: Request, res: Response) {
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string;
     const location = req.query.location as string;
+    const categoryFilter = (req.query.filter as string)?.toLowerCase();
 
     // Build filter object
     const filter: any = { isActive: true };
+
+    // Filter stores by product category / flags
+    if (categoryFilter && categoryFilter !== 'all') {
+      const productFilter: Record<string, unknown> = { isActive: true };
+
+      switch (categoryFilter) {
+        case 'men':
+          productFilter.category = 'Men';
+          break;
+        case 'women':
+          productFilter.category = 'Women';
+          break;
+        case 'kids':
+          productFilter.category = 'Kids';
+          break;
+        case 'unisex':
+          productFilter.category = 'Unisex';
+          break;
+        case 'new':
+          productFilter.isNewArrival = true;
+          break;
+        case 'bestseller':
+          productFilter.isBestSeller = true;
+          break;
+        case 'instock':
+          productFilter.availableQuantity = { $gt: 0 };
+          break;
+        default:
+          break;
+      }
+
+      if (Object.keys(productFilter).length > 1) {
+        const storeIds = await ProductModel.distinct('storeId', productFilter);
+        filter._id = { $in: storeIds };
+      }
+    }
     
     if (search) {
       filter.$or = [

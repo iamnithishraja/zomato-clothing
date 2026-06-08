@@ -14,6 +14,8 @@ import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from "@/constants/colors";
 import apiClient from "../../api/client";
+import { normalizeUploadAsset, uriToUploadBlob } from "@/utils/imageUploadUtils";
+import { pickImagesFromLibrary } from "@/utils/imagePickerUtils";
   
 type Props = {
   label: string;
@@ -23,7 +25,7 @@ type Props = {
   fullWidth?: boolean;
   squareSize?: number;
   aspectRatio?: number;
-  mediaTypes?: ImagePicker.MediaTypeOptions;
+  mediaTypes?: ImagePicker.MediaType | ImagePicker.MediaType[];
   fileNamePrefix?: string;
   maxImages?: number;
   required?: boolean;
@@ -50,7 +52,7 @@ const ImageUploader = ({
   fullWidth = false, 
   squareSize = 100, 
   aspectRatio = 16 / 9, 
-  mediaTypes = ImagePicker.MediaTypeOptions.Images, 
+  mediaTypes = ['images'], 
   fileNamePrefix,
   maxImages = 10,
   required = false,
@@ -100,15 +102,12 @@ const ImageUploader = ({
   // Upload single image
   const uploadImage = useCallback(async (asset: ImagePicker.ImagePickerAsset, optimisticKey: string) => {
     try {
-      let fileName = deriveFileName(asset.fileName ?? undefined, asset.uri ?? undefined, asset.mimeType ?? undefined);
-      if (fileNamePrefix && !fileName.toLowerCase().includes(fileNamePrefix.toLowerCase())) {
-        fileName = `${fileNamePrefix}${fileName}`;
+      const { fileName, fileType, uri } = normalizeUploadAsset(asset, fileNamePrefix);
+
+      if (__DEV__) {
+        console.log('Uploading image:', { fileType, fileName, assetUri: uri });
       }
-      const fileType = asset.mimeType || guessMimeTypeFromName(fileName);
-      
-      console.log('Uploading image:', { fileType, fileName, assetUri: asset.uri });
-      
-      // Get upload URL from backend
+
       const uploadResponse = await apiClient.post('/api/v1/upload/url', {
         fileType,
         fileName,
@@ -116,21 +115,14 @@ const ImageUploader = ({
         isPermanent: true,
       });
 
-      console.log('Upload URL response:', uploadResponse.data);
-
       if (!uploadResponse.data.success) {
         throw new Error(uploadResponse.data.message || 'Failed to get upload URL');
       }
 
       const { uploadUrl, publicUrl } = uploadResponse.data;
 
-      // Upload file to R2
-      console.log('Uploading to R2:', uploadUrl);
-      
-      // Convert asset to blob for upload
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      
+      const blob = await uriToUploadBlob(uri, fileType);
+
       const uploadResult = await fetch(uploadUrl, {
         method: 'PUT',
         body: blob,
@@ -205,17 +197,12 @@ const ImageUploader = ({
     if (!hasPermission) return;
 
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes,
-        allowsMultipleSelection: multiple,
-        quality: 0.8,
-        selectionLimit: multiple ? Math.min(maxImages - items.length, 10) : 1,
-        base64: false,
+      const assets = await pickImagesFromLibrary({
+        multiple,
+        limit: multiple ? Math.min(maxImages - items.length, 10) : 1,
       });
 
-      if (result.canceled) return;
-
-      const assets = multiple ? result.assets : [result.assets[0]];
+      if (!assets?.length) return;
 
       // Optimistically add placeholders
       const optimisticItems: Item[] = assets.map((a) => ({ 

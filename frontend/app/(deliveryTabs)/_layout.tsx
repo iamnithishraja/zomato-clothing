@@ -11,10 +11,12 @@ export default function DeliveryTabLayout() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      // Only allow Delivery role to access these tabs
+      if (!user.isProfileComplete) {
+        router.replace('/auth/ProfileCompletion');
+        return;
+      }
       if (user.role !== 'Delivery') {
         console.log('❌ Unauthorized access to Delivery tabs. Role:', user.role);
-        // Redirect to correct tabs based on role
         if (user.role === 'User') {
           router.replace('/(tabs)/' as any);
         } else if (user.role === 'Merchant') {
@@ -24,8 +26,7 @@ export default function DeliveryTabLayout() {
     }
   }, [user, isLoading, router]);
 
-  // Show loading while checking role
-  if (isLoading || !user || user.role !== 'Delivery') {
+  if (isLoading || !user || !user.isProfileComplete || user.role !== 'Delivery') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />

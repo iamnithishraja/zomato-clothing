@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../api/client';
 import ImageUploader from '../../components/ui/ImageUploader';
 import ProductDetailsModal from '../../components/merchant/ProductDetailsModal';
+import { cleanSpecifications } from '@/utils/productUtils';
 import { 
   ProductData, 
   FormErrors, 
@@ -236,8 +237,8 @@ const CreateProduct = () => {
         isOnSale: productData.isOnSale,
         sizes: productData.sizes,
         availableQuantity: Math.round(Number(productData.availableQuantity)),
-        specifications: productData.specifications,
-        season: productData.season,
+        specifications: cleanSpecifications(productData.specifications),
+        season: productData.season?.trim() || undefined,
         isActive: productData.isActive,
         isNewArrival: productData.isNewArrival,
         isBestSeller: productData.isBestSeller,

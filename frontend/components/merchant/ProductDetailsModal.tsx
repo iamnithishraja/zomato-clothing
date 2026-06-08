@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   Platform,
   SafeAreaView,
   TextInput,
+  Alert,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { cleanSpecifications } from '@/utils/productUtils';
 // Removed PRODUCT_SUBCATEGORIES import since subcategory is now handled on main screen
 
 // Removed unused screenHeight since we're using full screen now
@@ -37,7 +39,7 @@ interface ProductDetails {
 interface ProductDetailsModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (details: ProductDetails) => void;
+  onSave: (details: ProductDetails) => void | Promise<void>;
   initialData?: ProductDetails;
   category?: string;
   currentPrice?: string;
@@ -51,24 +53,56 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   category = 'Men',
   currentPrice = '0'
 }) => {
+  const presetMaterials = ['Cotton', 'Polyester', 'Silk', 'Linen', 'Leather'];
+  const [isSaving, setIsSaving] = useState(false);
+
   const [details, setDetails] = useState<ProductDetails>({
-    specifications: {
-      material: '',
-      fit: '',
-      pattern: ''
-    },
+    specifications: { material: '', fit: '', pattern: '' },
     season: '',
     isActive: true,
     isNewArrival: false,
     isBestSeller: false,
     isOnSale: false,
     discountPercentage: '',
-    ...initialData
   });
-
   const [discountPreview, setDiscountPreview] = useState<string>('');
-
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isCustomMaterial, setIsCustomMaterial] = useState(false);
+  const [customMaterial, setCustomMaterial] = useState('');
+  const wasVisibleRef = useRef(false);
+
+  const hydrateFromInitialData = useCallback((data?: ProductDetails) => {
+    const material = data?.specifications?.material?.trim() || '';
+    const isCustom = !!material && !presetMaterials.includes(material);
+
+    setIsCustomMaterial(isCustom);
+    setCustomMaterial(isCustom ? material : '');
+    setDetails({
+      specifications: {
+        material: isCustom ? material : material,
+        fit: data?.specifications?.fit || '',
+        pattern: data?.specifications?.pattern || '',
+      },
+      season: data?.season || '',
+      isActive: data?.isActive ?? true,
+      isNewArrival: data?.isNewArrival ?? false,
+      isBestSeller: data?.isBestSeller ?? false,
+      isOnSale: data?.isOnSale ?? false,
+      discountPercentage: data?.discountPercentage?.toString() || '',
+    });
+    setErrors({});
+  }, []);
+
+  useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      hydrateFromInitialData(initialData);
+    }
+    if (!visible) {
+      wasVisibleRef.current = false;
+    } else {
+      wasVisibleRef.current = true;
+    }
+  }, [visible, initialData, hydrateFromInitialData]);
 
   // Auto-calculate discount when price or discount percentage changes
   useEffect(() => {
@@ -89,7 +123,7 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
   // Removed subcategories since they're now handled on the main screen
 
-  const materials = ['Cotton', 'Polyester', 'Silk', 'Linen', 'Leather'];
+  const materials = ['Cotton', 'Polyester', 'Silk', 'Linen', 'Leather', 'Other'];
   const fits = ['Slim Fit', 'Regular Fit', 'Loose Fit', 'Oversized'];
   const patterns = ['Solid', 'Striped', 'Printed', 'Checkered'];
   const seasons = ['Summer', 'Winter', 'Monsoon', 'All Season'];
@@ -176,12 +210,78 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     return Object.keys(newErrors).length === 0;
   }, [details.isOnSale, details.discountPercentage]);
 
-  const handleSave = useCallback(() => {
-    if (validateForm()) {
-      onSave(details);
-      onClose();
+  const handleMaterialSelect = useCallback((value: string) => {
+    if (value === 'Other') {
+      setIsCustomMaterial(true);
+      setDetails(prev => ({
+        ...prev,
+        specifications: {
+          ...prev.specifications,
+          material: customMaterial.trim(),
+        },
+      }));
+      return;
     }
-  }, [details, onSave, onClose, validateForm]);
+    setIsCustomMaterial(false);
+    setCustomMaterial('');
+    handleSelect('specifications.material', value);
+  }, [customMaterial, handleSelect]);
+
+  const handleCustomMaterialChange = useCallback((value: string) => {
+    setCustomMaterial(value);
+    setDetails(prev => ({
+      ...prev,
+      specifications: {
+        ...prev.specifications,
+        material: value.trim(),
+      },
+    }));
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (isCustomMaterial && !customMaterial.trim()) {
+      setErrors((prev) => ({ ...prev, 'specifications.material': 'Please enter a material name' }));
+      return;
+    }
+
+    const resolvedMaterial = isCustomMaterial
+      ? customMaterial.trim()
+      : (details.specifications?.material?.trim() || '');
+
+    const finalDetails: ProductDetails = {
+      ...details,
+      specifications: cleanSpecifications({
+        material: resolvedMaterial,
+        fit: details.specifications?.fit,
+        pattern: details.specifications?.pattern,
+      }),
+      season: details.season?.trim() || undefined,
+    };
+
+    if (finalDetails.isOnSale && (!finalDetails.discountPercentage || finalDetails.discountPercentage.trim() === '')) {
+      setErrors({ discountPercentage: 'Discount percentage is required when on sale is enabled' });
+      return;
+    }
+
+    if (finalDetails.isOnSale && finalDetails.discountPercentage) {
+      const discount = parseFloat(finalDetails.discountPercentage);
+      if (isNaN(discount) || discount < 0 || discount > 100) {
+        setErrors({ discountPercentage: 'Discount percentage must be between 0 and 100' });
+        return;
+      }
+    }
+
+    try {
+      setIsSaving(true);
+      setErrors({});
+      await onSave(finalDetails);
+      onClose();
+    } catch {
+      Alert.alert('Error', 'Failed to save product details. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [details, onSave, onClose, isCustomMaterial, customMaterial]);
 
   const handleClose = useCallback(() => {
     // Check if user has made any changes
@@ -277,8 +377,8 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
               <Text style={styles.headerTitle}>Product Details</Text>
               <Text style={styles.headerCategory}>{category}</Text>
             </View>
-            <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>Save</Text>
+            <TouchableOpacity onPress={handleSave} style={styles.saveButton} disabled={isSaving}>
+              <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -299,9 +399,27 @@ const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
             {/* Material */}
             {renderSelectionGrid(
               materials,
-              details.specifications?.material || '',
-              (value) => handleSelect('specifications.material', value),
-              'Material'
+              isCustomMaterial ? 'Other' : (details.specifications?.material || ''),
+              handleMaterialSelect,
+              'Material',
+              'specifications.material'
+            )}
+
+            {isCustomMaterial && (
+              <View style={styles.customMaterialContainer}>
+                <Text style={styles.selectionLabel}>Enter Material *</Text>
+                <TextInput
+                  style={styles.customMaterialInput}
+                  value={customMaterial}
+                  onChangeText={handleCustomMaterialChange}
+                  placeholder="e.g. Rayon, Nylon, Bamboo fabric"
+                  placeholderTextColor={Colors.textMuted}
+                  maxLength={100}
+                />
+                {errors['specifications.material'] ? (
+                  <Text style={styles.errorText}>{errors['specifications.material']}</Text>
+                ) : null}
+              </View>
             )}
 
             {/* Fit */}
@@ -664,6 +782,20 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginTop: 4,
     fontWeight: '500',
+  },
+  customMaterialContainer: {
+    marginTop: -12,
+    marginBottom: 24,
+  },
+  customMaterialInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.background,
   },
 });
 

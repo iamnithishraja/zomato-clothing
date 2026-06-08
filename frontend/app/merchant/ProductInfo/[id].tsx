@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../../api/client';
 import ImageUploader from '../../../components/ui/ImageUploader';
 import ProductDetailsModal from '../../../components/merchant/ProductDetailsModal';
+import { cleanSpecifications } from '@/utils/productUtils';
 import { 
   ProductData, 
   FormErrors, 
@@ -212,18 +213,48 @@ const ProductInfo = () => {
     }
   }, [errors.images]);
 
-  const handleDetailsSave = useCallback((details: ProductDetails) => {
+  const handleDetailsSave = useCallback(async (details: ProductDetails) => {
+    const cleanedSpecs = cleanSpecifications(details.specifications);
+
     setProductData(prev => ({
       ...prev,
-      specifications: details.specifications,
-      season: details.season,
+      specifications: cleanedSpecs || {},
+      season: details.season || '',
       isActive: details.isActive,
       isNewArrival: details.isNewArrival,
       isBestSeller: details.isBestSeller,
       isOnSale: details.isOnSale,
       discountPercentage: details.discountPercentage,
     }));
-  }, []);
+
+    if (!productId) return;
+
+    const response = await apiClient.put(`/api/v1/product/${productId}`, {
+      specifications: cleanedSpecs,
+      season: details.season?.trim() || undefined,
+      isActive: details.isActive,
+      isNewArrival: details.isNewArrival,
+      isBestSeller: details.isBestSeller,
+      isOnSale: details.isOnSale,
+      discountPercentage: details.discountPercentage ? Number(details.discountPercentage) : 0,
+    });
+
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to save product details');
+    }
+
+    const product = response.data.product;
+    setProductData(prev => ({
+      ...prev,
+      specifications: product.specifications || cleanedSpecs || {},
+      season: product.season || details.season || '',
+      isActive: product.isActive ?? details.isActive,
+      isNewArrival: product.isNewArrival ?? details.isNewArrival,
+      isBestSeller: product.isBestSeller ?? details.isBestSeller,
+      isOnSale: product.isOnSale ?? details.isOnSale,
+      discountPercentage: product.discountPercentage?.toString() || details.discountPercentage || '',
+    }));
+  }, [productId]);
 
   const hasDetailsData = useCallback(() => {
     return !!(
@@ -286,8 +317,8 @@ const ProductInfo = () => {
         isOnSale: productData.isOnSale,
         sizes: productData.sizes,
         availableQuantity: Math.round(Number(productData.availableQuantity)),
-        specifications: productData.specifications,
-        season: productData.season,
+        specifications: cleanSpecifications(productData.specifications),
+        season: productData.season?.trim() || undefined,
         isActive: productData.isActive,
         isNewArrival: productData.isNewArrival,
         isBestSeller: productData.isBestSeller,

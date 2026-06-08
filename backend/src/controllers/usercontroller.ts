@@ -1,5 +1,13 @@
 
     import UserModel from "../Models/userModel";
+    import StoreModel from "../Models/storeModel";
+    import ProductModel from "../Models/productModel";
+    import OrderModel from "../Models/orderModel";
+    import DeliveryModel from "../Models/deliveryModel";
+    import PaymentModel from "../Models/paymentModel";
+    import FavoriteModel from "../Models/favoriteModel";
+    import NotificationModel from "../Models/notificationModel";
+    import { deleteFileFromR2 } from "../utils/fileUpload";
     import { onbooardingSchema, verifyOtpSchema, loginSchema, profileCompletionSchema, emailRegisterSchema } from "../schemas/onboardingSchema";
     import { generateOTP } from "../utils/otp";
     import { sendPhoneOtp } from "../utils/sms";
@@ -616,7 +624,7 @@ async function completeProfile(req: Request, res: Response) {
         const updatedUser = await UserModel.findByIdAndUpdate(
             user._id,
             updateData,
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!updatedUser) {
@@ -799,7 +807,7 @@ async function updateProfile(req: Request, res: Response) {
         const updatedUser = await UserModel.findByIdAndUpdate(
             user._id,
             updateData,
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!updatedUser) {
@@ -920,4 +928,68 @@ async function getUserStats(req: Request, res: Response) {
     }
 }
 
-    export { onboarding, verifyOtp, getProfile, registerUser, loginUser, completeProfile, updateProfile, getUserStats };
+async function deleteAccount(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const userId = user._id;
+
+        const deleteRemoteFile = async (url?: string | null) => {
+            if (url) {
+                try {
+                    await deleteFileFromR2(url);
+                } catch {
+                    // continue cleanup even if file delete fails
+                }
+            }
+        };
+
+        if (user.role === 'Merchant') {
+            const store = await StoreModel.findOne({ merchantId: userId });
+            if (store) {
+                const products = await ProductModel.find({ storeId: store._id });
+                for (const product of products) {
+                    for (const img of product.images || []) {
+                        await deleteRemoteFile(img);
+                    }
+                }
+                await ProductModel.deleteMany({ storeId: store._id });
+                await OrderModel.deleteMany({ store: store._id });
+                await PaymentModel.deleteMany({ store: store._id });
+                await NotificationModel.deleteMany({ store: store._id } as any);
+                for (const img of store.storeImages || []) {
+                    await deleteRemoteFile(img);
+                }
+                await StoreModel.deleteOne({ _id: store._id });
+            }
+        }
+
+        if (user.role === 'Delivery') {
+            await DeliveryModel.deleteMany({ deliveryPerson: userId });
+            await OrderModel.updateMany(
+                { deliveryPerson: userId },
+                { $unset: { deliveryPerson: '' } }
+            );
+        }
+
+        await FavoriteModel.deleteMany({ user: userId });
+        await NotificationModel.deleteMany({ recipient: userId });
+        await OrderModel.deleteMany({ user: userId });
+        await PaymentModel.deleteMany({ user: userId });
+        await deleteRemoteFile(user.avatar);
+
+        await UserModel.deleteOne({ _id: userId });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Account and all associated data deleted successfully',
+        });
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to delete account. Please try again.',
+        });
+    }
+}
+
+    export { onboarding, verifyOtp, getProfile, registerUser, loginUser, completeProfile, updateProfile, getUserStats, deleteAccount };

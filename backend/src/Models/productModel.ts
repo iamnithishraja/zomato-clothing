@@ -86,7 +86,7 @@ const productSchema = new mongoose.Schema({
   },
 
   specifications: {
-    material: { type: String, enum: ["Cotton", "Polyester", "Silk", "Wool", "Linen", "Denim", "Leather","Synthetic"] },
+    material: { type: String, trim: true, maxlength: 100 },
     fit: { type: String, enum: ["Slim Fit", "Regular Fit", "Loose Fit", "Oversized"] },
     pattern: { type: String, enum: ["Solid", "Striped", "Printed", "Checkered", "Floral"] },
   },

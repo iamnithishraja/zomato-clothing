@@ -86,7 +86,7 @@ async function createSingleStoreOrder(
     const productUpdate = await ProductModel.findOneAndUpdate(
       { _id: item.product, availableQuantity: { $gte: item.quantity } },
       { $inc: { availableQuantity: -item.quantity } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!productUpdate) {
       // Rollback previous decrements
@@ -323,7 +323,7 @@ async function createOrder(req: Request, res: Response) {
       const productUpdate = await ProductModel.findOneAndUpdate(
         { _id: item.product, availableQuantity: { $gte: item.quantity } },
         { $inc: { availableQuantity: -item.quantity } },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!productUpdate) {
         // Rollback previous decrements
@@ -676,7 +676,7 @@ async function updateOrderStatus(req: Request, res: Response) {
     const updatedOrder = await OrderModel.findByIdAndUpdate(
       orderId,
       updateData,
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('user', 'name phone email')
      .populate('store', 'storeName address')
      .populate('orderItems.product', 'name images price');
@@ -879,7 +879,7 @@ async function createMultipleOrders(req: Request, res: Response) {
           const productUpdate = await ProductModel.findOneAndUpdate(
             { _id: item.product, availableQuantity: { $gte: item.quantity } },
             { $inc: { availableQuantity: -item.quantity } },
-            { new: true }
+            { returnDocument: 'after' }
           );
           if (!productUpdate) {
             stockOk = false;

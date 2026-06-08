@@ -11,10 +11,16 @@ export default function MerchantTabLayout() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      // Only allow Merchant role to access these tabs
+      if (!user.isProfileComplete) {
+        if (user.role === 'Merchant' && user.name) {
+          router.replace('/auth/StoreDetails');
+        } else {
+          router.replace('/auth/ProfileCompletion');
+        }
+        return;
+      }
       if (user.role !== 'Merchant') {
         console.log('❌ Unauthorized access to Merchant tabs. Role:', user.role);
-        // Redirect to correct tabs based on role
         if (user.role === 'User') {
           router.replace('/(tabs)/' as any);
         } else if (user.role === 'Delivery') {
@@ -24,8 +30,7 @@ export default function MerchantTabLayout() {
     }
   }, [user, isLoading, router]);
 
-  // Show loading while checking role
-  if (isLoading || !user || user.role !== 'Merchant') {
+  if (isLoading || !user || !user.isProfileComplete || user.role !== 'Merchant') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />

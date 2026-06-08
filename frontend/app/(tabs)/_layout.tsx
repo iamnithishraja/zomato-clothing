@@ -11,10 +11,12 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      // Only allow User role to access these tabs
+      if (!user.isProfileComplete) {
+        router.replace('/auth/ProfileCompletion');
+        return;
+      }
       if (user.role !== 'User') {
         console.log('❌ Unauthorized access to User tabs. Role:', user.role);
-        // Redirect to correct tabs based on role
         if (user.role === 'Merchant') {
           router.replace('/(merchantTabs)/' as any);
         } else if (user.role === 'Delivery') {
@@ -24,8 +26,7 @@ export default function TabLayout() {
     }
   }, [user, isLoading, router]);
 
-  // Show loading while checking role
-  if (isLoading || !user || user.role !== 'User') {
+  if (isLoading || !user || !user.isProfileComplete || user.role !== 'User') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />

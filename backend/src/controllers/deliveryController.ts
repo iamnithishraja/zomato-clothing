@@ -286,7 +286,7 @@ async function updateDeliveryStatus(req: Request, res: Response) {
     const updatedDelivery = await DeliveryModel.findByIdAndUpdate(
       deliveryId,
       updateData,
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('deliveryPerson', 'name phone')
      .populate({
        path: 'order',
@@ -559,7 +559,7 @@ async function rateDelivery(req: Request, res: Response) {
     const updatedDelivery = await DeliveryModel.findByIdAndUpdate(
       deliveryId,
       { rating, review: review || '' },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('deliveryPerson', 'name phone')
      .populate({
        path: 'order',

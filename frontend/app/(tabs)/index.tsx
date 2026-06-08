@@ -43,6 +43,29 @@ export default function HomeScreen() {
   const [isSearchBarSticky, setIsSearchBarSticky] = useState(false);
   const [isCategorySticky, setIsCategorySticky] = useState(false);
 
+  const buildStoreParams = useCallback(
+    (overrides?: { search?: string; filter?: string | null }) => ({
+      page: 1,
+      limit: 20,
+      search: overrides?.search ?? searchQuery,
+      location: selectedLocation?.name,
+      filter: overrides?.filter ?? selectedFilter ?? 'all',
+    }),
+    [searchQuery, selectedLocation, selectedFilter]
+  );
+
+  const fetchStores = useCallback(
+    async (overrides?: { search?: string; filter?: string | null }) => {
+      const response = await apiClient.get('/api/v1/store/all', {
+        params: buildStoreParams(overrides),
+      });
+      if (response.data.success) {
+        setStores(response.data.stores);
+      }
+    },
+    [buildStoreParams]
+  );
+
   // --- Load data ---
   const loadData = useCallback(async (force: boolean = false) => {
     if (hasLoadedData && !force) return;
@@ -54,23 +77,13 @@ export default function HomeScreen() {
         setBestSellerStores(bestSellerResponse.data.stores);
       }
 
-      const storesResponse = await apiClient.get('/api/v1/store/all', {
-        params: {
-          page: 1,
-          limit: 20,
-          location: selectedLocation?.name,
-        },
-      });
-
-      if (storesResponse.data.success) {
-        setStores(storesResponse.data.stores);
-      }
+      await fetchStores();
       setHasLoadedData(true);
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load stores. Please try again.');
     }
-  }, [selectedLocation, hasLoadedData]);
+  }, [fetchStores, hasLoadedData]);
 
   // --- Refresh handler ---
   const handleRefresh = useCallback(async () => {
@@ -87,23 +100,12 @@ export default function HomeScreen() {
     async (query: string) => {
       setSearchQuery(query);
       try {
-        const storesResponse = await apiClient.get('/api/v1/store/all', {
-          params: {
-            page: 1,
-            limit: 20,
-            search: query,
-            location: selectedLocation?.name,
-          },
-        });
-
-        if (storesResponse.data.success) {
-          setStores(storesResponse.data.stores);
-        }
+        await fetchStores({ search: query });
       } catch (error) {
         console.error('Error searching:', error);
       }
     },
-    [selectedLocation]
+    [fetchStores]
   );
 
   // --- Filter handler ---
@@ -111,23 +113,12 @@ export default function HomeScreen() {
     async (filterId: string) => {
       setSelectedFilter(filterId);
       try {
-        const response = await apiClient.get('/api/v1/store/all', {
-          params: {
-            page: 1,
-            limit: 20,
-            search: searchQuery,
-            location: selectedLocation?.name,
-          },
-        });
-
-        if (response.data.success) {
-          setStores(response.data.stores);
-        }
+        await fetchStores({ filter: filterId });
       } catch (error) {
         console.error('Error filtering:', error);
       }
     },
-    [searchQuery, selectedLocation]
+    [fetchStores]
   );
 
   // --- Store press handler ---

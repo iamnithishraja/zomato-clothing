@@ -33,13 +33,22 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
         // Validate file type - Accept all common image and video formats
         const allowedTypes = [
             'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff', 'image/svg+xml',
-            'video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/avi', 'video/mov'
+            'image/heic', 'image/heif', 'image/avif',
+            'video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/avi', 'video/mov', 'video/3gpp', 'video/x-matroska',
+            'application/octet-stream'
         ];
         
-        // Also accept generic image/* and video/* types
-        const isImageType = fileType.startsWith('image/');
-        const isVideoType = fileType.startsWith('video/');
-        const isAllowedType = allowedTypes.includes(fileType) || isImageType || isVideoType;
+        const normalizedType = fileType.toLowerCase().trim();
+        const isImageType = normalizedType.startsWith('image/');
+        const isVideoType = normalizedType.startsWith('video/');
+        const isOctetStream = normalizedType === 'application/octet-stream' || normalizedType === 'binary/octet-stream';
+        const hasImageExt = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif|jfif)$/i.test(fileName);
+        const hasVideoExt = /\.(mp4|mov|m4v|webm|avi|3gp|mkv)$/i.test(fileName);
+        const isAllowedType =
+            allowedTypes.includes(normalizedType) ||
+            isImageType ||
+            isVideoType ||
+            (isOctetStream && (hasImageExt || hasVideoExt));
         
         if (!isAllowedType) {
             res.status(400).json({

@@ -10,6 +10,11 @@ import ErrorState from '@/components/admin/ErrorState';
 import EmptyState from '@/components/admin/EmptyState';
 import PaginationBar from '@/components/admin/PaginationBar';
 import { cn } from '@/lib/utils';
+import {
+  formatStoreRatingAverage,
+  formatStoreReviewCount,
+  hasStoreReviews,
+} from '@/lib/store-rating';
 
 const fmt = (v: number) =>
   `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -129,13 +134,21 @@ export default function StoresSection() {
                         {fmt(s.orderStats.totalRevenue)}
                       </td>
                       <td className="px-4 py-3 sm:px-6">
-                        <span className="font-bold text-amber-800">
-                          {s.rating?.average?.toFixed(1) || '0.0'}
-                        </span>
-                        <span className="ml-1 text-amber-600">★</span>
-                        <span className="ml-1 text-xs text-stone-500">
-                          ({s.rating?.totalReviews || 0})
-                        </span>
+                        {hasStoreReviews(s.rating?.totalReviews) ? (
+                          <>
+                            <span className="font-bold text-amber-800">
+                              {formatStoreRatingAverage(s.rating?.average)}
+                            </span>
+                            <span className="ml-1 text-amber-600">★</span>
+                            <span className="ml-1 text-xs text-stone-500">
+                              ({s.rating?.totalReviews})
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs font-medium text-stone-500">
+                            {formatStoreReviewCount(0)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 sm:px-6">
                         <span
@@ -160,8 +173,8 @@ export default function StoresSection() {
                               : 'bg-red-100 text-red-800 ring-red-200/50',
                           )}
                         >
-                        {s.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                          {s.isActive ? 'Active' : 'Inactive'}
+                        </span>
                     </td>
                     <td className="px-4 py-3 text-right sm:px-6">
                       <Link

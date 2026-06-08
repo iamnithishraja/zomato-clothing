@@ -23,6 +23,14 @@ import ErrorState from '@/components/admin/ErrorState';
 import { chartTheme } from '@/lib/admin-theme';
 import { chartTooltip, pieLegendFormatter } from '@/lib/chart-common';
 import { cn } from '@/lib/utils';
+import StoreReviewCell from '@/components/admin/StoreReviewCell';
+import {
+  formatReviewDate,
+  formatStoreRatingAverage,
+  formatStoreReviewCount,
+  hasStoreReviews,
+  renderStarRating,
+} from '@/lib/store-rating';
 
 const STATUS_PIE_COLORS = [
   '#b45309',
@@ -121,9 +129,15 @@ export default function StoreDetailSection() {
     );
   }
 
-  if (!data?.store) return null;
+  if (!data?.store) {
+    return (
+      <PageShell>
+        <ErrorState title="Store unavailable" message="Could not load store data." onRetry={load} />
+      </PageShell>
+    );
+  }
 
-  const { store, orderStats, recentOrders } = data;
+  const { store, orderStats, recentOrders, storeReviews = [] } = data;
   const dense = trendData.length > 14;
 
   return (
@@ -158,15 +172,33 @@ export default function StoreDetailSection() {
             >
               {store.isActive ? 'Active' : 'Inactive'}
             </span>
-            {store.rating?.average != null ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-950">
-                <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
-                {Number(store.rating.average).toFixed(1)}
-                <span className="font-normal text-amber-800">
-                  ({store.rating.totalReviews ?? 0} reviews)
-                </span>
-              </span>
-            ) : null}
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold',
+                hasStoreReviews(store.rating?.totalReviews)
+                  ? 'bg-amber-100 text-amber-950'
+                  : 'bg-stone-100 text-stone-600',
+              )}
+            >
+              <Star
+                className={cn(
+                  'h-3.5 w-3.5',
+                  hasStoreReviews(store.rating?.totalReviews)
+                    ? 'fill-amber-500 text-amber-600'
+                    : 'text-stone-400',
+                )}
+              />
+              {hasStoreReviews(store.rating?.totalReviews) ? (
+                <>
+                  {formatStoreRatingAverage(store.rating?.average)}
+                  <span className="font-normal text-amber-800">
+                    ({formatStoreReviewCount(store.rating?.totalReviews)})
+                  </span>
+                </>
+              ) : (
+                <span className="font-medium">{formatStoreReviewCount(0)}</span>
+              )}
+            </span>
           </div>
         }
       />
@@ -367,18 +399,72 @@ export default function StoreDetailSection() {
       </div>
 
       <div className="mt-8">
+        <PanelCard
+          title="Customer store reviews"
+          description={
+            hasStoreReviews(store.rating?.totalReviews)
+              ? `${formatStoreReviewCount(store.rating?.totalReviews)} · showing latest ${storeReviews.length}`
+              : 'Reviews appear after customers rate delivered orders'
+          }
+        >
+          {storeReviews.length === 0 ? (
+            <p className="py-10 text-center text-sm text-stone-500">
+              {hasStoreReviews(store.rating?.totalReviews)
+                ? 'Reviews are recorded but could not be loaded. Try refreshing the page.'
+                : 'No store reviews yet. Ratings are collected after successful delivery.'}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {storeReviews.map((review: any) => (
+                <div
+                  key={review._id}
+                  className="rounded-xl border border-stone-200/90 bg-stone-50/50 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-stone-900">{review.userName}</p>
+                      <p className="text-xs text-stone-500">
+                        Order #{review.orderNumber || review._id?.slice(-8)}
+                        {review.userPhone ? ` · ${review.userPhone}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold tracking-wide text-amber-700">
+                        {renderStarRating(review.rating)}
+                      </p>
+                      <p className="text-[11px] text-stone-500">
+                        {formatReviewDate(review.ratedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  {review.review?.trim() ? (
+                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-700">
+                      {review.review.trim()}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm italic text-stone-500">No written feedback</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </PanelCard>
+      </div>
+
+      <div className="mt-8">
         <PanelCard title="Recent orders" description="Newest 30 at this store">
           {!recentOrders?.length ? (
             <p className="py-10 text-center text-sm text-stone-500">No orders yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[720px] w-full border-collapse text-sm">
+              <table className="min-w-[920px] w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-stone-200 bg-stone-50/80 text-left text-[11px] font-bold uppercase tracking-wider text-stone-500">
                     <th className="px-4 py-2">Order</th>
                     <th className="px-4 py-2">Customer</th>
                     <th className="px-4 py-2">Amount</th>
                     <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Store review</th>
                     <th className="px-4 py-2">Payment</th>
                     <th className="px-4 py-2">Date</th>
                   </tr>
@@ -396,6 +482,9 @@ export default function StoreDetailSection() {
                         {fmt(o.totalAmount ?? 0)}
                       </td>
                       <td className="px-4 py-2 text-xs font-semibold text-stone-800">{o.status}</td>
+                      <td className="px-4 py-2 text-xs text-stone-600">
+                        <StoreReviewCell order={o} />
+                      </td>
                       <td className="px-4 py-2 text-xs text-stone-600">
                         {o.paymentMethod} / {o.paymentStatus}
                       </td>

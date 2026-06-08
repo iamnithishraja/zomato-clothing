@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchAllOrders, fetchOrderById, forceCancelOrder } from '../../services/dashboardApi';
 import { X, Search, AlertTriangle } from 'lucide-react';
 import PageShell from '@/components/admin/PageShell';
@@ -12,6 +13,8 @@ import PaginationBar from '@/components/admin/PaginationBar';
 import DateRangeFilterBar from '@/components/admin/DateRangeFilterBar';
 import { dateRangePresetDays } from '@/lib/admin-date';
 import { cn } from '@/lib/utils';
+import StoreReviewCell from '@/components/admin/StoreReviewCell';
+import StoreReviewPanel from '@/components/admin/StoreReviewPanel';
 
 const STATUS_BADGE: Record<string, string> = {
   Pending: 'bg-amber-100 text-amber-900 ring-amber-200/50',
@@ -294,7 +297,7 @@ export default function OrdersSection() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-[880px] w-full border-collapse text-sm">
+              <table className="min-w-[1020px] w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-stone-200 bg-stone-50/80 text-left text-[11px] font-bold uppercase tracking-wider text-stone-500">
                     <th className="px-4 py-3 sm:px-6">Order #</th>
@@ -302,6 +305,7 @@ export default function OrdersSection() {
                     <th className="px-4 py-3 sm:px-6">Store</th>
                     <th className="px-4 py-3 sm:px-6">Amount</th>
                     <th className="px-4 py-3 sm:px-6">Status</th>
+                    <th className="px-4 py-3 sm:px-6">Store review</th>
                     <th className="px-4 py-3 sm:px-6">Payment</th>
                     <th className="px-4 py-3 sm:px-6">Date</th>
                     <th className="px-4 py-3 sm:px-6">Actions</th>
@@ -317,7 +321,16 @@ export default function OrdersSection() {
                         {o.user?.name || o.user?.phone || '—'}
                       </td>
                       <td className="px-4 py-3 text-stone-600 sm:px-6">
-                        {o.store?.storeName || '—'}
+                        {o.store?._id ? (
+                          <Link
+                            to={`/dashboard/stores/${o.store._id}`}
+                            className="font-medium text-amber-900 hover:text-amber-950 hover:underline"
+                          >
+                            {o.store.storeName || 'View store'}
+                          </Link>
+                        ) : (
+                          o.store?.storeName || '—'
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 font-bold tabular-nums sm:px-6">
                         ₹{o.totalAmount?.toLocaleString('en-IN')}
@@ -326,13 +339,18 @@ export default function OrdersSection() {
                         <StatusBadge status={o.status} />
                       </td>
                       <td className="px-4 py-3 text-xs text-stone-600 sm:px-6">
+                        <StoreReviewCell order={o} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-stone-600 sm:px-6">
                         {o.paymentMethod} / {o.paymentStatus}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500 sm:px-6">
-                        {new Date(o.createdAt).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                        })}
+                        {o.createdAt
+                          ? new Date(o.createdAt).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                            })
+                          : '—'}
                       </td>
                       <td className="px-4 py-3 sm:px-6">
                         <div className="flex flex-wrap gap-2">
@@ -440,9 +458,19 @@ export default function OrdersSection() {
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
                       Store
                     </p>
-                    <p className="mt-1 font-semibold text-stone-900">
-                      {selectedOrder.store?.storeName || '—'}
-                    </p>
+                    {selectedOrder.store?._id ? (
+                      <Link
+                        to={`/dashboard/stores/${selectedOrder.store._id}`}
+                        className="mt-1 inline-block font-semibold text-amber-900 hover:text-amber-950 hover:underline"
+                        onClick={() => setSelectedOrder(null)}
+                      >
+                        {selectedOrder.store.storeName || 'View store'}
+                      </Link>
+                    ) : (
+                      <p className="mt-1 font-semibold text-stone-900">
+                        {selectedOrder.store?.storeName || '—'}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -469,6 +497,7 @@ export default function OrdersSection() {
                     {selectedOrder.shippingAddress}
                   </p>
                 </div>
+                <StoreReviewPanel order={selectedOrder} />
                 {selectedOrder.orderItems?.length > 0 ? (
                   <div className="mt-6">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">

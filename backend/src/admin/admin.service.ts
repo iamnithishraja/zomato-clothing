@@ -505,6 +505,9 @@ export class AdminService {
         .populate('user', 'name phone email')
         .populate('store', 'storeName')
         .populate('deliveryPerson', 'name phone')
+        .select(
+          'orderNumber totalAmount status paymentMethod paymentStatus createdAt user store deliveryPerson storeRated storeRating storeReview storeRatedAt shippingAddress',
+        )
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -958,7 +961,7 @@ export class AdminService {
       .select('name phone email')
       .lean();
 
-    const [orderAgg, statusBreakdown, ordersTrend, recentOrders] = await Promise.all([
+    const [orderAgg, statusBreakdown, ordersTrend, recentOrders, storeReviews] = await Promise.all([
       OrderModel.aggregate([
         { $match: { store: sid } },
         {
@@ -996,8 +999,18 @@ export class AdminService {
         .populate('user', 'name phone')
         .populate('deliveryPerson', 'name phone')
         .select(
-          'orderNumber totalAmount status paymentMethod paymentStatus createdAt user deliveryPerson',
+          'orderNumber totalAmount status paymentMethod paymentStatus createdAt user deliveryPerson storeRated storeRating',
         )
+        .lean(),
+      OrderModel.find({
+        store: sid,
+        status: 'Delivered',
+        storeRated: true,
+      })
+        .sort({ storeRatedAt: -1 })
+        .limit(50)
+        .populate('user', 'name phone email')
+        .select('orderNumber storeRating storeReview storeRatedAt user')
         .lean(),
     ]);
 
@@ -1042,6 +1055,15 @@ export class AdminService {
         revenue: d.revenue,
       })),
       recentOrders,
+      storeReviews: storeReviews.map((order: any) => ({
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        rating: order.storeRating,
+        review: order.storeReview || '',
+        ratedAt: order.storeRatedAt,
+        userName: order.user?.name || order.user?.phone || 'Customer',
+        userPhone: order.user?.phone,
+      })),
     };
   }
 

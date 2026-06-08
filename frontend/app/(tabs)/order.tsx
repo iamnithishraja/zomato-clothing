@@ -3,24 +3,42 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshCon
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import apiClient from '@/api/client';
 import { Order, OrdersResponse } from '@/types/order';
 import OrderDetails from '@/components/user/OrderDetails';
+import PendingStoreReviewsSection from '@/components/user/PendingStoreReviewsSection';
+import StoreRatingModal from '@/components/user/StoreRatingModal';
+import { usePendingStoreReviewsContext } from '@/contexts/PendingStoreReviewsContext';
 
 export default function OrderScreen() {
+  const params = useLocalSearchParams<{ filter?: string }>();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [showPendingOnly, setShowPendingOnly] = useState(params.filter === 'pending-reviews');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderDetailsVisible, setOrderDetailsVisible] = useState(false);
+  const [openRatingOnMount, setOpenRatingOnMount] = useState(false);
+
+  const [quickRateOrderId, setQuickRateOrderId] = useState<string | null>(null);
+  const [quickRateStoreName, setQuickRateStoreName] = useState<string | undefined>();
+
+  const {
+    visiblePendingCount,
+    visibleOrders,
+    orders: pendingOrders,
+    fetchPendingReviews,
+    deferOrder,
+    markOrderReviewed,
+  } = usePendingStoreReviewsContext();
 
   const loadOrders = useCallback(async () => {
     try {
       setIsLoading(true);
-      const params = selectedStatus ? `?status=${selectedStatus}` : '';
-      const response = await apiClient.get<OrdersResponse>(`/api/v1/order${params}`);
-      
+      const query = showPendingOnly ? '?pendingStoreReview=true' : '';
+      const response = await apiClient.get<OrdersResponse>(`/api/v1/order${query}`);
+
       if (response.data.success) {
         setOrders(response.data.orders);
       }
@@ -30,20 +48,32 @@ export default function OrderScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedStatus]);
+  }, [showPendingOnly]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadOrders();
+      await Promise.all([loadOrders(), fetchPendingReviews()]);
     } finally {
       setRefreshing(false);
     }
-  }, [loadOrders]);
+  }, [loadOrders, fetchPendingReviews]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingReviews();
+    }, [fetchPendingReviews])
+  );
+
+  useEffect(() => {
+    if (params.filter === 'pending-reviews') {
+      setShowPendingOnly(true);
+    }
+  }, [params.filter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -84,22 +114,59 @@ export default function OrderScreen() {
     return date.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
-  const statusFilters = [
-    { key: null, label: 'All' },
-    { key: 'Pending', label: 'Pending' },
-    { key: 'Accepted', label: 'Accepted' },
-    { key: 'Processing', label: 'Processing' },
-    { key: 'Assigned', label: 'Assigned' },
-    { key: 'Shipped', label: 'Shipped' },
-    { key: 'Delivered', label: 'Delivered' },
-    { key: 'Cancelled', label: 'Cancelled' }
-  ];
+  const openOrderDetails = (orderId: string, withRating = false) => {
+    setSelectedOrderId(orderId);
+    setOpenRatingOnMount(withRating);
+    setOrderDetailsVisible(true);
+  };
 
-  if (isLoading && orders.length === 0) {
+  const handlePendingRatePress = (orderId: string) => {
+    const order = orders.find((o) => o._id === orderId);
+    if (order?.storeRated) {
+      Alert.alert('Already reviewed', 'You have already submitted a store review for this order.');
+      handleRatingSuccess();
+      return;
+    }
+    if (quickRateOrderId === orderId) return;
+
+    const pending = pendingOrders.find((o) => o._id === orderId);
+    const name =
+      (pending && typeof pending.store === 'object' ? pending.store.storeName : undefined) ||
+      order?.store?.storeName;
+    setQuickRateOrderId(orderId);
+    setQuickRateStoreName(name);
+  };
+
+  const handleLaterPress = useCallback(
+    (orderId: string) => {
+      deferOrder(orderId);
+    },
+    [deferOrder]
+  );
+
+  const handleRatingSuccess = useCallback(
+    async (ratedOrderId?: string) => {
+      const orderIdToUpdate = ratedOrderId || quickRateOrderId;
+      if (orderIdToUpdate) {
+        await markOrderReviewed(orderIdToUpdate);
+        setOrders((prev) =>
+          prev.map((o) => (o._id === orderIdToUpdate ? { ...o, storeRated: true } : o))
+        );
+      }
+      loadOrders();
+      fetchPendingReviews();
+    },
+    [loadOrders, fetchPendingReviews, quickRateOrderId, markOrderReviewed]
+  );
+
+  const needsStoreReview = (order: Order) =>
+    order.status === 'Delivered' && !order.storeRated;
+
+  if (isLoading && orders.length === 0 && !showPendingOnly) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading orders...</Text>
@@ -109,11 +176,7 @@ export default function OrderScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={Colors.gradients.primary as [string, string]}
-        style={styles.header}
-      >
+      <LinearGradient colors={Colors.gradients.primary as [string, string]} style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>My Orders</Text>
           <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
@@ -122,40 +185,34 @@ export default function OrderScreen() {
         </View>
       </LinearGradient>
 
-      {/* Status Filters */}
-      <View style={styles.filtersWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersContainer}
-          contentContainerStyle={styles.filtersContent}
-        >
-          {statusFilters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key || 'all'}
-              style={[
-                styles.filterButton,
-                selectedStatus === filter.key && styles.filterButtonActive
-              ]}
-              onPress={() => setSelectedStatus(filter.key)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                selectedStatus === filter.key && styles.filterButtonTextActive
-              ]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      {!showPendingOnly && (
+        <PendingStoreReviewsSection
+          orders={visibleOrders}
+          totalPending={visiblePendingCount}
+          onRatePress={handlePendingRatePress}
+          onLaterPress={handleLaterPress}
+          onViewAllPress={() => setShowPendingOnly(true)}
+        />
+      )}
 
-      {/* Orders List */}
-      <ScrollView 
+      {showPendingOnly && (
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingBannerText}>Showing orders awaiting store review</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setShowPendingOnly(false);
+            }}
+          >
+            <Text style={styles.pendingBannerAction}>Show all</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
+          <RefreshControl
+            refreshing={refreshing}
             onRefresh={onRefresh}
             colors={[Colors.primary]}
             tintColor={Colors.primary}
@@ -166,44 +223,63 @@ export default function OrderScreen() {
         {orders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
-              <Ionicons name="receipt-outline" size={64} color={Colors.textSecondary} />
+              <Ionicons
+                name={showPendingOnly ? 'star-outline' : 'receipt-outline'}
+                size={64}
+                color={Colors.textSecondary}
+              />
             </View>
-            <Text style={styles.emptyTitle}>No Orders Found</Text>
+            <Text style={styles.emptyTitle}>
+              {showPendingOnly ? 'No Pending Reviews' : 'No Orders Found'}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              {selectedStatus 
-                ? `No orders with status "${selectedStatus}"`
-                : "You haven't placed any orders yet"
-              }
+              {showPendingOnly
+                ? 'All your delivered orders have been reviewed. Thank you!'
+                : "You haven't placed any orders yet"}
             </Text>
           </View>
         ) : (
           <View style={styles.ordersList}>
             {orders.map((order) => (
-              <TouchableOpacity 
-                key={order._id} 
-                style={styles.orderCard}
-                onPress={() => {
-                  setSelectedOrderId(order._id);
-                  setOrderDetailsVisible(true);
-                }}
+              <View
+                key={order._id}
+                style={[styles.orderCard, needsStoreReview(order) && styles.orderCardHighlight]}
               >
-                {/* Order Header */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => openOrderDetails(order._id)}
+                >
                 <View style={styles.orderHeader}>
                   <View style={styles.orderInfo}>
-                    <Text style={styles.orderNumber}>Order #{order._id.slice(-8).toUpperCase()}</Text>
+                    <Text style={styles.orderNumber}>
+                      Order #{order.orderNumber || order._id.slice(-8).toUpperCase()}
+                    </Text>
                     <Text style={styles.orderDate}>{formatDate(order.orderDate)}</Text>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Ionicons 
-                      name={getStatusIcon(order.status) as any} 
-                      size={14} 
-                      color={Colors.textPrimary} 
-                    />
-                    <Text style={styles.statusText}>{order.status}</Text>
+                  <View style={styles.badgesRow}>
+                    {needsStoreReview(order) && (
+                      <View style={styles.reviewBadge}>
+                        <Ionicons name="star" size={12} color="#B8860B" />
+                        <Text style={styles.reviewBadgeText}>Review</Text>
+                      </View>
+                    )}
+                    {order.storeRated && order.status === 'Delivered' && (
+                      <View style={styles.ratedBadge}>
+                        <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
+                        <Text style={styles.ratedBadgeText}>Rated</Text>
+                      </View>
+                    )}
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+                      <Ionicons
+                        name={getStatusIcon(order.status) as any}
+                        size={14}
+                        color={Colors.textPrimary}
+                      />
+                      <Text style={styles.statusText}>{order.status}</Text>
+                    </View>
                   </View>
                 </View>
 
-                {/* Order Details */}
                 <View style={styles.orderDetails}>
                   <View style={styles.detailRow}>
                     <View style={styles.detailIcon}>
@@ -213,7 +289,7 @@ export default function OrderScreen() {
                       {order.store.storeName}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.detailRow}>
                     <View style={styles.detailIcon}>
                       <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
@@ -222,7 +298,7 @@ export default function OrderScreen() {
                       {order.shippingAddress}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.detailRow}>
                     <View style={styles.detailIcon}>
                       <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
@@ -232,31 +308,40 @@ export default function OrderScreen() {
                     </Text>
                   </View>
                 </View>
+                </TouchableOpacity>
 
-                {/* Order Footer */}
                 <View style={styles.orderFooter}>
                   <View style={styles.amountContainer}>
                     <Text style={styles.totalLabel}>Total</Text>
-                    <Text style={styles.totalAmount}>₹{Math.round(order.totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
+                    <Text style={styles.totalAmount}>
+                      ₹{Math.round(order.totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </Text>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.viewButton}
-                    onPress={() => {
-                      setSelectedOrderId(order._id);
-                      setOrderDetailsVisible(true);
-                    }}
-                  >
-                    <Text style={styles.viewButtonText}>View Details</Text>
-                    <Ionicons name="chevron-forward-outline" size={16} color={Colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.footerActions}>
+                    {needsStoreReview(order) && (
+                      <TouchableOpacity
+                        style={styles.rateStoreButton}
+                        onPress={() => handlePendingRatePress(order._id)}
+                      >
+                        <Ionicons name="star-outline" size={14} color={Colors.textPrimary} />
+                        <Text style={styles.rateStoreButtonText}>Rate</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.viewButton}
+                      onPress={() => openOrderDetails(order._id)}
+                    >
+                      <Text style={styles.viewButtonText}>Details</Text>
+                      <Ionicons name="chevron-forward-outline" size={16} color={Colors.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}
       </ScrollView>
 
-      {/* Order Details Modal */}
       <Modal
         visible={orderDetailsVisible}
         animationType="slide"
@@ -264,22 +349,52 @@ export default function OrderScreen() {
         onRequestClose={() => {
           setOrderDetailsVisible(false);
           setSelectedOrderId(null);
-          loadOrders(); // Refresh orders when modal closes
+          setOpenRatingOnMount(false);
+          handleRatingSuccess();
         }}
       >
         <View style={styles.modalContainer}>
           {selectedOrderId && (
-            <OrderDetails 
-              orderId={selectedOrderId} 
+            <OrderDetails
+              orderId={selectedOrderId}
+              openRatingOnMount={openRatingOnMount}
               onClose={() => {
                 setOrderDetailsVisible(false);
                 setSelectedOrderId(null);
-                loadOrders(); // Refresh orders when closing
-              }} 
+                setOpenRatingOnMount(false);
+                handleRatingSuccess();
+              }}
+              onRatingSubmitted={(orderId) => handleRatingSuccess(orderId)}
+              onReviewLater={(orderId) => handleLaterPress(orderId)}
             />
           )}
         </View>
       </Modal>
+
+      {quickRateOrderId && (
+        <StoreRatingModal
+          visible={!!quickRateOrderId}
+          orderId={quickRateOrderId}
+          storeName={quickRateStoreName}
+          onClose={() => {
+            setQuickRateOrderId(null);
+            setQuickRateStoreName(undefined);
+          }}
+          onLater={() => {
+            if (quickRateOrderId) {
+              handleLaterPress(quickRateOrderId);
+            }
+            setQuickRateOrderId(null);
+            setQuickRateStoreName(undefined);
+          }}
+          onSuccess={() => {
+            const ratedId = quickRateOrderId;
+            setQuickRateOrderId(null);
+            setQuickRateStoreName(undefined);
+            handleRatingSuccess(ratedId || undefined);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -321,36 +436,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  filtersWrapper: {
-    backgroundColor: Colors.background,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.backgroundSecondary,
-  },
-  filtersContainer: {
-    maxHeight: 50,
-  },
-  filtersContent: {
-    paddingHorizontal: 20,
+  pendingBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  filterButton: {
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: Colors.backgroundSecondary,
-    marginRight: 12,
+    backgroundColor: '#FFF8E1',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE082',
   },
-  filterButtonActive: {
-    backgroundColor: Colors.primary,
+  pendingBannerText: {
+    fontSize: 13,
+    color: '#6D4C00',
+    fontWeight: '500',
   },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  filterButtonTextActive: {
-    color: Colors.textPrimary,
+  pendingBannerAction: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   content: {
     flex: 1,
@@ -396,6 +500,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.backgroundSecondary,
   },
+  orderCardHighlight: {
+    borderColor: '#FFD700',
+    borderWidth: 1.5,
+  },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -404,7 +512,7 @@ const styles = StyleSheet.create({
   },
   orderInfo: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 8,
   },
   orderNumber: {
     fontSize: 16,
@@ -418,17 +526,52 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.textSecondary,
   },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'flex-end',
+    maxWidth: '55%',
+  },
+  reviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#FFF8DC',
+  },
+  reviewBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B8860B',
+    textTransform: 'uppercase',
+  },
+  ratedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.success + '20',
+  },
+  ratedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.success,
+    textTransform: 'uppercase',
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
-    minWidth: 80,
-    justifyContent: 'center',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.textPrimary,
     marginLeft: 4,
@@ -477,6 +620,25 @@ const styles = StyleSheet.create({
   },
   totalAmount: {
     fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rateStoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+  },
+  rateStoreButtonText: {
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.textPrimary,
   },

@@ -270,4 +270,35 @@ export async function notifyPaymentFailed(
   });
 }
 
+/**
+ * Notify merchant when a customer leaves a store review.
+ */
+export async function notifyRatingReceived(
+  orderId: Types.ObjectId | string,
+  orderNumber: string,
+  merchantId: Types.ObjectId | string,
+  storeId: Types.ObjectId | string,
+  storeName: string,
+  rating: number,
+  review?: string
+): Promise<void> {
+  const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
+  const reviewSnippet = review?.trim()
+    ? `: "${review.trim().slice(0, 80)}${review.trim().length > 80 ? "…" : ""}"`
+    : "";
+
+  await sendNotification({
+    recipient: merchantId,
+    recipientRole: "Merchant",
+    type: "RATING_RECEIVED",
+    title: "New Store Review",
+    message: `${stars} (${rating}/5) for ${storeName} on order #${orderNumber}${reviewSnippet}`,
+    order: orderId,
+    store: storeId,
+    actionUrl: `/merchant/orders/${orderId}`,
+    actionLabel: "View Order",
+    data: { rating, review: review || "" },
+  });
+}
+
 

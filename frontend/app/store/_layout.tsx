@@ -10,6 +10,7 @@ export default function StoreLayout() {
       }}
     >
       <Stack.Screen name="[id]" />
+      <Stack.Screen name="reviews/[id]" />
     </Stack>
   );
 }

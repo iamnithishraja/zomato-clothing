@@ -1,13 +1,21 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import { Tabs, useRouter, useFocusEffect } from 'expo-router';
+import React, { useEffect, useCallback } from 'react';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { PendingStoreReviewsProvider, usePendingStoreReviewsContext } from '@/contexts/PendingStoreReviewsContext';
 
-export default function TabLayout() {
+function TabLayoutContent() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const { visiblePendingCount, fetchPendingReviews } = usePendingStoreReviewsContext();
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingReviews();
+    }, [fetchPendingReviews])
+  );
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -58,6 +66,7 @@ export default function TabLayout() {
         name="order"
         options={{
           title: 'Order',
+          tabBarBadge: visiblePendingCount > 0 ? (visiblePendingCount > 9 ? '9+' : visiblePendingCount) : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt" color={color} size={size} />
           ),
@@ -82,6 +91,17 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabLayout() {
+  const { user, isLoading } = useAuth();
+  const isCustomer = !isLoading && user?.role === 'User' && user.isProfileComplete;
+
+  return (
+    <PendingStoreReviewsProvider enabled={!!isCustomer}>
+      <TabLayoutContent />
+    </PendingStoreReviewsProvider>
   );
 }
 

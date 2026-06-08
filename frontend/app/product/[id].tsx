@@ -21,6 +21,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
+import StoreRatingDisplay from '@/components/user/StoreRatingDisplay';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -312,7 +313,15 @@ export default function ProductDetailsScreen() {
           </View>
 
           {/* Seller Card */}
-          <TouchableOpacity style={styles.sellerCard} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.sellerCard}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (product.storeId?._id) {
+                router.push(`/store/${product.storeId._id}` as any);
+              }
+            }}
+          >
             <View style={styles.sellerLeft}>
               <View style={styles.sellerAvatar}>
                 {product.storeId?.storeImages && product.storeId.storeImages.length > 0 ? (
@@ -331,11 +340,7 @@ export default function ProductDetailsScreen() {
                 <Text style={styles.sellerName}>
                   {product.storeId?.storeName || 'Store Name'}
                 </Text>
-                <View style={styles.ratingRow}>
-                  <Ionicons name="star" size={14} color={Colors.warning} />
-                  <Text style={styles.ratingText}>4.7</Text>
-                  <Text style={styles.ratingCount}>(128 reviews)</Text>
-                </View>
+                <StoreRatingDisplay rating={product.storeId?.rating} starSize={12} compact />
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />

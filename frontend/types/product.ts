@@ -91,8 +91,12 @@ export interface Product {
   storeId: {
     _id: string;
     storeName: string;
-    address: string;
+    address?: string;
     storeImages: string[];
+    rating?: {
+      average: number;
+      totalReviews: number;
+    };
   };
   createdAt: string;
   updatedAt: string;

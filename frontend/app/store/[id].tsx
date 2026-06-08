@@ -26,6 +26,8 @@ import type { Store } from '@/types/store';
 import type { Product } from '@/types/product';
 import apiClient from '@/api/client';
 import CartBar from '@/components/user/CartBar';
+import StoreReviewsPreview from '@/components/user/StoreReviewsPreview';
+import StoreRatingDisplay from '@/components/user/StoreRatingDisplay';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -206,9 +208,6 @@ export default function StoreDetailScreen() {
     );
   }
 
-  const formatRating = (rating: number) => {
-    return rating.toFixed(1);
-  };
 
   const getWorkingDaysText = () => {
     if (!store?.workingDays) return 'Hours not available';
@@ -284,12 +283,7 @@ export default function StoreDetailScreen() {
             <View style={styles.storeHeader}>
               <View style={styles.storeTitleContainer}>
                 <Text style={styles.storeName}>{store.storeName}</Text>
-                <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={16} color={Colors.warning} />
-                  <Text style={styles.ratingText}>
-                    {formatRating(store.rating?.average || 0)} ({store.rating?.totalReviews || 0} reviews)
-                  </Text>
-                </View>
+                <StoreRatingDisplay rating={store.rating} starSize={14} />
               </View>
               {/* status pill removed per requirement */}
             </View>
@@ -344,6 +338,10 @@ export default function StoreDetailScreen() {
               )}
             </View>
           </View>
+
+          {store._id && (
+            <StoreReviewsPreview storeId={store._id} storeRating={store.rating} />
+          )}
 
           {/* Category Icons (collapsible) */}
           <View style={styles.categoryIconsWrap}>

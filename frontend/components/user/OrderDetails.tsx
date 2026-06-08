@@ -8,17 +8,20 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  Modal,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
+import StoreRatingModal from '@/components/user/StoreRatingModal';
+import type { Order } from '@/types/order';
 
 interface OrderDetailsProps {
   orderId: string;
   onClose?: () => void;
+  openRatingOnMount?: boolean;
+  onRatingSubmitted?: (orderId: string) => void;
+  onReviewLater?: (orderId: string) => void;
 }
 
 const formatINR = (value: number) => Math.round(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -90,10 +93,31 @@ const getStatusIcon = (status: string) => {
   }
 };
 
-const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
-  const [order, setOrder] = useState<any>(null);
+const renderStarRow = (rating: number) => (
+  <View style={styles.submittedStars}>
+    {[1, 2, 3, 4, 5].map((star) => (
+      <Ionicons
+        key={star}
+        name={star <= rating ? 'star' : 'star-outline'}
+        size={16}
+        color="#FFD700"
+      />
+    ))}
+  </View>
+);
+
+const OrderDetails: React.FC<OrderDetailsProps> = ({
+  orderId,
+  onClose,
+  openRatingOnMount = false,
+  onRatingSubmitted,
+  onReviewLater,
+}) => {
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingPromptHandled, setRatingPromptHandled] = useState(false);
 
   // Flipkart-style status steps (end-state delivered)
   const statusSteps = useMemo(() => (
@@ -112,24 +136,39 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
     return 0;
   }, [order?.status, order?.statusHistory, statusSteps]);
 
-  const fetchOrderDetails = React.useCallback(async () => {
+  const fetchOrderDetails = React.useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
       const response = await apiClient.get(`/api/v1/order/${orderId}`);
       if (response.data.success) {
         setOrder(response.data.order);
       }
     } catch (error: any) {
       console.error('Error fetching order details:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to load order details');
+      if (!options?.silent) {
+        Alert.alert('Error', error.response?.data?.message || 'Failed to load order details');
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [orderId]);
 
   React.useEffect(() => {
     fetchOrderDetails();
   }, [fetchOrderDetails]);
+
+  React.useEffect(() => {
+    if (!openRatingOnMount || ratingPromptHandled || !order) return;
+
+    if (order.status === 'Delivered' && !order.storeRated) {
+      setShowRatingModal(true);
+    }
+    setRatingPromptHandled(true);
+  }, [openRatingOnMount, ratingPromptHandled, order]);
 
   const handleCancelOrder = async () => {
     Alert.alert(
@@ -160,40 +199,26 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
     );
   };
 
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [review, setReview] = useState('');
-  const [submittingRating, setSubmittingRating] = useState(false);
-
-  const handleRateStore = async () => {
+  const handleRateStore = () => {
+    if (order?.storeRated) {
+      Alert.alert('Already reviewed', 'You have already submitted a store review for this order.');
+      return;
+    }
+    if (order?.status !== 'Delivered') {
+      Alert.alert('Not yet delivered', 'You can rate the store after your order is delivered.');
+      return;
+    }
     setShowRatingModal(true);
   };
 
-  const submitRating = async () => {
-    if (rating === 0) {
-      Alert.alert('Error', 'Please select a rating');
-      return;
-    }
-
-    try {
-      setSubmittingRating(true);
-      await apiClient.post('/api/v1/stores/rate', {
-        orderId: order._id,
-        rating,
-        review: review.trim() || undefined
-      });
-      Alert.alert('Success', 'Thank you for rating the store!');
-      setShowRatingModal(false);
-      setRating(0);
-      setReview('');
-      // Refresh order details to update the UI
-      fetchOrderDetails();
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to submit rating');
-    } finally {
-      setSubmittingRating(false);
-    }
+  const handleReviewLater = () => {
+    setShowRatingModal(false);
+    setRatingPromptHandled(true);
+    onReviewLater?.(orderId);
   };
+
+  const storeName =
+    order && typeof order.store === 'object' ? order.store.storeName : undefined;
 
   if (loading) {
     return (
@@ -273,6 +298,15 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
         </View>
       </View>
 
+      {openRatingOnMount && order.storeRated && (
+        <View style={styles.alreadyReviewedBanner}>
+          <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+          <Text style={styles.alreadyReviewedText}>
+            You have already reviewed this store for this order.
+          </Text>
+        </View>
+      )}
+
       {/* Store Info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Store Details</Text>
@@ -289,22 +323,45 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
         </View>
       </View>
 
+      {/* Submitted store review */}
+      {order.status === 'Delivered' && order.storeRated && order.storeRating && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Store Review</Text>
+          <View style={styles.submittedReviewCard}>
+            {renderStarRow(order.storeRating)}
+            {order.storeReview ? (
+              <Text style={styles.submittedReviewText}>{order.storeReview}</Text>
+            ) : (
+              <Text style={styles.submittedReviewEmpty}>No written feedback provided.</Text>
+            )}
+            {order.storeRatedAt && (
+              <Text style={styles.submittedReviewDate}>
+                Reviewed on {formatDate(order.storeRatedAt)}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Order Items */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Order Items</Text>
-        {order.orderItems.map((item: any, index: number) => (
-          <View key={index} style={styles.orderItem}>
-            <Image
-              source={{ uri: item.product?.images?.[0] || 'https://via.placeholder.com/80' }}
-              style={styles.itemImage}
-            />
-            <View style={styles.itemDetails}>
-              <Text style={styles.itemName}>{item.product?.name || 'Product'}</Text>
-              <Text style={styles.itemPrice}>₹{formatINR(item.price)} × {item.quantity}</Text>
-              <Text style={styles.itemTotal}>Total: ₹{formatINR(item.price * item.quantity)}</Text>
+        {order.orderItems.map((item, index) => {
+          const product = typeof item.product === 'object' ? item.product : null;
+          return (
+            <View key={index} style={styles.orderItem}>
+              <Image
+                source={{ uri: product?.images?.[0] || 'https://via.placeholder.com/80' }}
+                style={styles.itemImage}
+              />
+              <View style={styles.itemDetails}>
+                <Text style={styles.itemName}>{product?.name || 'Product'}</Text>
+                <Text style={styles.itemPrice}>₹{formatINR(item.price)} × {item.quantity}</Text>
+                <Text style={styles.itemTotal}>Total: ₹{formatINR(item.price * item.quantity)}</Text>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       {/* Delivery Address */}
@@ -322,11 +379,11 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
         <View style={styles.paymentCard}>
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Items Total</Text>
-            <Text style={styles.paymentValue}>₹{formatINR(order.itemsTotal)}</Text>
+            <Text style={styles.paymentValue}>₹{formatINR(order.itemsTotal ?? 0)}</Text>
           </View>
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Delivery Fee</Text>
-            <Text style={styles.paymentValue}>₹{formatINR(order.deliveryFee)}</Text>
+            <Text style={styles.paymentValue}>₹{formatINR(order.deliveryFee ?? 0)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.paymentRow}>
@@ -443,78 +500,32 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ orderId, onClose }) => {
 
       <View style={{ height: 40 }} />
 
-      {/* Rating Modal */}
-      <Modal
-        visible={showRatingModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRatingModal(false)}
-      >
-        <View style={styles.ratingModalOverlay}>
-          <View style={styles.ratingModalContainer}>
-            <View style={styles.ratingModalHeader}>
-              <Text style={styles.ratingModalTitle}>Rate Your Experience</Text>
-              <TouchableOpacity onPress={() => setShowRatingModal(false)}>
-                <Ionicons name="close" size={28} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.ratingModalSubtitle}>
-              {order?.store?.storeName ? `How was your experience with ${order.store.storeName}?` : 'How was your experience?'}
-            </Text>
-
-            {/* Star Rating */}
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setRating(star)}
-                  style={styles.starButton}
-                >
-                  <Ionicons
-                    name={star <= rating ? 'star' : 'star-outline'}
-                    size={40}
-                    color={star <= rating ? '#FFD700' : Colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Review Input */}
-            <TextInput
-              style={styles.reviewInput}
-              placeholder="Share your experience (optional)"
-              placeholderTextColor={Colors.textSecondary}
-              multiline
-              numberOfLines={4}
-              value={review}
-              onChangeText={setReview}
-              textAlignVertical="top"
-            />
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              style={[styles.submitRatingButton, submittingRating && styles.submitRatingButtonDisabled]}
-              onPress={submitRating}
-              disabled={submittingRating || rating === 0}
-            >
-              <LinearGradient
-                colors={rating === 0 ? ['#CCCCCC', '#CCCCCC'] : Colors.gradients.primary as [string, string]}
-                style={styles.submitRatingGradient}
-              >
-                {submittingRating ? (
-                  <ActivityIndicator color={Colors.textPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="send" size={20} color={Colors.textPrimary} />
-                    <Text style={styles.submitRatingText}>Submit Rating</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <StoreRatingModal
+        visible={showRatingModal && !order.storeRated}
+        orderId={order._id}
+        storeName={storeName}
+        onClose={() => setShowRatingModal(false)}
+        onLater={handleReviewLater}
+        onSuccess={(response) => {
+          if (response?.order) {
+            setOrder((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    storeRated: response.order.storeRated,
+                    storeRating: response.order.storeRating,
+                    storeReview: response.order.storeReview,
+                    storeRatedAt: response.order.storeRatedAt,
+                  }
+                : prev
+            );
+          } else {
+            fetchOrderDetails({ silent: true });
+          }
+          setShowRatingModal(false);
+          onRatingSubmitted?.(order._id);
+        }}
+      />
     </ScrollView>
   );
 };
@@ -808,73 +819,49 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginLeft: 8,
   },
-  ratingModalOverlay: {
+  alreadyReviewedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.success + '15',
+    borderWidth: 1,
+    borderColor: Colors.success + '30',
+  },
+  alreadyReviewedText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  ratingModalContainer: {
-    backgroundColor: Colors.background,
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  ratingModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  ratingModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 13,
     color: Colors.textPrimary,
+    lineHeight: 18,
   },
-  ratingModalSubtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 24,
-  },
-  starButton: {
-    padding: 4,
-  },
-  reviewInput: {
+  submittedReviewCard: {
     backgroundColor: Colors.backgroundSecondary,
     borderRadius: 12,
     padding: 16,
+  },
+  submittedStars: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 10,
+  },
+  submittedReviewText: {
     fontSize: 14,
     color: Colors.textPrimary,
-    minHeight: 100,
-    marginBottom: 20,
+    lineHeight: 20,
+    marginBottom: 8,
   },
-  submitRatingButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
+  submittedReviewEmpty: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+    marginBottom: 8,
   },
-  submitRatingButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitRatingGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  submitRatingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+  submittedReviewDate: {
+    fontSize: 12,
+    color: Colors.textSecondary,
   },
   ratedBadge: {
     flexDirection: 'row',

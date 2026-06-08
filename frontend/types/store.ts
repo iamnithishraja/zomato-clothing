@@ -34,7 +34,7 @@ export interface Store {
   mapLink: string;
   contact: StoreContact;
   workingDays: StoreWorkingDays;
-  rating: StoreRating;
+  rating?: StoreRating;
   isActive: boolean;
   merchantId: StoreMerchant;
   createdAt: string;

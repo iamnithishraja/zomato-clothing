@@ -502,6 +502,7 @@ async function getOrdersForUser(req: Request, res: Response) {
     const limit = parseInt(req.query.limit as string) || 10;
     const status = req.query.status as string;
     const paymentStatus = req.query.paymentStatus as string;
+    const pendingStoreReview = req.query.pendingStoreReview === 'true';
 
     // Build filter object based on user role
     let filter: any = {};
@@ -527,6 +528,10 @@ async function getOrdersForUser(req: Request, res: Response) {
     }
     if (paymentStatus) {
       filter.paymentStatus = paymentStatus;
+    }
+    if (pendingStoreReview && user.role === 'User') {
+      filter.status = 'Delivered';
+      filter.storeRated = { $ne: true };
     }
 
     // Calculate skip value for pagination

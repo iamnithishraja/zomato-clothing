@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Store } from '@/types/store';
+import StoreRatingDisplay from '@/components/user/StoreRatingDisplay';
 
 interface ModernStoreCardProps {
   store: Store;
@@ -24,33 +25,6 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const renderStars = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <Ionicons key={i} name="star" size={12} color="#FFD700" />
-      );
-    }
-
-    if (hasHalfStar) {
-      stars.push(
-        <Ionicons key="half" name="star-half" size={12} color="#FFD700" />
-      );
-    }
-
-    const emptyStars = 5 - Math.ceil(rating);
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <Ionicons key={`empty-${i}`} name="star-outline" size={12} color="#E5E7EB" />
-      );
-    }
-
-    return stars;
-  };
 
   // Get image array (ensure at least one element)
   const storeImages = store.storeImages && store.storeImages.length > 0 
@@ -182,17 +156,7 @@ const ModernStoreCard: React.FC<ModernStoreCardProps> = ({ store, onPress }) => 
             <Text style={styles.storeName} numberOfLines={1}>
               {store.storeName}
             </Text>
-            <View style={styles.ratingContainer}>
-              <View style={styles.starsContainer}>
-                {renderStars(store.rating.average)}
-              </View>
-              <Text style={styles.ratingText}>
-                {store.rating.average.toFixed(1)}
-              </Text>
-              <Text style={styles.reviewCount}>
-                ({store.rating.totalReviews})
-              </Text>
-            </View>
+            <StoreRatingDisplay rating={store.rating} starSize={12} compact style={styles.ratingContainer} />
           </View>
 
           {/* Description */}

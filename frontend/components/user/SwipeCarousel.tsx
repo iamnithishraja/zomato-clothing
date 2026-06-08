@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import type { Store } from '@/types/store';
+import StoreRatingDisplay from '@/components/user/StoreRatingDisplay';
 
 interface SwipeCarouselProps {
   stores: Store[];
@@ -134,33 +135,6 @@ const SwipeCarousel: React.FC<SwipeCarouselProps> = ({
     },
   });
 
-  const renderStars = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <Ionicons key={i} name="star" size={14} color={Colors.warning} />
-      );
-    }
-
-    if (hasHalfStar) {
-      stars.push(
-        <Ionicons key="half" name="star-half" size={14} color={Colors.warning} />
-      );
-    }
-
-    const emptyStars = 5 - Math.ceil(rating);
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <Ionicons key={`empty-${i}`} name="star-outline" size={14} color={Colors.border} />
-      );
-    }
-
-    return stars;
-  };
-
   const renderCard = (store: Store) => {
     return (
       <Animated.View
@@ -218,12 +192,13 @@ const SwipeCarousel: React.FC<SwipeCarouselProps> = ({
               {/* Rating with Background */}
               <View style={styles.ratingContainer}>
                 <View style={styles.ratingBackground}>
-                  <View style={styles.starsContainer}>
-                    {renderStars(store.rating.average)}
-                  </View>
-                  <Text style={styles.ratingText}>
-                    {store.rating.average.toFixed(1)} ({store.rating.totalReviews})
-                  </Text>
+                  <StoreRatingDisplay
+                    rating={store.rating}
+                    starSize={14}
+                    compact
+                    onDark
+                    textStyle={styles.ratingText}
+                  />
                 </View>
               </View>
             </View>

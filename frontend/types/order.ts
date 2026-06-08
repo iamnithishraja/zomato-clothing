@@ -1,5 +1,14 @@
+export interface OrderItemProduct {
+  _id: string;
+  name: string;
+  images?: string[];
+  price?: number;
+  category?: string;
+  subcategory?: string;
+}
+
 export interface OrderItem {
-  product: string; // Product ID
+  product: string | OrderItemProduct;
   quantity: number;
   price: number;
   size?: string;
@@ -53,6 +62,17 @@ export interface Order {
   cancellationReason?: string;
   cancelledAt?: string;
   isActive: boolean;
+  orderNumber?: string;
+  itemsTotal?: number;
+  storeRated?: boolean;
+  storeRating?: number;
+  storeReview?: string;
+  storeRatedAt?: string;
+  statusHistory?: {
+    status: string;
+    timestamp: string;
+    note?: string;
+  }[];
   createdAt: string;
   updatedAt: string;
 }

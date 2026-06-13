@@ -16,7 +16,7 @@
     import { generateToken } from "../utils/token";
     import type { User } from "../types/user";
     import bcrypt from "bcrypt";
-    import { verificationFieldsForClient } from "../utils/verificationUtils";
+    import { verificationFieldsForClient, maybeGrandfatherVerification } from "../utils/verificationUtils";
 
     function serializeUserForClient(user: any) {
         return {
@@ -246,12 +246,13 @@
         const token = generateToken(user._id.toString());
 
         const freshUser = await UserModel.findById(user._id);
+        const resolvedUser = await maybeGrandfatherVerification(freshUser || user);
         return res.status(200).json({
             success: true,
             message: "OTP verified successfully. You are now logged in.",
-            user: serializeUserForClient(freshUser || user),
+            user: serializeUserForClient(resolvedUser),
             token,
-            isProfileComplete: user.isProfileComplete,
+            isProfileComplete: resolvedUser.isProfileComplete,
         });
 
     } catch (error) {
@@ -278,13 +279,17 @@
 
     async function getProfile(req: Request, res: Response) {
     try {
-        // User is already authenticated by middleware
-        const user = (req as any).user;
-        
+        const authUser = (req as any).user;
+        const freshUser = await UserModel.findById(authUser._id);
+        if (!freshUser) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        const resolvedUser = await maybeGrandfatherVerification(freshUser);
+
         return res.status(200).json({
             success: true,
             message: "Profile retrieved successfully",
-            user: serializeUserForClient(user),
+            user: serializeUserForClient(resolvedUser),
         });
     } catch (error) {
         console.error("Error getting profile:", error);
@@ -351,17 +356,11 @@
             // Generate token
             const token = generateToken(user._id.toString());
             
-            // Remove sensitive data from response
-            const userResponse = user.toObject();
-            delete userResponse.password;
-            delete userResponse.otp;
-            delete userResponse.otpExpiry;
-            
-            res.status(201).json({ 
+            res.status(201).json({
                 success: true,
-                user: userResponse,
+                user: serializeUserForClient(user),
                 token,
-                isProfileComplete: userResponse.isProfileComplete,
+                isProfileComplete: user.isProfileComplete,
                 message: 'Registration successful'
             });
         } catch (error) {
@@ -547,18 +546,14 @@ async function loginUser(req: Request, res: Response): Promise<void> {
         }
 
         const token = generateToken(user._id.toString());
-        
-        // Remove sensitive data from response
-        const userResponse = user.toObject();
-        delete userResponse.password;
-        delete userResponse.otp;
-        delete userResponse.otpExpiry;
-        
-        res.status(200).json({ 
-            success: true, 
-            user: userResponse, 
+
+        const resolvedUser = await maybeGrandfatherVerification(user);
+
+        res.status(200).json({
+            success: true,
+            user: serializeUserForClient(resolvedUser),
             token,
-            isProfileComplete: userResponse.isProfileComplete,
+            isProfileComplete: resolvedUser.isProfileComplete,
             message: 'Login successful'
         });
     } catch (error) {

@@ -268,23 +268,25 @@ const StoreDetails = () => {
         : await apiClient.post('/api/v1/store/create', backendData);
 
       if (response.data.success) {
-        // Update user data in context to reflect profile completion
-        if (user) {
-          await login(
-            { ...user, isProfileComplete: true, verificationStatus: 'pending_documents' },
-            token || '',
-          );
+        if (response.data.user && token) {
+          await login(response.data.user, token);
+        } else if (user && token) {
+          const profileResp = await apiClient.get('/api/v1/user/profile');
+          if (profileResp.data.success && profileResp.data.user) {
+            await login(profileResp.data.user, token);
+          }
         }
-        
+
+        const nextRoute = isEditMode ? '/(merchantTabs)/' : '/auth/VerificationPending';
         Alert.alert(
           'Success!',
           isEditMode ? 'Your store details have been updated.' : 'Your store details have been saved successfully.',
           [
             {
               text: 'Continue',
-              onPress: () => router.replace('/auth/VerificationPending')
-            }
-          ]
+              onPress: () => router.replace(nextRoute as any),
+            },
+          ],
         );
       } else {
         Alert.alert('Error', response.data.message || 'Failed to save store details. Please try again.');

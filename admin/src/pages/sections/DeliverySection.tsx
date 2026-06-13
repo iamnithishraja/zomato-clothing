@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchDeliveryPartners, fetchDeliveryStats } from '../../services/dashboardApi';
 import { Truck, Wifi, WifiOff, Loader } from 'lucide-react';
 import {
@@ -236,6 +237,7 @@ export default function DeliverySection() {
                       <th className="px-4 py-3 sm:px-6">Deliveries</th>
                       <th className="px-4 py-3 sm:px-6">Completed</th>
                       <th className="px-4 py-3 sm:px-6">Rating</th>
+                      <th className="px-4 py-3 sm:px-6">Verification</th>
                       <th className="px-4 py-3 sm:px-6">Joined</th>
                     </tr>
                   </thead>
@@ -268,6 +270,17 @@ export default function DeliverySection() {
                           {p.deliveryStats?.avgRating
                             ? `${p.deliveryStats.avgRating} ★`
                             : '—'}
+                        </td>
+                        <td className="px-4 py-3 sm:px-6">
+                          <span className="mr-2 text-xs capitalize text-stone-600">
+                            {(p.verificationStatus || 'unknown').replace(/_/g, ' ')}
+                          </span>
+                          <Link
+                            to={`/dashboard/verification/delivery/${p._id}`}
+                            className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                          >
+                            Review
+                          </Link>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500 sm:px-6">
                           {new Date(p.createdAt).toLocaleDateString('en-IN', {

@@ -110,7 +110,7 @@ export async function createRazorpayOrder(req: Request, res: Response) {
         currency: razorpayOrder.currency
       },
       paymentIds,
-      keyId: process.env.RAZORPAY_KEY_ID
+      keyId: process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEYID
     });
 
   } catch (error) {

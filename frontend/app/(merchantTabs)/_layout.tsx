@@ -1,39 +1,32 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import { Tabs, useRouter, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect } from 'react';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPostAuthRoute } from '@/utils/authRouting';
 import { needsVerificationScreen } from '@/utils/verificationUtils';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function MerchantTabLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUserProfile } = useAuth();
   const router = useRouter();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoading) {
+        void refreshUserProfile();
+      }
+    }, [isLoading, refreshUserProfile]),
+  );
 
   useEffect(() => {
     if (!isLoading && user) {
-      if (!user.isProfileComplete) {
-        if (user.role === 'Merchant' && user.name) {
-          router.replace('/auth/StoreDetails');
-        } else {
-          router.replace('/auth/ProfileCompletion');
-        }
-        return;
-      }
-      if (needsVerificationScreen(user)) {
-        router.replace('/auth/VerificationPending');
-        return;
-      }
-      if (user.role !== 'Merchant') {
-        console.log('❌ Unauthorized access to Merchant tabs. Role:', user.role);
-        if (user.role === 'User') {
-          router.replace('/(tabs)/' as any);
-        } else if (user.role === 'Delivery') {
-          router.replace('/(deliveryTabs)/' as any);
-        }
+      const target = getPostAuthRoute(user);
+      if (target !== '/(merchantTabs)/') {
+        router.replace(target as any);
       }
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, user?.verificationStatus, user?.verificationGrandfathered]);
 
   if (isLoading || !user || !user.isProfileComplete || needsVerificationScreen(user) || user.role !== 'Merchant') {
     return (

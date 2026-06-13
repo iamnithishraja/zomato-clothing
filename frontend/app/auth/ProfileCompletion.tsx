@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import apiClient from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
-import { needsVerificationScreen } from '@/utils/verificationUtils';
+import { getPostAuthRoute } from '@/utils/authRouting';
 
 const ProfileCompletion = () => {
   const router = useRouter();
@@ -140,18 +140,7 @@ const ProfileCompletion = () => {
         // Update user data in context
         const { user: updatedUser } = response.data;
         await login(updatedUser, token || '');
-        
-        // Navigate based on user role
-        if (updatedUser.role === 'Merchant') {
-          router.push('/auth/StoreDetails');
-        } else if (needsVerificationScreen(updatedUser)) {
-          router.replace('/auth/VerificationPending');
-        } else if (updatedUser.role === 'Delivery') {
-          router.replace('/(deliveryTabs)/' as any);
-        } else {
-          // For regular users, navigate to user tabs
-          router.replace('/(tabs)');
-        }
+        router.replace(getPostAuthRoute(updatedUser) as any);
       } else {
         Alert.alert('Error', response.data.message || 'Failed to complete profile. Please try again.');
       }

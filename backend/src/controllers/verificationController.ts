@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import z from 'zod';
 import UserModel from '../Models/userModel';
 import { verificationFieldsForClient, resolveVerificationStatus } from '../utils/verificationUtils';
+import { deleteFileFromR2 } from '../utils/fileUpload';
 
 const documentSchema = z.object({
   documentType: z.enum(['aadhaar', 'other']),
@@ -75,6 +76,15 @@ export async function submitVerificationDocuments(req: Request, res: Response) {
         success: false,
         message: 'Aadhaar document is required',
       });
+    }
+
+    // Remove previous uploads from storage when re-submitting
+    if (user.verificationDocuments?.length) {
+      await Promise.all(
+        user.verificationDocuments.map((doc: { url?: string }) =>
+          doc.url ? deleteFileFromR2(doc.url) : Promise.resolve(),
+        ),
+      );
     }
 
     const verificationDocuments = documents.map((d) => ({

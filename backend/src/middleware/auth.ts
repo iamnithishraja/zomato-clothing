@@ -4,6 +4,7 @@ import UserModel from "../Models/userModel";
 import type { CustomRequest } from "../types";
 
 import type { User } from "../types/user";
+import { maybeGrandfatherVerification } from "../utils/verificationUtils";
 
 export async function isAuthenticated(
   req: CustomRequest,
@@ -47,8 +48,10 @@ export async function isAuthenticated(
        return;
     }
 
+    const resolvedUser = await maybeGrandfatherVerification(user);
+    
     // Check if user is verified through either phone or email
-    if (!user.isPhoneVerified && !user.isEmailVerified) {
+    if (!resolvedUser.isPhoneVerified && !resolvedUser.isEmailVerified) {
        res.status(401).json({
         success: false,
         message: "Account not verified. Please verify your phone or email.",
@@ -56,7 +59,7 @@ export async function isAuthenticated(
       return;
     }
     
-    req.user = user;
+    req.user = resolvedUser;
     next();
   } catch (error) {
     console.error("Authentication error:", error);

@@ -126,3 +126,8 @@ export async function updateVerificationStatus(
   });
   return res.data.data;
 }
+
+export async function updateStoreStatus(storeId: string, isActive: boolean) {
+  const res = await api.patch(`/api/v1/admin/stores/${storeId}/status`, { isActive });
+  return res.data.data;
+}

@@ -666,9 +666,48 @@ export async function updateVerificationStatus(req: CustomRequest, res: Response
     if (error.message === 'User not found' || error.message.includes('not a merchant')) {
       return res.status(404).json({ success: false, message: error.message });
     }
+    if (error.message.includes('Cannot mark under review')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to update verification status',
+    });
+  }
+}
+
+const storeStatusBodySchema = z.object({
+  isActive: z.boolean(),
+});
+
+export async function updateStoreStatus(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const idParsed = mongoIdParamSchema.safeParse({ id: req.params.id });
+    if (!idParsed.success) {
+      return res.status(400).json({ success: false, message: 'Invalid store id' });
+    }
+    const bodyParsed = storeStatusBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request body',
+        errors: bodyParsed.error.issues,
+      });
+    }
+    const data = await AdminService.updateStoreStatus(idParsed.data.id, bodyParsed.data.isActive);
+    return res.status(200).json({
+      success: true,
+      message: `Store ${bodyParsed.data.isActive ? 'activated' : 'deactivated'} successfully`,
+      data,
+    });
+  } catch (error: any) {
+    console.error('Update store status error:', error);
+    if (error.message === 'Store not found') {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update store status',
     });
   }
 }

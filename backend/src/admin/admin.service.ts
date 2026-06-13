@@ -10,6 +10,8 @@ import PaymentModel from '../Models/paymentModel';
 import DeliveryModel from '../Models/deliveryModel';
 import { resolveVerificationStatus, verificationFieldsForClient } from '../utils/verificationUtils';
 import type { VerificationStatus } from '../types/verification';
+import { notifyVerificationDecision } from '../utils/notificationUtils';
+import { deleteFileFromR2 } from '../utils/fileUpload';
 
 export class AdminService {
   /** Escape user input used inside MongoDB $regex to reduce ReDoS / injection issues */
@@ -762,6 +764,7 @@ export class AdminService {
 
     const enrichedPartners = partners.map((p: any) => ({
       ...p,
+      verificationStatus: resolveVerificationStatus(p),
       deliveryStats: statsMap[p._id.toString()] || {
         totalDeliveries: 0,
         completedDeliveries: 0,
@@ -960,7 +963,7 @@ export class AdminService {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
     const owner = await UserModel.findById((store as any).merchantId)
-      .select('name phone email')
+      .select('name phone email role verificationStatus isProfileComplete')
       .lean();
 
     const [orderAgg, statusBreakdown, ordersTrend, recentOrders, storeReviews] = await Promise.all([
@@ -1040,7 +1043,13 @@ export class AdminService {
         contact: s.contact,
         createdAt: s.createdAt,
         owner: owner
-          ? { name: owner.name, phone: owner.phone, email: owner.email }
+          ? {
+              _id: owner._id,
+              name: owner.name,
+              phone: owner.phone,
+              email: owner.email,
+              verificationStatus: resolveVerificationStatus(owner),
+            }
           : null,
       },
       orderStats: {
@@ -1133,7 +1142,7 @@ export class AdminService {
           phone: user.phone,
           email: user.email,
           storeName,
-          verificationStatus: resolveVerificationStatus(user),
+          verificationStatus: user.verificationStatus || 'not_required',
           verificationSubmittedAt: user.verificationSubmittedAt,
           verificationReviewedAt: user.verificationReviewedAt,
           verificationReviewNote: user.verificationReviewNote,
@@ -1182,7 +1191,12 @@ export class AdminService {
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        ...verificationFieldsForClient(user),
+        verificationStatus: user.verificationStatus || 'not_required',
+        verificationGrandfathered: !!user.verificationGrandfathered,
+        verificationDocuments: user.verificationDocuments || [],
+        verificationSubmittedAt: user.verificationSubmittedAt ?? null,
+        verificationReviewedAt: user.verificationReviewedAt ?? null,
+        verificationReviewNote: user.verificationReviewNote ?? null,
       },
       store,
       authMethod: user.isPhoneVerified ? 'phone_otp' : user.isEmailVerified ? 'email_password' : 'unknown',
@@ -1210,13 +1224,31 @@ export class AdminService {
       throw new Error('User is not a merchant or delivery partner');
     }
 
+    if (status === 'pending_review') {
+      const hasDocs =
+        (user.verificationDocuments?.length ?? 0) > 0 || !!user.verificationSubmittedAt;
+      if (!hasDocs) {
+        throw new Error('Cannot mark under review — user has not uploaded documents yet');
+      }
+    }
+
     const update: Record<string, unknown> = {
       verificationStatus: status,
-      verificationReviewedAt: new Date(),
+      verificationGrandfathered: false,
       verificationReviewNote: note?.trim() || null,
     };
 
+    if (status === 'approved' || status === 'rejected') {
+      update.verificationReviewedAt = new Date();
+    } else if (status === 'pending_review') {
+      update.verificationReviewedAt = null;
+    }
+
     if (status === 'pending_documents') {
+      const docs = user.verificationDocuments || [];
+      await Promise.all(
+        docs.map((doc) => (doc.url ? deleteFileFromR2(doc.url) : Promise.resolve())),
+      );
       update.verificationDocuments = [];
       update.verificationSubmittedAt = null;
       update.verificationReviewedAt = null;
@@ -1225,13 +1257,39 @@ export class AdminService {
     const updated = await UserModel.findByIdAndUpdate(userId, update, { returnDocument: 'after' });
     if (!updated) throw new Error('User not found');
 
+    await notifyVerificationDecision(
+      updated._id,
+      updated.role as 'Merchant' | 'Delivery',
+      status,
+      note,
+    );
+
     return {
       user: {
         _id: updated._id,
         name: updated.name,
         role: updated.role,
-        ...verificationFieldsForClient(updated),
+        verificationStatus: updated.verificationStatus,
+        verificationGrandfathered: updated.verificationGrandfathered,
+        verificationDocuments: updated.verificationDocuments || [],
+        verificationSubmittedAt: updated.verificationSubmittedAt ?? null,
+        verificationReviewedAt: updated.verificationReviewedAt ?? null,
+        verificationReviewNote: updated.verificationReviewNote ?? null,
       },
+    };
+  }
+
+  static async updateStoreStatus(storeId: string, isActive: boolean) {
+    const store = await StoreModel.findByIdAndUpdate(
+      storeId,
+      { isActive, updatedAt: new Date() },
+      { returnDocument: 'after' },
+    );
+    if (!store) throw new Error('Store not found');
+    return {
+      _id: store._id,
+      storeName: store.storeName,
+      isActive: store.isActive,
     };
   }
 

@@ -4,17 +4,43 @@ type UserLike = {
   role?: 'User' | 'Merchant' | 'Delivery';
   isProfileComplete?: boolean;
   verificationStatus?: VerificationStatus;
+  verificationGrandfathered?: boolean;
 };
 
+function isExplicitVerificationStatus(status?: VerificationStatus): boolean {
+  return (
+    status === 'pending_documents' ||
+    status === 'pending_review' ||
+    status === 'rejected' ||
+    status === 'approved'
+  );
+}
+
+/** Trust API verificationStatus when admin/user set it explicitly. */
 export function resolveVerificationStatus(user: UserLike): VerificationStatus {
-  if (user.verificationStatus) {
-    return user.verificationStatus;
+  const raw = user.verificationStatus;
+
+  if (isExplicitVerificationStatus(raw)) {
+    return raw!;
   }
-  if (user.role === 'User') return 'not_required';
-  if (user.role === 'Merchant' || user.role === 'Delivery') {
+
+  if (user.verificationGrandfathered) {
+    return 'approved';
+  }
+
+  if (user.role === 'User') {
+    return 'not_required';
+  }
+
+  if (user.role !== 'Merchant' && user.role !== 'Delivery') {
+    return 'not_required';
+  }
+
+  if (!raw || raw === 'not_required') {
     return user.isProfileComplete ? 'approved' : 'pending_documents';
   }
-  return 'not_required';
+
+  return 'pending_documents';
 }
 
 /** True when merchant/delivery must stay on the verification gate screen. */

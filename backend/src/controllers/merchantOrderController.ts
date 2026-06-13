@@ -132,6 +132,7 @@ export async function rejectOrder(req: Request, res: Response) {
     await releaseInventory(order.orderItems);
 
     // Handle refund for online payments (Razorpay)
+    let refundStatus: 'not_applicable' | 'completed' | 'failed' | 'pending' = 'not_applicable';
     if (order.paymentMethod === "Online" && order.paymentStatus === "Completed") {
       try {
         const payment = await PaymentModel.findById(order.paymentId);
@@ -157,12 +158,14 @@ export async function rejectOrder(req: Request, res: Response) {
           // Update order payment status
           order.paymentStatus = "Refunded";
           await order.save();
+          refundStatus = 'completed';
         } else {
           console.warn("Payment record missing or no gatewayPaymentId for refund", order._id);
+          refundStatus = 'failed';
         }
       } catch (refundErr) {
         console.error("Refund error:", refundErr);
-        // Do not fail the rejection if refund fails; client can retry via admin
+        refundStatus = 'failed';
       }
     }
 
@@ -179,7 +182,8 @@ export async function rejectOrder(req: Request, res: Response) {
     return res.status(200).json({
       success: true,
       message: "Order rejected successfully",
-      order
+      order,
+      refundStatus,
     });
 
   } catch (error) {

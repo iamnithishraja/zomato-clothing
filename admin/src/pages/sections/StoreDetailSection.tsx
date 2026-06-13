@@ -14,7 +14,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { fetchStoreDetail } from '../../services/dashboardApi';
+import { fetchStoreDetail, updateStoreStatus } from '../../services/dashboardApi';
 import PageShell from '@/components/admin/PageShell';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import PanelCard from '@/components/admin/PanelCard';
@@ -52,6 +52,7 @@ export default function StoreDetailSection() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toggling, setToggling] = useState(false);
 
   const load = () => {
     if (!storeId) return;
@@ -156,12 +157,23 @@ export default function StoreDetailSection() {
         title={store.storeName}
         description={[
           store.owner?.name ? `Owner: ${store.owner.name}` : null,
+          store.owner?.verificationStatus
+            ? `Verification: ${String(store.owner.verificationStatus).replace(/_/g, ' ')}`
+            : null,
           store.address ? String(store.address).slice(0, 120) : null,
         ]
           .filter(Boolean)
           .join(' · ')}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {store.owner?._id ? (
+              <Link
+                to={`/dashboard/verification/merchants/${store.owner._id}`}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                Merchant verification
+              </Link>
+            ) : null}
             <span
               className={cn(
                 'rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset',
@@ -172,6 +184,25 @@ export default function StoreDetailSection() {
             >
               {store.isActive ? 'Active' : 'Inactive'}
             </span>
+            <button
+              type="button"
+              disabled={toggling}
+              onClick={async () => {
+                if (!storeId) return;
+                try {
+                  setToggling(true);
+                  await updateStoreStatus(storeId, !store.isActive);
+                  load();
+                } catch (e: any) {
+                  alert(e?.response?.data?.message || e.message || 'Failed to update store');
+                } finally {
+                  setToggling(false);
+                }
+              }}
+              className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-800 hover:bg-stone-50 disabled:opacity-60"
+            >
+              {toggling ? 'Saving…' : store.isActive ? 'Deactivate store' : 'Activate store'}
+            </button>
             <span
               className={cn(
                 'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold',

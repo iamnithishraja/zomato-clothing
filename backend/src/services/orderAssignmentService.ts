@@ -226,14 +226,14 @@ export async function processUnassignedOrders(): Promise<void> {
           }
 
           // Double-check delivery partner is still available (prevent race condition)
-          const partnerCheck = await UserModel.findOne({
-            _id: selectedDeliveryPartner._id,
-            role: 'Delivery',
-            isActive: true,
-            isBusy: false
-          });
-          
-          if (!partnerCheck) {
+          const partnerDoc = await UserModel.findById(selectedDeliveryPartner._id).lean();
+          if (
+            !partnerDoc ||
+            partnerDoc.role !== 'Delivery' ||
+            !partnerDoc.isActive ||
+            partnerDoc.isBusy ||
+            !isVerificationApproved(partnerDoc)
+          ) {
             console.log(`⚠️ [Assignment Service] Delivery partner ${selectedDeliveryPartner._id} is no longer available, skipping`);
             continue;
           }
@@ -249,7 +249,7 @@ export async function processUnassignedOrders(): Promise<void> {
             // They have an active delivery, make sure isBusy is true
             await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, { isBusy: true });
             continue;
-          } else if (partnerCheck.isBusy) {
+          } else if (partnerDoc.isBusy) {
             // They're marked busy but have no active delivery - clear it
             console.log(`🧹 [Assignment Service] Delivery partner ${selectedDeliveryPartner._id} marked busy with no active delivery, clearing stuck flag`);
             await UserModel.findByIdAndUpdate(selectedDeliveryPartner._id, { 

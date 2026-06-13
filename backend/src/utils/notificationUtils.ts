@@ -4,7 +4,7 @@ import type { Types } from "mongoose";
 export interface NotificationData {
   recipient: Types.ObjectId | string;
   recipientRole: "User" | "Merchant" | "Delivery";
-  type: "ORDER_PLACED" | "ORDER_ACCEPTED" | "ORDER_REJECTED" | "ORDER_READY" | "ORDER_PICKED" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "PAYMENT_FAILED" | "DELIVERY_ASSIGNED" | "RATING_RECEIVED" | "GENERAL";
+  type: "ORDER_PLACED" | "ORDER_ACCEPTED" | "ORDER_REJECTED" | "ORDER_READY" | "ORDER_PICKED" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "PAYMENT_FAILED" | "DELIVERY_ASSIGNED" | "RATING_RECEIVED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "GENERAL";
   title: string;
   message: string;
   order?: Types.ObjectId | string;
@@ -301,4 +301,74 @@ export async function notifyRatingReceived(
   });
 }
 
+/**
+ * Notify merchant/delivery partner when admin updates verification status.
+ */
+export async function notifyVerificationDecision(
+  userId: Types.ObjectId | string,
+  role: "Merchant" | "Delivery",
+  status: "approved" | "rejected" | "pending_review" | "pending_documents",
+  note?: string,
+): Promise<void> {
+  const roleLabel = role === 'Merchant' ? 'seller' : 'delivery partner';
+
+  if (status === 'approved') {
+    await sendNotification({
+      recipient: userId,
+      recipientRole: role,
+      type: 'VERIFICATION_APPROVED',
+      title: 'Account verified',
+      message: `Your ${roleLabel} account has been approved. You can now use the app.`,
+      actionUrl: role === 'Merchant' ? '/(merchantTabs)/' : '/(deliveryTabs)/',
+      actionLabel: 'Open app',
+    });
+    return;
+  }
+
+  if (status === 'rejected') {
+    await sendNotification({
+      recipient: userId,
+      recipientRole: role,
+      type: 'VERIFICATION_REJECTED',
+      title: 'Verification rejected',
+      message: note?.trim()
+        ? `Your ${roleLabel} verification was rejected. Reason: ${note.trim()}`
+        : `Your ${roleLabel} verification was rejected. Please upload documents again.`,
+      actionUrl: '/auth/VerificationPending',
+      actionLabel: 'Re-upload documents',
+      data: { note: note || '' },
+    });
+    return;
+  }
+
+  if (status === 'pending_review') {
+    await sendNotification({
+      recipient: userId,
+      recipientRole: role,
+      type: 'GENERAL',
+      title: 'Verification under review',
+      message: note?.trim()
+        ? `Your ${roleLabel} documents are being reviewed. ${note.trim()}`
+        : `Your ${roleLabel} documents are being reviewed. We will notify you once a decision is made.`,
+      actionUrl: '/auth/VerificationPending',
+      actionLabel: 'View status',
+    });
+    return;
+  }
+
+  if (status === 'pending_documents') {
+    await sendNotification({
+      recipient: userId,
+      recipientRole: role,
+      type: 'GENERAL',
+      title: 'New documents required',
+      message: note?.trim()
+        ? `Please upload your verification documents again. ${note.trim()}`
+        : `Please upload your verification documents again to continue as a ${roleLabel}.`,
+      actionUrl: '/auth/VerificationPending',
+      actionLabel: 'Upload documents',
+      data: { note: note || '' },
+    });
+  }
+}
 

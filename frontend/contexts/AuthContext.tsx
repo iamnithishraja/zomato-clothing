@@ -3,28 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../api/client';
 
 import type { VerificationDocument, VerificationStatus } from '@/types/verification';
+import type { User } from '@/types/user';
 
-interface User {
-  _id: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  gender?: 'Male' | 'Female' | 'Other';
-  avatar?: string;
-  addresses?: string[];
-  isPhoneVerified: boolean;
-  isEmailVerified: boolean;
-  isProfileComplete: boolean;
-  verificationStatus?: VerificationStatus;
-  verificationDocuments?: VerificationDocument[];
-  verificationSubmittedAt?: string | null;
-  verificationReviewedAt?: string | null;
-  verificationReviewNote?: string | null;
-  role: 'User' | 'Merchant' | 'Delivery';
-  isBusy?: boolean; // For delivery partners
-  createdAt?: string;
-  updatedAt?: string;
-}
+export type { User, UserRole, UserGender } from '@/types/user';
 
 interface AuthContextType {
   user: User | null;
@@ -35,6 +16,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   updateUser: (userData: User) => Promise<void>;
+  refreshUserProfile: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -175,6 +157,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshUserProfile = useCallback(async (): Promise<User | null> => {
+    const currentToken = token ?? (await AsyncStorage.getItem('authToken'));
+    if (!currentToken) return null;
+
+    try {
+      const response = await apiClient.get('/api/v1/user/profile', {
+        headers: { Authorization: `Bearer ${currentToken}` },
+      });
+
+      if (response.data?.success && response.data.user) {
+        const updatedUser = response.data.user as User;
+        setUser(updatedUser);
+        setToken(currentToken);
+        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+        await AsyncStorage.setItem('authToken', currentToken);
+        return updatedUser;
+      }
+    } catch (error) {
+      console.error('Error refreshing user profile:', error);
+    }
+    return null;
+  }, [token]);
+
   const value: AuthContextType = {
     user,
     token,
@@ -184,6 +189,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     setLoading,
     updateUser,
+    refreshUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

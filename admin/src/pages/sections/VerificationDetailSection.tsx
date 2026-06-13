@@ -10,6 +10,7 @@ import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import PanelCard from '@/components/admin/PanelCard';
 import LoadingState from '@/components/admin/LoadingState';
 import ErrorState from '@/components/admin/ErrorState';
+
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="grid grid-cols-1 gap-1 border-b border-stone-100 py-3 sm:grid-cols-3">
@@ -17,6 +18,10 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
       <dd className="sm:col-span-2 text-sm text-stone-900">{value || '—'}</dd>
     </div>
   );
+}
+
+function statusLabel(status?: string) {
+  return (status || 'unknown').replace(/_/g, ' ');
 }
 
 function PdfDocumentCard({
@@ -68,6 +73,7 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   const load = useCallback(() => {
     if (!userId) return;
@@ -86,12 +92,22 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
     load();
   }, [load]);
 
-  const handleStatus = async (status: string) => {
+  const handleStatus = async (status: string, options?: { confirm?: string }) => {
     if (!userId) return;
+    if (options?.confirm && !window.confirm(options.confirm)) return;
+
     try {
       setSaving(true);
+      setSuccessMsg('');
       await updateVerificationStatus(userId, status, note.trim() || undefined);
-      navigate(listPath);
+
+      if (status === 'approved') {
+        navigate(listPath);
+        return;
+      }
+
+      setSuccessMsg(`Status updated to "${statusLabel(status)}".`);
+      load();
     } catch (e: any) {
       alert(e?.response?.data?.message || e.message || 'Update failed');
     } finally {
@@ -110,6 +126,8 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
 
   const { user, store, authMethod } = data;
   const docs = user.verificationDocuments || [];
+  const rawStatus = user.verificationStatus || 'unknown';
+  const hasUploadedDocs = docs.length > 0 || !!user.verificationSubmittedAt;
 
   return (
     <PageShell>
@@ -123,8 +141,14 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
 
       <AdminPageHeader
         title={user.name || 'Verification review'}
-        description={`${user.role} account · ${user.verificationStatus?.replace(/_/g, ' ')}`}
+        description={`${user.role} account · ${statusLabel(rawStatus)}`}
       />
+
+      {successMsg ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          {successMsg}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <PanelCard>
@@ -137,6 +161,7 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
             <DetailRow label="Sign-up method" value={authMethod?.replace('_', ' ')} />
             <DetailRow label="Phone verified" value={user.isPhoneVerified ? 'Yes' : 'No'} />
             <DetailRow label="Email verified" value={user.isEmailVerified ? 'Yes' : 'No'} />
+            <DetailRow label="Status" value={statusLabel(rawStatus)} />
             <DetailRow
               label="Submitted at"
               value={
@@ -195,12 +220,13 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
       <PanelCard className="mt-8">
         <h3 className="mb-3 text-base font-bold text-stone-900">Admin decision</h3>
         <p className="mb-3 text-sm text-stone-600">
-          You can approve, reject, or reset verification at any time — even after a previous decision.
+          Approve or reject after review. Use &quot;Mark under review&quot; when you have started checking documents.
+          &quot;Request new docs&quot; clears uploaded files and asks the user to upload again.
         </p>
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="Optional note (shown to user on rejection)"
+          placeholder="Note for the user (shown on rejection or when requesting new documents)"
           rows={3}
           className="mb-4 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
         />
@@ -223,7 +249,8 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || !hasUploadedDocs}
+            title={hasUploadedDocs ? undefined : 'User must upload documents first'}
             onClick={() => handleStatus('pending_review')}
             className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
           >
@@ -232,12 +259,22 @@ export default function VerificationDetailSection({ listPath, listLabel }: { lis
           <button
             type="button"
             disabled={saving}
-            onClick={() => handleStatus('pending_documents')}
+            onClick={() =>
+              handleStatus('pending_documents', {
+                confirm:
+                  'This will delete all uploaded documents from storage and ask the user to upload new ones. Continue?',
+              })
+            }
             className="rounded-xl border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-60"
           >
-            Reset — request new docs
+            Request new docs
           </button>
         </div>
+        {!hasUploadedDocs ? (
+          <p className="mt-3 text-xs text-stone-500">
+            &quot;Mark under review&quot; is available after the user uploads documents.
+          </p>
+        ) : null}
       </PanelCard>
     </PageShell>
   );

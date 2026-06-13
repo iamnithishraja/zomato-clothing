@@ -66,6 +66,9 @@ const storeSchema = new mongoose.Schema({
   },
 
   isActive: { type: Boolean, default: true },
+
+  /** Store existed before merchant identity verification — used to grandfather existing merchants */
+  preVerificationStore: { type: Boolean, default: false },
 }, {
   timestamps: true,
 });

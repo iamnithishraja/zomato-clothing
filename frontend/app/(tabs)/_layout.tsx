@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { PendingStoreReviewsProvider, usePendingStoreReviewsContext } from '@/contexts/PendingStoreReviewsContext';
+import { getPostAuthRoute } from '@/utils/authRouting';
 
 function TabLayoutContent() {
   const { user, isLoading } = useAuth();
@@ -19,17 +20,8 @@ function TabLayoutContent() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      if (!user.isProfileComplete) {
-        router.replace('/auth/ProfileCompletion');
-        return;
-      }
       if (user.role !== 'User') {
-        console.log('❌ Unauthorized access to User tabs. Role:', user.role);
-        if (user.role === 'Merchant') {
-          router.replace('/(merchantTabs)/' as any);
-        } else if (user.role === 'Delivery') {
-          router.replace('/(deliveryTabs)/' as any);
-        }
+        router.replace(getPostAuthRoute(user) as any);
       }
     }
   }, [user, isLoading, router]);

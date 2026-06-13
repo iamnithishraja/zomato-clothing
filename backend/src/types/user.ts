@@ -20,6 +20,7 @@ export interface User {
     verificationSubmittedAt?: Date;
     verificationReviewedAt?: Date;
     verificationReviewNote?: string;
+    verificationGrandfathered?: boolean;
     role: UserRole;
     otp?: string;
     otpExpiry?: Date;

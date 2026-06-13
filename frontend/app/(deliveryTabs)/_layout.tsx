@@ -1,13 +1,14 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useMemo } from 'react';
+import { Tabs, useRouter, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPostAuthRoute } from '@/utils/authRouting';
 import { needsVerificationScreen } from '@/utils/verificationUtils';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function DeliveryTabLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUserProfile } = useAuth();
   const router = useRouter();
 
   const canAccessDeliveryTabs = useMemo(() => {
@@ -16,7 +17,15 @@ export default function DeliveryTabLayout() {
     if (user.role !== 'Delivery') return false;
     if (needsVerificationScreen(user)) return false;
     return true;
-  }, [isLoading, user]);
+  }, [isLoading, user, user?.verificationStatus, user?.verificationGrandfathered]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoading) {
+        void refreshUserProfile();
+      }
+    }, [isLoading, refreshUserProfile]),
+  );
 
   useEffect(() => {
     if (isLoading) return;
@@ -26,24 +35,11 @@ export default function DeliveryTabLayout() {
       return;
     }
 
-    if (!user.isProfileComplete) {
-      router.replace('/auth/ProfileCompletion');
-      return;
+    const target = getPostAuthRoute(user);
+    if (target !== '/(deliveryTabs)/') {
+      router.replace(target as any);
     }
-
-    if (needsVerificationScreen(user)) {
-      router.replace('/auth/VerificationPending' as any);
-      return;
-    }
-
-    if (user.role !== 'Delivery') {
-      if (user.role === 'User') {
-        router.replace('/(tabs)/' as any);
-      } else if (user.role === 'Merchant') {
-        router.replace('/(merchantTabs)/' as any);
-      }
-    }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, user?.verificationStatus, user?.verificationGrandfathered]);
 
   if (!canAccessDeliveryTabs) {
     return (

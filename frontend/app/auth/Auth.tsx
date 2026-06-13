@@ -22,6 +22,7 @@ import ContinueButton from "@/components/auth/ContinueButton";
 import TermsSection from "@/components/auth/TermsSection";
 import apiClient from "../../api/client";
 import { useAuth } from "../../contexts/AuthContext";
+import { navigateAfterAuth } from '@/utils/authRouting';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -150,21 +151,9 @@ const Auth = () => {
         });
 
         if (loginResponse.data.success) {
-          const { token, user, isProfileComplete } = loginResponse.data;
+          const { token, user } = loginResponse.data;
           await login(user, token);
-          
-          // Check if profile is complete and navigate based on role
-          if (isProfileComplete || user.isProfileComplete) {
-            if (user.role === 'Merchant') {
-              router.replace('/(merchantTabs)/' as any);
-            } else if (user.role === 'Delivery') {
-              router.replace('/(deliveryTabs)/' as any);
-            } else {
-              router.replace('/(tabs)');
-            }
-          } else {
-            router.replace('/auth/ProfileCompletion' as any);
-          }
+          navigateAfterAuth(user, router);
           return;
         }
       } catch (loginError: any) {

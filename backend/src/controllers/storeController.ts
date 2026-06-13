@@ -1,6 +1,7 @@
 import StoreModel from "../Models/storeModel";
 import UserModel from "../Models/userModel";
 import ProductModel from "../Models/productModel";
+import { getApprovedMerchantIds } from "../utils/merchantVisibility";
 
 import type { Response, Request } from "express";
 import { 
@@ -8,6 +9,7 @@ import {
   validateStoreData, 
   sendErrorResponse 
 } from "../utils/validation";
+import { verificationFieldsForClient, isVerificationApproved } from "../utils/verificationUtils";
 
 // Create store details
 async function createStore(req: Request, res: Response) {
@@ -64,14 +66,19 @@ async function createStore(req: Request, res: Response) {
       return sendErrorResponse(res, 500, "Failed to save store details");
     }
     
-    // Profile complete; identity verification still required before selling
-    await UserModel.findByIdAndUpdate(
+    // New store: profile complete; verification required unless already grandfathered
+    const userUpdate: Record<string, unknown> = {
+      isProfileComplete: true,
+      updatedAt: new Date(),
+    };
+    if (!user.verificationGrandfathered) {
+      userUpdate.verificationStatus = 'pending_documents';
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
       user._id,
-      {
-        isProfileComplete: true,
-        verificationStatus: 'pending_documents',
-        updatedAt: new Date(),
-      }
+      userUpdate,
+      { returnDocument: 'after' }
     );
     
     return res.status(201).json({
@@ -89,7 +96,21 @@ async function createStore(req: Request, res: Response) {
         isActive: store.isActive,
         createdAt: store.createdAt,
         updatedAt: store.updatedAt
-      }
+      },
+      user: updatedUser ? {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        phone: updatedUser.phone,
+        email: updatedUser.email,
+        gender: updatedUser.gender,
+        avatar: updatedUser.avatar,
+        addresses: updatedUser.addresses,
+        isPhoneVerified: updatedUser.isPhoneVerified,
+        isEmailVerified: updatedUser.isEmailVerified,
+        isProfileComplete: updatedUser.isProfileComplete,
+        role: updatedUser.role,
+        ...verificationFieldsForClient(updatedUser),
+      } : null,
     });
     
   } catch (error) {
@@ -355,15 +376,14 @@ async function deleteStoreDetails(req: Request, res: Response) {
 // Get all stores for customers (public endpoint)
 async function getAllStores(req: Request, res: Response) {
   try {
-    // Get query parameters for pagination and filtering
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string;
     const location = req.query.location as string;
     const categoryFilter = (req.query.filter as string)?.toLowerCase();
 
-    // Build filter object
-    const filter: any = { isActive: true };
+    const approvedMerchantIds = await getApprovedMerchantIds();
+    const filter: any = { isActive: true, merchantId: { $in: approvedMerchantIds } };
 
     // Filter stores by product category / flags
     if (categoryFilter && categoryFilter !== 'all') {
@@ -452,9 +472,9 @@ async function getAllStores(req: Request, res: Response) {
 async function getBestSellerStores(req: Request, res: Response) {
   try {
     const limit = parseInt(req.query.limit as string) || 4;
+    const approvedMerchantIds = await getApprovedMerchantIds();
 
-    // Get top rated stores
-    const stores = await StoreModel.find({ isActive: true })
+    const stores = await StoreModel.find({ isActive: true, merchantId: { $in: approvedMerchantIds } })
       .populate('merchantId', 'name email')
       .sort({ 'rating.average': -1, 'rating.totalReviews': -1 })
       .limit(limit);
@@ -487,9 +507,24 @@ async function getStoreById(req: Request, res: Response) {
     }
 
     const store = await StoreModel.findById(id)
-      .populate('merchantId', 'name email');
+      .populate('merchantId', 'name email verificationStatus isProfileComplete role');
 
     if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: "Store not found"
+      });
+    }
+
+    const merchant = store.merchantId as any;
+    if (!merchant || merchant.role !== 'Merchant' || !isVerificationApproved(merchant)) {
+      return res.status(404).json({
+        success: false,
+        message: "Store not found"
+      });
+    }
+
+    if (!store.isActive) {
       return res.status(404).json({
         success: false,
         message: "Store not found"
@@ -535,11 +570,12 @@ async function searchStoresByProductQuery(req: Request, res: Response) {
     // If no query provided, fallback to top rated stores
     if (!q.trim()) {
       const skip = (page - 1) * limit;
-      const stores = await StoreModel.find({ isActive: true })
+      const approvedMerchantIds = await getApprovedMerchantIds();
+      const stores = await StoreModel.find({ isActive: true, merchantId: { $in: approvedMerchantIds } })
         .sort({ 'rating.average': -1, 'rating.totalReviews': -1 })
         .skip(skip)
         .limit(limit);
-      const totalStores = await StoreModel.countDocuments({ isActive: true });
+      const totalStores = await StoreModel.countDocuments({ isActive: true, merchantId: { $in: approvedMerchantIds } });
       return res.status(200).json({
         success: true,
         message: "Stores retrieved successfully",
@@ -557,6 +593,8 @@ async function searchStoresByProductQuery(req: Request, res: Response) {
     const searchRegex = new RegExp(q.trim(), 'i');
 
     // Aggregate products matching the query to find relevant stores (no pagination here)
+    const approvedMerchantIds = await getApprovedMerchantIds();
+
     const productAgg: any[] = [
       { $match: {
           isActive: true,
@@ -587,7 +625,7 @@ async function searchStoresByProductQuery(req: Request, res: Response) {
         }
       },
       { $unwind: "$store" },
-      { $match: { "store.isActive": true } },
+      { $match: { "store.isActive": true, "store.merchantId": { $in: approvedMerchantIds } } },
       // Compute a simple score combining matches and rating
       { $addFields: {
           ratingAvg: "$store.rating.average",

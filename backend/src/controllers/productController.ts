@@ -1,5 +1,7 @@
 import ProductModel from "../Models/productModel";
 import StoreModel from "../Models/storeModel";
+import { getApprovedMerchantIds } from "../utils/merchantVisibility";
+import { isVerificationApproved } from "../utils/verificationUtils";
 import type { Response, Request } from "express";
 import { 
   validateMerchantRole, 
@@ -370,7 +372,14 @@ async function getAllProducts(req: Request, res: Response) {
     const isNewArrival = req.query.isNewArrival === 'true';
 
     // Build filter object
-    const filter: any = { isActive: true };
+    const approvedMerchantIds = await getApprovedMerchantIds();
+    const approvedStores = await StoreModel.find({
+      merchantId: { $in: approvedMerchantIds },
+      isActive: true,
+    }).select('_id').lean();
+    const approvedStoreIds = approvedStores.map((s) => s._id);
+
+    const filter: any = { isActive: true, storeId: { $in: approvedStoreIds } };
     
     if (category) filter.category = category;
     if (subcategory) filter.subcategory = subcategory;
@@ -517,6 +526,15 @@ async function getProductsBySubcategory(req: Request, res: Response) {
 async function getProductsByStore(req: Request, res: Response) {
   try {
     const { storeId } = req.params;
+    const store = await StoreModel.findById(storeId).populate('merchantId');
+    if (!store || !store.isActive) {
+      return sendErrorResponse(res, 404, 'Store not found');
+    }
+    const merchant = store.merchantId as any;
+    if (!merchant || !isVerificationApproved(merchant)) {
+      return sendErrorResponse(res, 404, 'Store not found');
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const category = req.query.category as string;

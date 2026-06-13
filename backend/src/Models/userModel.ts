@@ -77,6 +77,11 @@ const userSchema = new mongoose.Schema({
   verificationSubmittedAt: Date,
   verificationReviewedAt: Date,
   verificationReviewNote: String,
+  /** True for merchants/delivery who existed before document verification was required */
+  verificationGrandfathered: {
+    type: Boolean,
+    default: false,
+  },
 
   // Security / auth fields
   otp: String,

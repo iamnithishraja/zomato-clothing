@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface INotification extends Document {
   recipient: mongoose.Schema.Types.ObjectId;
   recipientRole: "User" | "Merchant" | "Delivery";
-  type: "ORDER_PLACED" | "ORDER_ACCEPTED" | "ORDER_REJECTED" | "ORDER_READY" | "ORDER_PICKED" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "PAYMENT_FAILED" | "DELIVERY_ASSIGNED" | "RATING_RECEIVED" | "GENERAL";
+  type: "ORDER_PLACED" | "ORDER_ACCEPTED" | "ORDER_REJECTED" | "ORDER_READY" | "ORDER_PICKED" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "PAYMENT_FAILED" | "DELIVERY_ASSIGNED" | "RATING_RECEIVED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "GENERAL";
   title: string;
   message: string;
   
@@ -53,6 +53,8 @@ const notificationSchema: Schema = new Schema(
         "PAYMENT_FAILED",
         "DELIVERY_ASSIGNED",
         "RATING_RECEIVED",
+        "VERIFICATION_APPROVED",
+        "VERIFICATION_REJECTED",
         "GENERAL"
       ],
       required: true

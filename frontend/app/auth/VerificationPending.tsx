@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,27 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/api/client';
 import { pickPdfDocument, uploadPdfToR2, type PickedDocument } from '@/utils/documentUploadUtils';
-import { isVerificationApproved, resolveVerificationStatus } from '@/utils/verificationUtils';
+import {
+  isVerificationApproved,
+  resolveVerificationStatus,
+  verificationStatusLabel,
+} from '@/utils/verificationUtils';
+import type { User } from '@/types/user';
 
 type DocSlot = 'aadhaar' | 'other';
 
 const VerificationPending = () => {
   const router = useRouter();
-  const { user, login, token, logout } = useAuth();
+  const { user, login, token, logout, refreshUserProfile } = useAuth();
   const [aadhaarDoc, setAadhaarDoc] = useState<PickedDocument | null>(null);
   const [otherDoc, setOtherDoc] = useState<PickedDocument | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,12 +37,66 @@ const VerificationPending = () => {
 
   const status = useMemo(
     () => (user ? resolveVerificationStatus(user) : 'pending_documents'),
-    [user],
+    [
+      user,
+      user?.verificationStatus,
+      user?.verificationGrandfathered,
+      user?.verificationSubmittedAt,
+      user?.verificationReviewNote,
+    ],
   );
 
   const roleLabel = user?.role === 'Merchant' ? 'seller' : 'delivery partner';
   const canUpload = status === 'pending_documents' || status === 'rejected';
   const isWaiting = status === 'pending_review';
+
+  const navigateIfApproved = useCallback(
+    (updatedUser: User) => {
+      if (!isVerificationApproved(updatedUser)) return;
+      if (updatedUser.role === 'Merchant') {
+        router.replace('/(merchantTabs)/' as any);
+      } else if (updatedUser.role === 'Delivery') {
+        router.replace('/(deliveryTabs)/' as any);
+      }
+    },
+    [router],
+  );
+
+  const syncStatusFromServer = useCallback(async () => {
+    if (!token) return null;
+    try {
+      const updatedUser = await refreshUserProfile();
+      if (updatedUser) {
+        navigateIfApproved(updatedUser);
+      }
+      return updatedUser;
+    } catch (error: any) {
+      console.error('Verification status sync failed:', error);
+      return null;
+    }
+  }, [navigateIfApproved, refreshUserProfile, token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void syncStatusFromServer();
+    }, [syncStatusFromServer]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void syncStatusFromServer();
+      }
+    });
+    return () => sub.remove();
+  }, [syncStatusFromServer]);
+
+  useEffect(() => {
+    if (canUpload) {
+      setAadhaarDoc(null);
+      setOtherDoc(null);
+    }
+  }, [canUpload, user?.verificationStatus, user?.verificationSubmittedAt]);
 
   const handlePick = useCallback(async (slot: DocSlot) => {
     try {
@@ -91,24 +151,13 @@ const VerificationPending = () => {
     if (!token) return;
     try {
       setIsRefreshing(true);
-      const response = await apiClient.get('/api/v1/user/profile');
-      if (response.data.success && response.data.user) {
-        const updatedUser = response.data.user;
-        await login(updatedUser, token);
-        if (isVerificationApproved(updatedUser)) {
-          if (updatedUser.role === 'Merchant') {
-            router.replace('/(merchantTabs)/' as any);
-          } else if (updatedUser.role === 'Delivery') {
-            router.replace('/(deliveryTabs)/' as any);
-          }
-        }
-      }
+      await syncStatusFromServer();
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Could not refresh status');
     } finally {
       setIsRefreshing(false);
     }
-  }, [login, router, token]);
+  }, [syncStatusFromServer, token]);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -139,12 +188,18 @@ const VerificationPending = () => {
           {isWaiting ? 'Verification in progress' : status === 'rejected' ? 'Verification rejected' : 'Identity verification'}
         </Text>
 
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusBadgeText}>{verificationStatusLabel(status)}</Text>
+        </View>
+
         <Text style={styles.subtitle}>
           {isWaiting
-            ? `Your documents have been uploaded successfully. Our team is reviewing your ${roleLabel} account. You cannot use the app until verification is approved.`
+            ? `Your documents have been uploaded successfully. Our team is reviewing your ${roleLabel} account. You cannot use the app until verification is approved.${user.verificationReviewNote ? `\n\nNote: ${user.verificationReviewNote}` : ''}`
             : status === 'rejected'
               ? `Your verification was rejected.${user.verificationReviewNote ? `\n\nReason: ${user.verificationReviewNote}` : ''}\n\nPlease upload your documents again.`
-              : `Upload your Aadhaar and any supporting PDF documents. You cannot ${user.role === 'Merchant' ? 'sell products' : 'deliver orders'} until admin approval.`}
+              : status === 'pending_documents' && user.verificationReviewNote
+                ? `${user.verificationReviewNote}\n\nPlease upload your Aadhaar and supporting PDF documents again.`
+                : `Upload your Aadhaar and any supporting PDF documents. You cannot ${user.role === 'Merchant' ? 'sell products' : 'deliver orders'} until admin approval.`}
         </Text>
 
         {canUpload && (
@@ -200,7 +255,22 @@ const VerificationPending = () => {
               </>
             )}
           </TouchableOpacity>
-        ) : null}
+        ) : (
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={handleRefreshStatus}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <ActivityIndicator color={Colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={18} color={Colors.primary} />
+                <Text style={styles.refreshText}>Refresh status</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
 
         {isWaiting && user.verificationDocuments?.length ? (
           <View style={styles.uploadedList}>
@@ -286,6 +356,20 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     textAlign: 'center',
     marginBottom: 12,
+  },
+  statusBadge: {
+    alignSelf: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 16,
+  },
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+    textTransform: 'capitalize',
   },
   subtitle: {
     fontSize: 15,

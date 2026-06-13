@@ -130,8 +130,8 @@ export interface OrderStatsResponse {
   stats: OrderStats;
 }
 
-// Cart related types
-export interface CartItem {
+// Cart related types (API-shaped; app cart state uses CartContext.CartItem)
+export interface OrderCartItem {
   product: {
     _id: string;
     name: string;
@@ -145,8 +145,8 @@ export interface CartItem {
   notes?: string;
 }
 
-export interface Cart {
-  items: CartItem[];
+export interface OrderCart {
+  items: OrderCartItem[];
   totalItems: number;
   totalAmount: number;
   storeId?: string;

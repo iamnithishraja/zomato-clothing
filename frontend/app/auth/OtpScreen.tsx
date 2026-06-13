@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import apiClient from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import { navigateAfterAuth } from '@/utils/authRouting';
 
 const OtpScreen = () => {
   const router = useRouter();
@@ -88,25 +88,9 @@ const OtpScreen = () => {
       });
 
       if (response.data.success) {
-        // Store token and user data using AuthContext
-        const { token, user, isProfileComplete } = response.data;
-        
-        // Login through AuthContext
+        const { token, user } = response.data;
         await login(user, token);
-        
-        // Check if profile is complete and navigate based on role
-        if (isProfileComplete || user.isProfileComplete) {
-          if (user.role === 'Merchant') {
-            router.replace('/(merchantTabs)/' as any);
-          } else if (user.role === 'Delivery') {
-            router.replace('/(deliveryTabs)/' as any);
-          } else {
-            router.replace('/(tabs)');
-          }
-        } else {
-          // Navigate to profile completion screen
-          router.replace('/auth/ProfileCompletion' as any);
-        }
+        navigateAfterAuth(user, router);
       } else {
         // Wrong OTP - clear without shake
         setOtp(['', '', '', '']);

@@ -1,32 +1,51 @@
 import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { needsVerificationScreen } from '@/utils/verificationUtils';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function DeliveryTabLayout() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
+  const canAccessDeliveryTabs = useMemo(() => {
+    if (isLoading || !user) return false;
+    if (!user.isProfileComplete) return false;
+    if (user.role !== 'Delivery') return false;
+    if (needsVerificationScreen(user)) return false;
+    return true;
+  }, [isLoading, user]);
+
   useEffect(() => {
-    if (!isLoading && user) {
-      if (!user.isProfileComplete) {
-        router.replace('/auth/ProfileCompletion');
-        return;
-      }
-      if (user.role !== 'Delivery') {
-        console.log('❌ Unauthorized access to Delivery tabs. Role:', user.role);
-        if (user.role === 'User') {
-          router.replace('/(tabs)/' as any);
-        } else if (user.role === 'Merchant') {
-          router.replace('/(merchantTabs)/' as any);
-        }
+    if (isLoading) return;
+
+    if (!user) {
+      router.replace('/auth/Auth');
+      return;
+    }
+
+    if (!user.isProfileComplete) {
+      router.replace('/auth/ProfileCompletion');
+      return;
+    }
+
+    if (needsVerificationScreen(user)) {
+      router.replace('/auth/VerificationPending' as any);
+      return;
+    }
+
+    if (user.role !== 'Delivery') {
+      if (user.role === 'User') {
+        router.replace('/(tabs)/' as any);
+      } else if (user.role === 'Merchant') {
+        router.replace('/(merchantTabs)/' as any);
       }
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user || !user.isProfileComplete || user.role !== 'Delivery') {
+  if (!canAccessDeliveryTabs) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -72,15 +91,12 @@ export default function DeliveryTabLayout() {
           ),
         }}
       />
-      {/* Removed Settlements route */}
-      {/* Hidden Order Details screen - accessible via navigation only */}
       <Tabs.Screen
         name="order-details"
         options={{
           href: null,
         }}
       />
-      {/* Hidden Navigation Map screen - accessible via navigation only */}
       <Tabs.Screen
         name="navigation-map"
         options={{

@@ -16,6 +16,24 @@
     import { generateToken } from "../utils/token";
     import type { User } from "../types/user";
     import bcrypt from "bcrypt";
+    import { verificationFieldsForClient } from "../utils/verificationUtils";
+
+    function serializeUserForClient(user: any) {
+        return {
+            _id: user._id,
+            name: user.name,
+            phone: user.phone,
+            email: user.email,
+            gender: user.gender,
+            avatar: user.avatar,
+            addresses: user.addresses,
+            isPhoneVerified: user.isPhoneVerified,
+            isEmailVerified: user.isEmailVerified,
+            isProfileComplete: user.isProfileComplete,
+            role: user.role,
+            ...verificationFieldsForClient(user),
+        };
+    }
 
     // Utility function to validate email domains - only allow legitimate providers
     function validateEmailDomain(email: string): { isValid: boolean; error?: string } {
@@ -227,16 +245,11 @@
         // Generate JWT token
         const token = generateToken(user._id.toString());
 
+        const freshUser = await UserModel.findById(user._id);
         return res.status(200).json({
             success: true,
             message: "OTP verified successfully. You are now logged in.",
-            user: {
-                _id: user._id,
-                phone: user.phone,
-                isPhoneVerified: true,
-                role: user.role,
-                isProfileComplete: user.isProfileComplete
-            },
+            user: serializeUserForClient(freshUser || user),
             token,
             isProfileComplete: user.isProfileComplete,
         });
@@ -271,19 +284,7 @@
         return res.status(200).json({
             success: true,
             message: "Profile retrieved successfully",
-            user: {
-                _id: user._id,
-                name: user.name,
-                phone: user.phone,
-                email: user.email,
-                gender: user.gender,
-                avatar: user.avatar,
-                addresses: user.addresses,
-                isPhoneVerified: user.isPhoneVerified,
-                isEmailVerified: user.isEmailVerified,
-                isProfileComplete: user.isProfileComplete,
-                role: user.role
-            }
+            user: serializeUserForClient(user),
         });
     } catch (error) {
         console.error("Error getting profile:", error);
@@ -612,6 +613,7 @@ async function completeProfile(req: Request, res: Response) {
             role,
             avatar: avatar || null,
             isProfileComplete,
+            verificationStatus: role === 'User' ? 'not_required' : 'pending_documents',
             updatedAt: new Date()
         };
         if (Array.isArray(addresses)) {
@@ -637,19 +639,7 @@ async function completeProfile(req: Request, res: Response) {
         return res.status(200).json({
             success: true,
             message: "Profile completed successfully",
-            user: {
-                _id: updatedUser._id,
-                name: updatedUser.name,
-                phone: updatedUser.phone,
-                email: updatedUser.email,
-                gender: updatedUser.gender,
-                avatar: updatedUser.avatar,
-                addresses: updatedUser.addresses,
-                isPhoneVerified: updatedUser.isPhoneVerified,
-                isEmailVerified: updatedUser.isEmailVerified,
-                isProfileComplete: updatedUser.isProfileComplete,
-                role: updatedUser.role
-            }
+            user: serializeUserForClient(updatedUser),
         });
         
     } catch (error) {
@@ -821,20 +811,10 @@ async function updateProfile(req: Request, res: Response) {
             success: true,
             message: "Profile updated successfully",
             user: {
-                _id: updatedUser._id,
-                name: updatedUser.name,
-                phone: updatedUser.phone,
-                email: updatedUser.email,
-                gender: updatedUser.gender,
-                avatar: updatedUser.avatar,
-                addresses: updatedUser.addresses,
-                isPhoneVerified: updatedUser.isPhoneVerified,
-                isEmailVerified: updatedUser.isEmailVerified,
-                isProfileComplete: updatedUser.isProfileComplete,
-                role: updatedUser.role,
+                ...serializeUserForClient(updatedUser),
                 createdAt: updatedUser.createdAt,
-                updatedAt: updatedUser.updatedAt
-            }
+                updatedAt: updatedUser.updatedAt,
+            },
         });
         
     } catch (error) {

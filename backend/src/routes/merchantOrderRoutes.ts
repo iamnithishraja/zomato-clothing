@@ -7,11 +7,12 @@ import {
 } from "../controllers/merchantOrderController";
 import { isAuthenticated } from "../middleware/auth";
 import { requireRole } from "../middleware/roleAuth";
+import { requireApprovedVerification } from "../middleware/verificationAuth";
 
 const router = express.Router();
 
-// All routes require merchant role
-router.use(isAuthenticated, requireRole(['Merchant']));
+// All routes require merchant role and approved verification
+router.use(isAuthenticated, requireRole(['Merchant']), requireApprovedVerification);
 
 // Get merchant's orders
 router.get("/", getMerchantOrders);

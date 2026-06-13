@@ -8,6 +8,8 @@ import OrderModel from '../Models/orderModel';
 import StoreModel from '../Models/storeModel';
 import PaymentModel from '../Models/paymentModel';
 import DeliveryModel from '../Models/deliveryModel';
+import { resolveVerificationStatus, verificationFieldsForClient } from '../utils/verificationUtils';
+import type { VerificationStatus } from '../types/verification';
 
 export class AdminService {
   /** Escape user input used inside MongoDB $regex to reduce ReDoS / injection issues */
@@ -1064,6 +1066,172 @@ export class AdminService {
         userName: order.user?.name || order.user?.phone || 'Customer',
         userPhone: order.user?.phone,
       })),
+    };
+  }
+
+  // ─── Verification queue (merchants & delivery partners) ─────────────────────
+  static async getVerificationQueue(params: {
+    role: 'Merchant' | 'Delivery';
+    page?: number;
+    limit?: number;
+    status?: VerificationStatus;
+    search?: string;
+  }) {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 15;
+    const skip = (page - 1) * limit;
+
+    const filter: Record<string, unknown> = {
+      role: params.role,
+      isProfileComplete: true,
+    };
+
+    if (params.status) {
+      filter.verificationStatus = params.status;
+    } else {
+      filter.verificationStatus = { $in: ['pending_documents', 'pending_review', 'rejected'] };
+    }
+
+    if (params.search?.trim()) {
+      const q = AdminService.escapeRegex(params.search.trim());
+      filter.$and = [
+        ...(Array.isArray(filter.$and) ? filter.$and : []),
+        {
+          $or: [
+            { name: { $regex: q, $options: 'i' } },
+            { phone: { $regex: q, $options: 'i' } },
+            { email: { $regex: q, $options: 'i' } },
+          ],
+        },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      UserModel.find(filter)
+        .sort({ verificationSubmittedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select(
+          'name phone email role verificationStatus verificationSubmittedAt verificationReviewedAt verificationReviewNote isPhoneVerified isEmailVerified createdAt',
+        )
+        .lean(),
+      UserModel.countDocuments(filter),
+    ]);
+
+    const items = await Promise.all(
+      users.map(async (user: any) => {
+        let storeName: string | null = null;
+        if (params.role === 'Merchant') {
+          const store = await StoreModel.findOne({ merchantId: user._id })
+            .select('storeName')
+            .lean();
+          storeName = store?.storeName ?? null;
+        }
+        return {
+          _id: user._id,
+          name: user.name,
+          phone: user.phone,
+          email: user.email,
+          storeName,
+          verificationStatus: resolveVerificationStatus(user),
+          verificationSubmittedAt: user.verificationSubmittedAt,
+          verificationReviewedAt: user.verificationReviewedAt,
+          verificationReviewNote: user.verificationReviewNote,
+          authMethod: user.isPhoneVerified ? 'phone_otp' : user.isEmailVerified ? 'email_password' : 'unknown',
+          createdAt: user.createdAt,
+        };
+      }),
+    );
+
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  static async getVerificationDetail(userId: string) {
+    const user = await UserModel.findById(userId).lean();
+    if (!user) throw new Error('User not found');
+    if (user.role !== 'Merchant' && user.role !== 'Delivery') {
+      throw new Error('User is not a merchant or delivery partner');
+    }
+
+    let store = null;
+    if (user.role === 'Merchant') {
+      store = await StoreModel.findOne({ merchantId: user._id }).lean();
+    }
+
+    return {
+      user: {
+        _id: user._id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        gender: user.gender,
+        avatar: user.avatar,
+        addresses: user.addresses,
+        role: user.role,
+        isPhoneVerified: user.isPhoneVerified,
+        isEmailVerified: user.isEmailVerified,
+        isProfileComplete: user.isProfileComplete,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        ...verificationFieldsForClient(user),
+      },
+      store,
+      authMethod: user.isPhoneVerified ? 'phone_otp' : user.isEmailVerified ? 'email_password' : 'unknown',
+    };
+  }
+
+  static async updateVerificationStatus(
+    userId: string,
+    status: VerificationStatus,
+    note?: string,
+  ) {
+    const allowed: VerificationStatus[] = [
+      'pending_documents',
+      'pending_review',
+      'approved',
+      'rejected',
+    ];
+    if (!allowed.includes(status)) {
+      throw new Error('Invalid verification status');
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) throw new Error('User not found');
+    if (user.role !== 'Merchant' && user.role !== 'Delivery') {
+      throw new Error('User is not a merchant or delivery partner');
+    }
+
+    const update: Record<string, unknown> = {
+      verificationStatus: status,
+      verificationReviewedAt: new Date(),
+      verificationReviewNote: note?.trim() || null,
+    };
+
+    if (status === 'pending_documents') {
+      update.verificationDocuments = [];
+      update.verificationSubmittedAt = null;
+      update.verificationReviewedAt = null;
+    }
+
+    const updated = await UserModel.findByIdAndUpdate(userId, update, { returnDocument: 'after' });
+    if (!updated) throw new Error('User not found');
+
+    return {
+      user: {
+        _id: updated._id,
+        name: updated.name,
+        role: updated.role,
+        ...verificationFieldsForClient(updated),
+      },
     };
   }
 

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../api/client';
 
+import type { VerificationDocument, VerificationStatus } from '@/types/verification';
+
 interface User {
   _id: string;
   name?: string;
@@ -13,6 +15,11 @@ interface User {
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
   isProfileComplete: boolean;
+  verificationStatus?: VerificationStatus;
+  verificationDocuments?: VerificationDocument[];
+  verificationSubmittedAt?: string | null;
+  verificationReviewedAt?: string | null;
+  verificationReviewNote?: string | null;
   role: 'User' | 'Merchant' | 'Delivery';
   isBusy?: boolean; // For delivery partners
   createdAt?: string;

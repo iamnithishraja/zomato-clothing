@@ -35,6 +35,7 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
             'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff', 'image/svg+xml',
             'image/heic', 'image/heif', 'image/avif',
             'video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/avi', 'video/mov', 'video/3gpp', 'video/x-matroska',
+            'application/pdf',
             'application/octet-stream'
         ];
         
@@ -44,16 +45,19 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
         const isOctetStream = normalizedType === 'application/octet-stream' || normalizedType === 'binary/octet-stream';
         const hasImageExt = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif|jfif)$/i.test(fileName);
         const hasVideoExt = /\.(mp4|mov|m4v|webm|avi|3gp|mkv)$/i.test(fileName);
+        const hasPdfExt = /\.pdf$/i.test(fileName);
+        const isPdfType = normalizedType === 'application/pdf';
         const isAllowedType =
             allowedTypes.includes(normalizedType) ||
             isImageType ||
             isVideoType ||
-            (isOctetStream && (hasImageExt || hasVideoExt));
+            isPdfType ||
+            (isOctetStream && (hasImageExt || hasVideoExt || hasPdfExt));
         
         if (!isAllowedType) {
             res.status(400).json({
                 success: false,
-                message: "File type not supported. Allowed types: images and videos"
+                message: "File type not supported. Allowed types: images, videos, and PDF documents"
             });
             return;
         }

@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import type { VerificationDocument, VerificationStatus } from "./verification";
+
 export type UserRole = "User" | "Merchant" | "Delivery";
 
 export interface User {
@@ -13,6 +15,11 @@ export interface User {
     isPhoneVerified: boolean;
     isEmailVerified: boolean;
     isProfileComplete: boolean;
+    verificationStatus?: VerificationStatus;
+    verificationDocuments?: VerificationDocument[];
+    verificationSubmittedAt?: Date;
+    verificationReviewedAt?: Date;
+    verificationReviewNote?: string;
     role: UserRole;
     otp?: string;
     otpExpiry?: Date;

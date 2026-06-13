@@ -64,10 +64,14 @@ async function createStore(req: Request, res: Response) {
       return sendErrorResponse(res, 500, "Failed to save store details");
     }
     
-    // Update user's profile completion status to true
+    // Profile complete; identity verification still required before selling
     await UserModel.findByIdAndUpdate(
       user._id,
-      { isProfileComplete: true, updatedAt: new Date() }
+      {
+        isProfileComplete: true,
+        verificationStatus: 'pending_documents',
+        updatedAt: new Date(),
+      }
     );
     
     return res.status(201).json({

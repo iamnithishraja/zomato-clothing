@@ -6,11 +6,12 @@ import {
 } from "../controllers/codController";
 import { isAuthenticated } from "../middleware/auth";
 import { requireRole } from "../middleware/roleAuth";
+import { requireApprovedVerification } from "../middleware/verificationAuth";
 
 const router = express.Router();
 
-// All routes require delivery role
-router.use(isAuthenticated, requireRole(['Delivery']));
+// All routes require delivery role and approved verification
+router.use(isAuthenticated, requireRole(['Delivery']), requireApprovedVerification);
 
 // Mark COD as collected after delivery
 router.post("/:orderId/collect", markCodCollected);

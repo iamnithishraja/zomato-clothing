@@ -80,6 +80,16 @@ const forceCancelBodySchema = z.object({
   reason: z.string().max(2000).optional(),
 });
 
+const verificationQueueQuerySchema = paginationQuerySchema.extend({
+  status: z.enum(['pending_documents', 'pending_review', 'approved', 'rejected']).optional(),
+  search: z.string().trim().max(200).optional(),
+});
+
+const verificationUpdateBodySchema = z.object({
+  status: z.enum(['pending_documents', 'pending_review', 'approved', 'rejected']),
+  note: z.string().max(2000).optional(),
+});
+
 // Admin signup
 export async function adminSignup(req: Request, res: Response): Promise<Response> {
   try {
@@ -556,6 +566,109 @@ export async function getAdminStoreDetail(req: CustomRequest, res: Response): Pr
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to get store detail',
+    });
+  }
+}
+
+export async function getVerificationQueue(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const roleParam = req.params.role;
+    if (roleParam !== 'merchants' && roleParam !== 'delivery') {
+      return res.status(400).json({ success: false, message: 'Invalid verification queue' });
+    }
+    const parsed = verificationQueueQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid query parameters',
+        errors: parsed.error.issues,
+      });
+    }
+    const data = await AdminService.getVerificationQueue({
+      role: roleParam === 'merchants' ? 'Merchant' : 'Delivery',
+      page: parsed.data.page,
+      limit: parsed.data.limit,
+      status: parsed.data.status,
+      search: parsed.data.search,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Verification queue retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Verification queue error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get verification queue',
+    });
+  }
+}
+
+export async function getVerificationDetail(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const parsed = mongoIdParamSchema.safeParse({ id: req.params.userId });
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user id',
+        errors: parsed.error.issues,
+      });
+    }
+    const data = await AdminService.getVerificationDetail(parsed.data.id);
+    return res.status(200).json({
+      success: true,
+      message: 'Verification detail retrieved successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Verification detail error:', error);
+    if (error.message === 'User not found' || error.message.includes('not a merchant')) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get verification detail',
+    });
+  }
+}
+
+export async function updateVerificationStatus(req: CustomRequest, res: Response): Promise<Response> {
+  try {
+    const idParsed = mongoIdParamSchema.safeParse({ id: req.params.userId });
+    if (!idParsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user id',
+        errors: idParsed.error.issues,
+      });
+    }
+    const bodyParsed = verificationUpdateBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request body',
+        errors: bodyParsed.error.issues,
+      });
+    }
+    const data = await AdminService.updateVerificationStatus(
+      idParsed.data.id,
+      bodyParsed.data.status,
+      bodyParsed.data.note,
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'Verification status updated successfully',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Update verification status error:', error);
+    if (error.message === 'User not found' || error.message.includes('not a merchant')) {
+      return res.status(404).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update verification status',
     });
   }
 }

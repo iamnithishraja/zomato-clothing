@@ -95,3 +95,34 @@ export async function fetchStoreDetail(storeId: string) {
   const res = await api.get(`/api/v1/admin/stores/${storeId}/detail`);
   return res.data.data;
 }
+
+// ─── Verification ───────────────────────────────────────────────────────────
+export async function fetchVerificationQueue(
+  role: 'merchants' | 'delivery',
+  params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  },
+) {
+  const res = await api.get(`/api/v1/admin/verification/queue/${role}`, { params });
+  return res.data.data;
+}
+
+export async function fetchVerificationDetail(userId: string) {
+  const res = await api.get(`/api/v1/admin/verification/users/${userId}`);
+  return res.data.data;
+}
+
+export async function updateVerificationStatus(
+  userId: string,
+  status: string,
+  note?: string,
+) {
+  const res = await api.patch(`/api/v1/admin/verification/users/${userId}/status`, {
+    status,
+    note,
+  });
+  return res.data.data;
+}

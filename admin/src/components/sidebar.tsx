@@ -9,6 +9,7 @@ import {
   DollarSign,
   ClipboardList,
   Store,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -29,6 +30,8 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: Users, label: 'Users', href: '/dashboard/users' },
   { icon: Truck, label: 'Delivery', href: '/dashboard/delivery' },
   { icon: Store, label: 'Stores', href: '/dashboard/stores' },
+  { icon: ShieldCheck, label: 'Merchant verify', href: '/dashboard/verification/merchants' },
+  { icon: ShieldCheck, label: 'Delivery verify', href: '/dashboard/verification/delivery' },
 ];
 
 function NavItem({
@@ -104,6 +107,12 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     }
     if (currentPath === href) return true;
     if (href === '/dashboard/stores' && currentPath.startsWith('/dashboard/stores/')) {
+      return true;
+    }
+    if (href === '/dashboard/verification/merchants' && currentPath.startsWith('/dashboard/verification/merchants')) {
+      return true;
+    }
+    if (href === '/dashboard/verification/delivery' && currentPath.startsWith('/dashboard/verification/delivery')) {
       return true;
     }
     return false;

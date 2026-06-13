@@ -11,6 +11,10 @@ import UsersSection from '@/pages/sections/UsersSection';
 import DeliverySection from '@/pages/sections/DeliverySection';
 import StoresSection from '@/pages/sections/StoresSection';
 import StoreDetailSection from '@/pages/sections/StoreDetailSection';
+import MerchantVerificationSection from '@/pages/sections/MerchantVerificationSection';
+import DeliveryVerificationSection from '@/pages/sections/DeliveryVerificationSection';
+import MerchantVerificationDetailSection from '@/pages/sections/MerchantVerificationDetailSection';
+import DeliveryVerificationDetailSection from '@/pages/sections/DeliveryVerificationDetailSection';
 
 const AUTH_HOME = '/dashboard/analytics';
 
@@ -43,6 +47,10 @@ function App() {
         <Route path="delivery" element={<DeliverySection />} />
         <Route path="stores" element={<StoresSection />} />
         <Route path="stores/:storeId" element={<StoreDetailSection />} />
+        <Route path="verification/merchants" element={<MerchantVerificationSection />} />
+        <Route path="verification/merchants/:userId" element={<MerchantVerificationDetailSection />} />
+        <Route path="verification/delivery" element={<DeliveryVerificationSection />} />
+        <Route path="verification/delivery/:userId" element={<DeliveryVerificationDetailSection />} />
       </Route>
       <Route
         path="/"

@@ -11,6 +11,7 @@ import DeliveryModel from '../Models/deliveryModel';
 import StoreModel from '../Models/storeModel';
 import { notifyDeliveryAssigned } from '../utils/notificationUtils';
 import { calculateDistance } from '../utils/locationUtils';
+import { isVerificationApproved } from '../utils/verificationUtils';
 
 
 /**
@@ -53,11 +54,11 @@ export async function processUnassignedOrders(): Promise<void> {
     console.log(`👥 [Assignment Service] Found ${allOnlinePartners.length} online delivery partner(s)`);
 
     // Filter to only those who are not busy
-    const availableDeliveryPartners = await UserModel.find({
+    const availableDeliveryPartners = (await UserModel.find({
       role: 'Delivery',
       isActive: true,
       isBusy: false
-    }).lean();
+    }).lean()).filter((partner) => isVerificationApproved(partner));
 
     if (availableDeliveryPartners.length === 0) {
       console.log(`⚠️ [Assignment Service] No delivery partners available (${allOnlinePartners.length} online but all busy)`);

@@ -270,7 +270,10 @@ const StoreDetails = () => {
       if (response.data.success) {
         // Update user data in context to reflect profile completion
         if (user) {
-          await login({ ...user, isProfileComplete: true }, token || '');
+          await login(
+            { ...user, isProfileComplete: true, verificationStatus: 'pending_documents' },
+            token || '',
+          );
         }
         
         Alert.alert(
@@ -279,7 +282,7 @@ const StoreDetails = () => {
           [
             {
               text: 'Continue',
-              onPress: () => router.replace('/(merchantTabs)/' as any)
+              onPress: () => router.replace('/auth/VerificationPending')
             }
           ]
         );

@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { needsVerificationScreen } from '@/utils/verificationUtils';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function MerchantTabLayout() {
@@ -19,6 +20,10 @@ export default function MerchantTabLayout() {
         }
         return;
       }
+      if (needsVerificationScreen(user)) {
+        router.replace('/auth/VerificationPending');
+        return;
+      }
       if (user.role !== 'Merchant') {
         console.log('❌ Unauthorized access to Merchant tabs. Role:', user.role);
         if (user.role === 'User') {
@@ -30,7 +35,7 @@ export default function MerchantTabLayout() {
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user || !user.isProfileComplete || user.role !== 'Merchant') {
+  if (isLoading || !user || !user.isProfileComplete || needsVerificationScreen(user) || user.role !== 'Merchant') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />

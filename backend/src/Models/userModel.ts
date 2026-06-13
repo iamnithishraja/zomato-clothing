@@ -57,6 +57,27 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+
+  // Merchant / delivery identity verification
+  verificationStatus: {
+    type: String,
+    enum: ['not_required', 'pending_documents', 'pending_review', 'approved', 'rejected'],
+    default: 'not_required',
+  },
+  verificationDocuments: [{
+    documentType: {
+      type: String,
+      enum: ['aadhaar', 'other'],
+      required: true,
+    },
+    url: { type: String, required: true },
+    fileName: { type: String },
+    uploadedAt: { type: Date, default: Date.now },
+  }],
+  verificationSubmittedAt: Date,
+  verificationReviewedAt: Date,
+  verificationReviewNote: String,
+
   // Security / auth fields
   otp: String,
   otpExpiry: Date,

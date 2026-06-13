@@ -17,6 +17,7 @@ import deliveryAssignmentRoute from "./routes/deliveryAssignmentRoutes";
 import directionsRoute from "./routes/directionsRoutes";
 import geocodeRoute from "./routes/geocodeRoutes";
 import adminRoute from "./admin/admin.routes";
+import verificationRoute from "./routes/verificationRoutes";
 import { initializeRazorpay } from "./controllers/paymentController";
 import { requestTimeout } from "./middleware/timeout";
 import { startAssignmentScheduler, stopAssignmentScheduler } from "./services/assignmentScheduler";
@@ -79,6 +80,7 @@ app.use("/api/v1/delivery-assignment", deliveryAssignmentRoute);
 app.use("/api/v1", directionsRoute);
 app.use("/api/v1", geocodeRoute);
 app.use("/api/v1/admin", adminRoute);
+app.use("/api/v1/user/verification", verificationRoute);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

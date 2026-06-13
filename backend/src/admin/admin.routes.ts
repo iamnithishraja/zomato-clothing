@@ -17,6 +17,9 @@ import {
   getDeliveryStats,
   getStorePerformance,
   getAdminStoreDetail,
+  getVerificationQueue,
+  getVerificationDetail,
+  updateVerificationStatus,
 } from './admin.controller';
 import { isAdminAuthenticated } from './admin.middleware';
 
@@ -56,5 +59,10 @@ router.get('/delivery-partners/stats', isAdminAuthenticated, getDeliveryStats);
 // Stores
 router.get('/stores/performance', isAdminAuthenticated, getStorePerformance);
 router.get('/stores/:id/detail', isAdminAuthenticated, getAdminStoreDetail);
+
+// Verification (merchants & delivery partners)
+router.get('/verification/queue/:role(merchants|delivery)', isAdminAuthenticated, getVerificationQueue);
+router.get('/verification/users/:userId', isAdminAuthenticated, getVerificationDetail);
+router.patch('/verification/users/:userId/status', isAdminAuthenticated, updateVerificationStatus);
 
 export default router;

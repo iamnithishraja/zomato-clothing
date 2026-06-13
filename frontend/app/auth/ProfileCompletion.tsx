@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import apiClient from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { needsVerificationScreen } from '@/utils/verificationUtils';
 
 const ProfileCompletion = () => {
   const router = useRouter();
@@ -142,10 +143,10 @@ const ProfileCompletion = () => {
         
         // Navigate based on user role
         if (updatedUser.role === 'Merchant') {
-          // For merchants, navigate to store details screen
           router.push('/auth/StoreDetails');
+        } else if (needsVerificationScreen(updatedUser)) {
+          router.replace('/auth/VerificationPending');
         } else if (updatedUser.role === 'Delivery') {
-          // For delivery users, navigate to delivery tabs
           router.replace('/(deliveryTabs)/' as any);
         } else {
           // For regular users, navigate to user tabs

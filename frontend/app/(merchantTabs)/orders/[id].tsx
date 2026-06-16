@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
+import { uploadAssetToR2 } from '@/utils/imageUploadUtils';
+import type { ReturnRequest } from '@/types/return';
 
 export default function MerchantOrderDetails() {
   const router = useRouter();
@@ -13,6 +16,20 @@ export default function MerchantOrderDetails() {
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [returnRequest, setReturnRequest] = useState<ReturnRequest | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+
+  const loadReturn = useCallback(async () => {
+    if (!orderId) return;
+    try {
+      const res = await apiClient.get(`/api/v1/returns/order/${orderId}`);
+      if (res.data?.success) {
+        setReturnRequest(res.data.returnRequest);
+      }
+    } catch {
+      setReturnRequest(null);
+    }
+  }, [orderId]);
 
   const load = useCallback(async () => {
     try {
@@ -22,12 +39,13 @@ export default function MerchantOrderDetails() {
         console.log('Order loaded, status:', res.data.order.status);
         setOrder(res.data.order);
       }
+      await loadReturn();
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.message || 'Failed to load order');
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, loadReturn]);
 
   // Reload on initial mount
   useEffect(() => {
@@ -110,6 +128,116 @@ export default function MerchantOrderDetails() {
       setProcessing(false);
     }
   };
+
+  const approveReturn = async () => {
+    if (!returnRequest) return;
+    Alert.alert('Approve Return', 'Approve this return and schedule pickup from the customer?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Approve',
+        onPress: async () => {
+          try {
+            setProcessing(true);
+            await apiClient.post(`/api/v1/returns/${returnRequest._id}/approve`);
+            await loadReturn();
+            Alert.alert('Success', 'Return approved. Pickup has been scheduled.');
+          } catch (e: any) {
+            Alert.alert('Error', e.response?.data?.message || 'Failed to approve return');
+          } finally {
+            setProcessing(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const rejectReturn = async () => {
+    if (!returnRequest) return;
+    Alert.alert('Reject Return', 'Reject this return request?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reject',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setProcessing(true);
+            await apiClient.post(`/api/v1/returns/${returnRequest._id}/reject`);
+            await loadReturn();
+            Alert.alert('Done', 'Return request rejected.');
+          } catch (e: any) {
+            Alert.alert('Error', e.response?.data?.message || 'Failed to reject return');
+          } finally {
+            setProcessing(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const completeRefund = async () => {
+    if (!returnRequest) return;
+    Alert.alert(
+      'Mark Refund Completed',
+      `Confirm you have sent ₹${Math.round(order?.totalAmount || 0).toLocaleString('en-IN')} to ${returnRequest.refundUpiId || 'the customer'} via UPI?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setProcessing(true);
+              await apiClient.post(`/api/v1/returns/${returnRequest._id}/complete-refund`);
+              await loadReturn();
+              Alert.alert('Success', 'Refund marked as completed.');
+            } catch (e: any) {
+              Alert.alert('Error', e.response?.data?.message || 'Failed to mark refund completed');
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const uploadRefundProof = async () => {
+    if (!returnRequest) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Please allow photo library access to upload refund proof.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setUploadingProof(true);
+      const publicUrl = await uploadAssetToR2(result.assets[0], {
+        fileNamePrefix: 'refund-proof',
+        role: 'Merchant',
+        apiClient,
+      });
+
+      await apiClient.put(`/api/v1/returns/${returnRequest._id}/refund-proof`, {
+        refundProofImage: publicUrl,
+      });
+
+      await loadReturn();
+      Alert.alert('Success', 'Refund proof uploaded.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || e.response?.data?.message || 'Failed to upload proof');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
+  const returnDeliveryDelivered = returnRequest?.returnDelivery?.status === 'Delivered';
+  const canMarkRefund = returnRequest?.status === 'Approved' && returnDeliveryDelivered;
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -262,6 +390,113 @@ export default function MerchantOrderDetails() {
             </View>
           </View>
         </View>
+
+        {/* Return Request Section */}
+        {returnRequest && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Return Request</Text>
+              <View style={[styles.badge, { backgroundColor: returnRequest.status === 'Pending' ? '#FFF3E0' : '#E8F5E9' }]}>
+                <Text style={styles.badgeText}>{returnRequest.status}</Text>
+              </View>
+            </View>
+
+            <View style={styles.returnCard}>
+              <Text style={styles.returnLabel}>Reason</Text>
+              <Text style={styles.returnValue}>{returnRequest.reason}</Text>
+
+              {returnRequest.notes ? (
+                <>
+                  <Text style={styles.returnLabel}>Customer Notes</Text>
+                  <Text style={styles.returnValue}>{returnRequest.notes}</Text>
+                </>
+              ) : null}
+
+              {returnRequest.refundUpiId ? (
+                <>
+                  <Text style={styles.returnLabel}>Refund UPI ID</Text>
+                  <Text style={[styles.returnValue, styles.upiValue]}>{returnRequest.refundUpiId}</Text>
+                </>
+              ) : null}
+
+              {returnRequest.returnDelivery && (
+                <>
+                  <Text style={styles.returnLabel}>Return Pickup Status</Text>
+                  <Text style={styles.returnValue}>
+                    {returnRequest.returnDelivery.status === 'Delivered'
+                      ? 'Delivered to Merchant'
+                      : returnRequest.returnDelivery.status === 'PickedUp'
+                        ? 'Picked Up'
+                        : ['Pending', 'Accepted'].includes(returnRequest.returnDelivery.status)
+                          ? 'Assigned'
+                          : returnRequest.returnDelivery.status}
+                  </Text>
+                </>
+              )}
+
+              {returnRequest.refundStatus === 'Completed' && (
+                <View style={styles.refundDoneBadge}>
+                  <Text style={styles.refundDoneText}>✓ Refund Completed</Text>
+                </View>
+              )}
+
+              {returnRequest.refundProofImage && (
+                <Image source={{ uri: returnRequest.refundProofImage }} style={styles.proofThumb} />
+              )}
+
+              {returnRequest.status === 'Pending' && (
+                <View style={styles.returnActions}>
+                  <TouchableOpacity
+                    style={[styles.returnActionBtn, styles.returnRejectBtn]}
+                    onPress={rejectReturn}
+                    disabled={processing}
+                  >
+                    <Text style={styles.returnActionText}>Reject Return</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.returnActionBtn, styles.returnApproveBtn]}
+                    onPress={approveReturn}
+                    disabled={processing}
+                  >
+                    <Text style={styles.returnActionText}>Approve Return</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {(canMarkRefund || ['Approved', 'Completed'].includes(returnRequest.status)) && (
+                <View style={styles.refundActions}>
+                  {canMarkRefund && (
+                    <TouchableOpacity
+                      style={styles.refundCompleteBtn}
+                      onPress={completeRefund}
+                      disabled={processing}
+                    >
+                      <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.refundCompleteGradient}>
+                        <Text style={styles.refundCompleteText}>Mark Refund Completed</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+
+                  {['Approved', 'Completed'].includes(returnRequest.status) && (
+                    <TouchableOpacity
+                      style={styles.proofUploadBtn}
+                      onPress={uploadRefundProof}
+                      disabled={uploadingProof}
+                    >
+                      {uploadingProof ? (
+                        <ActivityIndicator color={Colors.primary} size="small" />
+                      ) : (
+                        <Text style={styles.proofUploadText}>
+                          {returnRequest.refundProofImage ? 'Update Refund Proof' : 'Upload Refund Proof (Optional)'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Status History Timeline */}
         {Array.isArray(order.statusHistory) && order.statusHistory.length > 0 && (
@@ -734,5 +969,104 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6
-  }
+  },
+  returnCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    gap: 6,
+  },
+  returnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#757575',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+  },
+  returnValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    lineHeight: 22,
+  },
+  upiValue: {
+    color: '#1976D2',
+    fontWeight: '800',
+  },
+  returnActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  returnActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  returnRejectBtn: {
+    backgroundColor: '#F44336',
+  },
+  returnApproveBtn: {
+    backgroundColor: '#4CAF50',
+  },
+  returnActionText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  refundActions: {
+    marginTop: 12,
+    gap: 10,
+  },
+  refundCompleteBtn: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  refundCompleteGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  refundCompleteText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  proofUploadBtn: {
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  proofUploadText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  refundDoneBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  refundDoneText: {
+    color: '#4CAF50',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  proofThumb: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    marginTop: 10,
+    backgroundColor: '#F5F5F5',
+  },
 });

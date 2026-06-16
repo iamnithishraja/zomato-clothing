@@ -275,12 +275,13 @@ export async function processUnassignedOrders(): Promise<void> {
           });
 
           // Create delivery record if not exists
-          let delivery = await DeliveryModel.findOne({ order: order._id });
+          let delivery = await DeliveryModel.findOne({ order: order._id, deliveryType: { $ne: 'RETURN' } });
           
           if (!delivery) {
             delivery = new DeliveryModel({
               deliveryPerson: selectedDeliveryPartner._id,
               order: order._id,
+              deliveryType: 'STANDARD',
               pickupAddress: store?.address || 'Store address',
               deliveryAddress: order.shippingAddress,
               estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
@@ -470,6 +471,7 @@ export async function assignOrdersToNewlyOnlinePartner(deliveryPersonId: Types.O
       const delivery = new DeliveryModel({
         deliveryPerson: deliveryPerson._id,
         order: nearestOrder._id,
+        deliveryType: 'STANDARD',
         pickupAddress: store?.address || 'Store address',
         deliveryAddress: nearestOrder.shippingAddress,
         estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),

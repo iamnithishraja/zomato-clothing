@@ -266,14 +266,18 @@ export async function manuallyAssignDeliveryPartner(req: Request, res: Response)
       currentOrder: order._id
     });
 
-    // Create or update delivery record
-    let delivery = await DeliveryModel.findOne({ order: order._id });
+    // Create or update standard delivery record only (ignore return deliveries)
+    let delivery = await DeliveryModel.findOne({
+      order: order._id,
+      deliveryType: { $ne: "RETURN" },
+    });
     
     if (!delivery) {
       const store = order.store as any;
       delivery = new DeliveryModel({
         deliveryPerson: deliveryPerson._id,
         order: order._id,
+        deliveryType: "STANDARD",
         pickupAddress: store.address || "Store address",
         deliveryAddress: order.shippingAddress,
         estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),

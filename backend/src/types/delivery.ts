@@ -2,8 +2,10 @@ import mongoose, { type Document } from "mongoose";
 import type { User } from "./user";
 
 export interface IDelivery extends Document {
-  deliveryPerson: mongoose.Types.ObjectId | User;
+  deliveryPerson?: mongoose.Types.ObjectId | User;
   order: mongoose.Types.ObjectId;
+  deliveryType?: "STANDARD" | "RETURN";
+  returnRequest?: mongoose.Types.ObjectId;
   status: "Pending" | "Accepted" | "PickedUp" | "OnTheWay" | "Delivered" | "Cancelled";
   pickupAddress: string;
   deliveryAddress: string;

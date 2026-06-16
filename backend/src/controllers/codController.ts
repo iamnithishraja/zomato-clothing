@@ -33,7 +33,11 @@ export async function markCodCollected(req: Request, res: Response) {
     }
 
     // Verify delivery assignment and status against Delivery entity
-    const delivery = await DeliveryModel.findOne({ order: orderId, deliveryPerson: user._id });
+    const delivery = await DeliveryModel.findOne({
+      order: orderId,
+      deliveryPerson: user._id,
+      deliveryType: { $ne: 'RETURN' },
+    });
     if (!delivery) {
       return sendErrorResponse(res, 403, "No delivery assignment found for this order");
     }

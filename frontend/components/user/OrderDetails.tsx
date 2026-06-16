@@ -8,13 +8,16 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import apiClient from '@/api/client';
 import StoreRatingModal from '@/components/user/StoreRatingModal';
+import ReturnRequestModal from '@/components/user/ReturnRequestModal';
 import type { Order } from '@/types/order';
+import type { ReturnRequest } from '@/types/return';
 
 interface OrderDetailsProps {
   orderId: string;
@@ -118,6 +121,13 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
   const [cancelling, setCancelling] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingPromptHandled, setRatingPromptHandled] = useState(false);
+  const [returnRequest, setReturnRequest] = useState<ReturnRequest | null>(null);
+  const [canRequestReturn, setCanRequestReturn] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [returnWindowExpiresAt, setReturnWindowExpiresAt] = useState<Date | null>(null);
+
+  const RETURN_WINDOW_MS = 48 * 60 * 60 * 1000;
 
   // Flipkart-style status steps (end-state delivered)
   const statusSteps = useMemo(() => (
@@ -145,6 +155,19 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
       if (response.data.success) {
         setOrder(response.data.order);
       }
+
+      try {
+        const returnRes = await apiClient.get(`/api/v1/returns/order/${orderId}`);
+        if (returnRes.data.success) {
+          setReturnRequest(returnRes.data.returnRequest);
+          setCanRequestReturn(!!returnRes.data.canRequestReturn);
+          if (returnRes.data.returnWindowExpiresAt) {
+            setReturnWindowExpiresAt(new Date(returnRes.data.returnWindowExpiresAt));
+          }
+        }
+      } catch {
+        // Return info is optional
+      }
     } catch (error: any) {
       console.error('Error fetching order details:', error);
       if (!options?.silent) {
@@ -160,6 +183,32 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
   React.useEffect(() => {
     fetchOrderDetails();
   }, [fetchOrderDetails]);
+
+  React.useEffect(() => {
+    if (returnRequest || order?.status !== 'Delivered') {
+      return;
+    }
+
+    const expiresAt =
+      returnWindowExpiresAt ??
+      (order?.deliveryDate
+        ? new Date(new Date(order.deliveryDate).getTime() + RETURN_WINDOW_MS)
+        : null);
+
+    if (!expiresAt) {
+      setCanRequestReturn(false);
+      return;
+    }
+
+    const updateWindow = () => {
+      const stillEligible = Date.now() <= expiresAt.getTime();
+      setCanRequestReturn(stillEligible);
+    };
+
+    updateWindow();
+    const interval = setInterval(updateWindow, 30_000);
+    return () => clearInterval(interval);
+  }, [order?.status, order?.deliveryDate, returnRequest, returnWindowExpiresAt]);
 
   React.useEffect(() => {
     if (!openRatingOnMount || ratingPromptHandled || !order) return;
@@ -246,6 +295,35 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
   const canCancel = ['Pending', 'Accepted', 'Processing'].includes(order.status);
   const canRate = order.status === 'Delivered' && !order.storeRated;
 
+  const getReturnStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pending': return '#FF9800';
+      case 'Approved': return '#2196F3';
+      case 'Rejected': return '#F44336';
+      case 'Completed': return '#4CAF50';
+      default: return Colors.textSecondary;
+    }
+  };
+
+  const getReturnDeliveryLabel = (status?: string) => {
+    switch (status) {
+      case 'Pending':
+      case 'Accepted':
+        return 'Return pickup assigned';
+      case 'PickedUp':
+        return 'Item picked up from you';
+      case 'OnTheWay':
+        return 'Item on the way to merchant';
+      case 'Delivered':
+        return 'Item returned to merchant';
+      default:
+        return null;
+    }
+  };
+
+  const returnDeliveryStatus = returnRequest?.returnDelivery?.status;
+  const returnDeliveryLabel = getReturnDeliveryLabel(returnDeliveryStatus);
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -304,6 +382,48 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
           <Text style={styles.alreadyReviewedText}>
             You have already reviewed this store for this order.
           </Text>
+        </View>
+      )}
+
+      {/* Return Status */}
+      {returnRequest && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Return & Refund</Text>
+          <View style={styles.returnCard}>
+            <View style={styles.returnStatusRow}>
+              <Ionicons name="return-down-back" size={22} color={getReturnStatusColor(returnRequest.status)} />
+              <View style={styles.returnStatusInfo}>
+                <Text style={[styles.returnStatusText, { color: getReturnStatusColor(returnRequest.status) }]}>
+                  Return {returnRequest.status}
+                </Text>
+                <Text style={styles.returnReasonText}>Reason: {returnRequest.reason}</Text>
+                {returnRequest.notes ? (
+                  <Text style={styles.returnNotesText}>{returnRequest.notes}</Text>
+                ) : null}
+              </View>
+            </View>
+
+            {returnRequest.status === 'Approved' && returnDeliveryLabel && (
+              <View style={styles.returnStep}>
+                <Ionicons name="bicycle-outline" size={18} color={Colors.primary} />
+                <Text style={styles.returnStepText}>{returnDeliveryLabel}</Text>
+              </View>
+            )}
+
+            {returnRequest.refundStatus === 'Completed' && (
+              <View style={styles.returnStep}>
+                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Text style={[styles.returnStepText, { color: Colors.success }]}>Refund Completed</Text>
+              </View>
+            )}
+
+            {returnRequest.refundProofImage && (
+              <TouchableOpacity style={styles.proofButton} onPress={() => setShowProofModal(true)}>
+                <Ionicons name="image-outline" size={18} color={Colors.primary} />
+                <Text style={styles.proofButtonText}>View Refund Proof</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -496,6 +616,18 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
             </LinearGradient>
           </TouchableOpacity>
         )}
+
+        {canRequestReturn && !returnRequest && (
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowReturnModal(true)}>
+            <LinearGradient
+              colors={['#FF9800', '#F57C00']}
+              style={styles.actionGradient}
+            >
+              <Ionicons name="return-down-back-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.actionButtonText}>Request Return</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={{ height: 40 }} />
@@ -526,6 +658,33 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
           onRatingSubmitted?.(order._id);
         }}
       />
+
+      <ReturnRequestModal
+        visible={showReturnModal}
+        orderId={order._id}
+        paymentMethod={order.paymentMethod}
+        onClose={() => setShowReturnModal(false)}
+        onSuccess={() => {
+          setShowReturnModal(false);
+          fetchOrderDetails({ silent: true });
+        }}
+      />
+
+      <Modal visible={showProofModal} transparent animationType="fade" onRequestClose={() => setShowProofModal(false)}>
+        <View style={styles.proofOverlay}>
+          <View style={styles.proofModal}>
+            <View style={styles.proofHeader}>
+              <Text style={styles.proofTitle}>Refund Proof</Text>
+              <TouchableOpacity onPress={() => setShowProofModal(false)}>
+                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            {returnRequest?.refundProofImage && (
+              <Image source={{ uri: returnRequest.refundProofImage }} style={styles.proofImage} resizeMode="contain" />
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -876,6 +1035,87 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FFD700',
+  },
+  returnCard: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  returnStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  returnStatusInfo: {
+    flex: 1,
+  },
+  returnStatusText: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  returnReasonText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  returnNotesText: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  returnStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 4,
+  },
+  returnStepText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  proofButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingVertical: 8,
+  },
+  proofButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  proofOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  proofModal: {
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  proofHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  proofTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  proofImage: {
+    width: '100%',
+    height: 400,
+    backgroundColor: '#000',
   },
 });
 

@@ -229,7 +229,11 @@ const ModernDeliveryDashboard: React.FC = () => {
                     style={styles.statusBanner}
                   >
                     <Ionicons name={getStatusIcon(delivery.status)} size={18} color="#FFFFFF" />
-                    <Text style={styles.statusBannerText}>{delivery.status}</Text>
+                    <Text style={styles.statusBannerText}>
+                      {delivery.deliveryType === 'RETURN'
+                        ? (delivery.status === 'Delivered' ? 'Delivered to Merchant' : delivery.status === 'PickedUp' ? 'Picked Up' : ['Pending', 'Accepted'].includes(delivery.status) ? 'Assigned' : delivery.status)
+                        : delivery.status}
+                    </Text>
                   </LinearGradient>
 
                   {/* Order Info */}
@@ -241,7 +245,13 @@ const ModernDeliveryDashboard: React.FC = () => {
                           #{order?.orderNumber || delivery._id.slice(-8)}
                         </Text>
                       </View>
-                      {order?.paymentMethod === 'COD' && (
+                      {delivery.deliveryType === 'RETURN' && (
+                        <View style={[styles.codBadge, { backgroundColor: '#E3F2FD' }]}>
+                          <Ionicons name="return-down-back" size={14} color="#1976D2" />
+                          <Text style={[styles.codBadgeText, { color: '#1976D2' }]}>RETURN</Text>
+                        </View>
+                      )}
+                      {order?.paymentMethod === 'COD' && delivery.deliveryType !== 'RETURN' && (
                         <View style={styles.codBadge}>
                           <Ionicons name="cash" size={14} color="#FF9800" />
                           <Text style={styles.codBadgeText}>COD</Text>
@@ -253,7 +263,7 @@ const ModernDeliveryDashboard: React.FC = () => {
                     <View style={styles.addressesContainer}>
                       <View style={styles.addressRow}>
                         <View style={styles.addressIcon}>
-                          <Ionicons name="storefront" size={16} color="#4CAF50" />
+                          <Ionicons name={delivery.deliveryType === 'RETURN' ? 'home' : 'storefront'} size={16} color="#4CAF50" />
                         </View>
                         <Text style={styles.addressText} numberOfLines={1}>
                           {delivery.pickupAddress}
@@ -264,7 +274,7 @@ const ModernDeliveryDashboard: React.FC = () => {
                       
                       <View style={styles.addressRow}>
                         <View style={styles.addressIcon}>
-                          <Ionicons name="location" size={16} color="#F44336" />
+                          <Ionicons name={delivery.deliveryType === 'RETURN' ? 'storefront' : 'location'} size={16} color="#F44336" />
                         </View>
                         <Text style={styles.addressText} numberOfLines={1}>
                           {delivery.deliveryAddress}

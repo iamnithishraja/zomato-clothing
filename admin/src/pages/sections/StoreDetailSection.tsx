@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, MapPin, Star, Store } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Store, RotateCcw } from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -138,7 +138,14 @@ export default function StoreDetailSection() {
     );
   }
 
-  const { store, orderStats, recentOrders, storeReviews = [] } = data;
+  const {
+    store,
+    orderStats,
+    recentOrders,
+    storeReviews = [],
+    returnStats = { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0 },
+    storeReturns = [],
+  } = data;
   const dense = trendData.length > 14;
 
   return (
@@ -234,7 +241,7 @@ export default function StoreDetailSection() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
             <Store className="h-4 w-4" />
@@ -260,7 +267,19 @@ export default function StoreDetailSection() {
               / {orderStats.cancelledOrders}
             </span>
           </p>
-          <p className="mt-1 text-xs text-stone-600">Return / cancel rate: {orderStats.returnRate}%</p>
+          <p className="mt-1 text-xs text-stone-600">Cancel rate: {orderStats.returnRate}%</p>
+        </div>
+        <div className="rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            <RotateCcw className="h-4 w-4" />
+            Product returns
+          </div>
+          <p className="mt-2 text-2xl font-bold tabular-nums text-amber-900">
+            {returnStats?.total ?? 0}
+          </p>
+          <p className="mt-1 text-xs text-stone-600">
+            {returnStats?.pending ?? 0} pending · {returnStats?.completed ?? 0} completed
+          </p>
         </div>
         <div className="rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
@@ -282,6 +301,83 @@ export default function StoreDetailSection() {
             </p>
           ) : null}
         </div>
+      </div>
+
+      <div className="mt-8">
+        <PanelCard
+          title="Product returns"
+          description={`${returnStats?.total ?? 0} total · ${returnStats?.pending ?? 0} pending · ${returnStats?.approved ?? 0} approved · ${returnStats?.rejected ?? 0} rejected · ${returnStats?.completed ?? 0} completed`}
+        >
+          {!storeReturns?.length ? (
+            <p className="py-10 text-center text-sm text-stone-500">
+              No return requests for this store yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[1000px] w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-stone-200 bg-stone-50/80 text-left text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                    <th className="px-4 py-2">Order</th>
+                    <th className="px-4 py-2">Customer</th>
+                    <th className="px-4 py-2">Reason</th>
+                    <th className="px-4 py-2">Return status</th>
+                    <th className="px-4 py-2">Refund</th>
+                    <th className="px-4 py-2">Pickup status</th>
+                    <th className="px-4 py-2">Amount</th>
+                    <th className="px-4 py-2">Requested</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {storeReturns.map((ret: any) => (
+                    <tr key={ret._id} className="hover:bg-stone-50/80">
+                      <td className="px-4 py-2 font-semibold">
+                        {ret.order?.orderNumber || ret.order?._id?.slice(-8) || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-stone-600">
+                        {ret.customer?.name || ret.customer?.phone || '—'}
+                      </td>
+                      <td className="px-4 py-2 text-stone-700">{ret.reason}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-xs font-bold',
+                            ret.status === 'Pending' && 'bg-amber-100 text-amber-900',
+                            ret.status === 'Approved' && 'bg-blue-100 text-blue-900',
+                            ret.status === 'Rejected' && 'bg-red-100 text-red-900',
+                            ret.status === 'Completed' && 'bg-emerald-100 text-emerald-900',
+                          )}
+                        >
+                          {ret.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-stone-600">
+                        {ret.refundStatus}
+                        {ret.refundProofImage ? ' · proof ✓' : ''}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-stone-600">
+                        {ret.returnDelivery?.status === 'Delivered'
+                          ? 'Delivered to merchant'
+                          : ret.returnDelivery?.status || '—'}
+                      </td>
+                      <td className="px-4 py-2 font-bold tabular-nums">
+                        {fmt(ret.order?.totalAmount ?? 0)}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-stone-500">
+                        {ret.createdAt
+                          ? new Date(ret.createdAt).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </PanelCard>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">

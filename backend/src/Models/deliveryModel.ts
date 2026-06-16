@@ -5,13 +5,21 @@ const deliverySchema: Schema = new Schema(
   {
     deliveryPerson: {
       type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true
+      ref: "User"
     },
     order: { 
       type: Schema.Types.ObjectId, 
       ref: "Order", 
       required: true
+    },
+    deliveryType: {
+      type: String,
+      enum: ["STANDARD", "RETURN"],
+      default: "STANDARD"
+    },
+    returnRequest: {
+      type: Schema.Types.ObjectId,
+      ref: "Return"
     },
     status: {
       type: String,
@@ -68,6 +76,7 @@ deliverySchema.index({ deliveryPerson: 1, status: 1 }); // Delivery person's del
 deliverySchema.index({ order: 1 }); // Lookup delivery by order
 deliverySchema.index({ status: 1, createdAt: -1 }); // Query deliveries by status and date
 deliverySchema.index({ deliveryPerson: 1, createdAt: -1 }); // Delivery person history
+deliverySchema.index({ deliveryType: 1, status: 1 }); // Return assignment queries
 
 const DeliveryModel = mongoose.model<IDelivery>("Delivery", deliverySchema);
 

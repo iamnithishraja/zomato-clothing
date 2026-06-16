@@ -8,6 +8,7 @@ import OrderModel from '../Models/orderModel';
 import StoreModel from '../Models/storeModel';
 import PaymentModel from '../Models/paymentModel';
 import DeliveryModel from '../Models/deliveryModel';
+import ReturnModel from '../Models/returnModel';
 import { resolveVerificationStatus, verificationFieldsForClient } from '../utils/verificationUtils';
 import type { VerificationStatus } from '../types/verification';
 import { notifyVerificationDecision } from '../utils/notificationUtils';
@@ -966,7 +967,8 @@ export class AdminService {
       .select('name phone email role verificationStatus isProfileComplete')
       .lean();
 
-    const [orderAgg, statusBreakdown, ordersTrend, recentOrders, storeReviews] = await Promise.all([
+    const [orderAgg, statusBreakdown, ordersTrend, recentOrders, storeReviews, storeOrderIds] =
+      await Promise.all([
       OrderModel.aggregate([
         { $match: { store: sid } },
         {
@@ -1017,7 +1019,44 @@ export class AdminService {
         .populate('user', 'name phone email')
         .select('orderNumber storeRating storeReview storeRatedAt user')
         .lean(),
+      OrderModel.find({ store: sid }).distinct('_id'),
     ]);
+
+    const [storeReturns, returnStatusBreakdown] = await Promise.all([
+      ReturnModel.find({ order: { $in: storeOrderIds } })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('order', 'orderNumber totalAmount status paymentMethod paymentStatus')
+        .populate('customer', 'name phone')
+        .populate({
+          path: 'returnDelivery',
+          select: 'status deliveryType',
+        })
+        .lean(),
+      ReturnModel.aggregate([
+        { $match: { order: { $in: storeOrderIds } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const returnStats = {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      completed: 0,
+    };
+    returnStatusBreakdown.forEach((row: any) => {
+      const status = String(row._id);
+      if (status === 'Pending') returnStats.pending = row.count;
+      else if (status === 'Approved') returnStats.approved = row.count;
+      else if (status === 'Rejected') returnStats.rejected = row.count;
+      else if (status === 'Completed') returnStats.completed = row.count;
+    });
+    returnStats.total = returnStatusBreakdown.reduce(
+      (sum: number, row: any) => sum + row.count,
+      0,
+    );
 
     const raw = orderAgg[0];
     const totalOrders = raw?.totalOrders ?? 0;
@@ -1074,6 +1113,39 @@ export class AdminService {
         ratedAt: order.storeRatedAt,
         userName: order.user?.name || order.user?.phone || 'Customer',
         userPhone: order.user?.phone,
+      })),
+      returnStats,
+      storeReturns: storeReturns.map((ret: any) => ({
+        _id: ret._id,
+        status: ret.status,
+        refundStatus: ret.refundStatus,
+        reason: ret.reason,
+        notes: ret.notes,
+        refundUpiId: ret.refundUpiId,
+        refundProofImage: ret.refundProofImage,
+        createdAt: ret.createdAt,
+        updatedAt: ret.updatedAt,
+        order: ret.order
+          ? {
+              _id: ret.order._id,
+              orderNumber: ret.order.orderNumber,
+              totalAmount: ret.order.totalAmount,
+              status: ret.order.status,
+              paymentMethod: ret.order.paymentMethod,
+              paymentStatus: ret.order.paymentStatus,
+            }
+          : null,
+        customer: ret.customer
+          ? {
+              name: ret.customer.name,
+              phone: ret.customer.phone,
+            }
+          : null,
+        returnDelivery: ret.returnDelivery
+          ? {
+              status: ret.returnDelivery.status,
+            }
+          : null,
       })),
     };
   }
@@ -1208,15 +1280,23 @@ export class AdminService {
     status: VerificationStatus,
     note?: string,
   ) {
-    const allowed: VerificationStatus[] = [
+    type VerificationDecisionStatus =
+      | 'pending_documents'
+      | 'pending_review'
+      | 'approved'
+      | 'rejected';
+
+    const allowed: VerificationDecisionStatus[] = [
       'pending_documents',
       'pending_review',
       'approved',
       'rejected',
     ];
-    if (!allowed.includes(status)) {
+    if (!allowed.includes(status as VerificationDecisionStatus)) {
       throw new Error('Invalid verification status');
     }
+
+    const decisionStatus = status as VerificationDecisionStatus;
 
     const user = await UserModel.findById(userId);
     if (!user) throw new Error('User not found');
@@ -1224,7 +1304,7 @@ export class AdminService {
       throw new Error('User is not a merchant or delivery partner');
     }
 
-    if (status === 'pending_review') {
+    if (decisionStatus === 'pending_review') {
       const hasDocs =
         (user.verificationDocuments?.length ?? 0) > 0 || !!user.verificationSubmittedAt;
       if (!hasDocs) {
@@ -1233,18 +1313,18 @@ export class AdminService {
     }
 
     const update: Record<string, unknown> = {
-      verificationStatus: status,
+      verificationStatus: decisionStatus,
       verificationGrandfathered: false,
       verificationReviewNote: note?.trim() || null,
     };
 
-    if (status === 'approved' || status === 'rejected') {
+    if (decisionStatus === 'approved' || decisionStatus === 'rejected') {
       update.verificationReviewedAt = new Date();
-    } else if (status === 'pending_review') {
+    } else if (decisionStatus === 'pending_review') {
       update.verificationReviewedAt = null;
     }
 
-    if (status === 'pending_documents') {
+    if (decisionStatus === 'pending_documents') {
       const docs = user.verificationDocuments || [];
       await Promise.all(
         docs.map((doc) => (doc.url ? deleteFileFromR2(doc.url) : Promise.resolve())),
@@ -1260,7 +1340,7 @@ export class AdminService {
     await notifyVerificationDecision(
       updated._id,
       updated.role as 'Merchant' | 'Delivery',
-      status,
+      decisionStatus,
       note,
     );
 

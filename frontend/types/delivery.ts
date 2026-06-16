@@ -47,6 +47,8 @@ export interface Delivery {
       address?: string;
     };
   };
+  deliveryType?: 'STANDARD' | 'RETURN';
+  returnRequest?: string;
   status: 'Pending' | 'Accepted' | 'PickedUp' | 'OnTheWay' | 'Delivered' | 'Cancelled';
   pickupAddress: string;
   deliveryAddress: string;

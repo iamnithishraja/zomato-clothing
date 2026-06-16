@@ -162,33 +162,37 @@ const OrderDetailsScreen: React.FC = () => {
       return;
     }
 
-    // Get store info for pickup
     const store = order.store;
-    
-    // Prepare pickup location (store)
-    const pickupLocation = {
-      lat: order.pickupLocation?.lat,
-      lng: order.pickupLocation?.lng,
-      address: delivery.pickupAddress || store?.address || '',
-      mapLink: (store as any)?.mapLink // Pass mapLink if available
-    };
+    const isReturn = delivery.deliveryType === 'RETURN';
 
-    // Prepare delivery location (user address)
-    const deliveryLocation = {
+    const customerCoords = {
       lat: order.deliveryLocation?.lat,
       lng: order.deliveryLocation?.lng,
-      address: delivery.deliveryAddress || order.shippingAddress || ''
+      address: isReturn
+        ? delivery.pickupAddress || order.shippingAddress || ''
+        : delivery.deliveryAddress || order.shippingAddress || '',
     };
 
-    // Navigate to in-app navigation screen
+    const storeCoords = {
+      lat: order.pickupLocation?.lat,
+      lng: order.pickupLocation?.lng,
+      address: isReturn
+        ? delivery.deliveryAddress || store?.address || ''
+        : delivery.pickupAddress || store?.address || '',
+      mapLink: (store as any)?.mapLink,
+    };
+
+    const pickupLocation = isReturn ? customerCoords : storeCoords;
+    const deliveryLocation = isReturn ? storeCoords : customerCoords;
+
     router.push({
       pathname: '/(deliveryTabs)/navigation-map',
       params: {
         orderId: delivery._id,
         pickupLocation: JSON.stringify(pickupLocation),
         deliveryLocation: JSON.stringify(deliveryLocation),
-        navigationType: locationType
-      }
+        navigationType: locationType,
+      },
     });
   };
 
@@ -210,7 +214,34 @@ const OrderDetailsScreen: React.FC = () => {
   const order = typeof delivery.order === 'object' ? delivery.order : null;
   const store = order?.store;
   const customer = order?.user;
+  const isReturnDelivery = delivery.deliveryType === 'RETURN';
   const canShowCustomerAndDelivery = ['Accepted', 'PickedUp', 'OnTheWay', 'Delivered'].includes(delivery.status);
+
+  const activeDeliverySteps = isReturnDelivery
+    ? [
+        { key: 'Pending', label: 'Assigned', icon: 'time-outline' },
+        { key: 'Accepted', label: 'Assigned', icon: 'checkmark-circle-outline' },
+        { key: 'PickedUp', label: 'Picked Up', icon: 'cube-outline' },
+        { key: 'Delivered', label: 'Delivered to Merchant', icon: 'checkmark-done-circle' },
+      ]
+    : deliverySteps;
+
+  const getReturnStepStatus = (stepKey: string, currentStatus: string): 'completed' | 'current' | 'pending' => {
+    const stepOrder = ['Pending', 'Accepted', 'PickedUp', 'Delivered'];
+    const normalizedStatus =
+      currentStatus === 'OnTheWay' ? 'PickedUp' : currentStatus;
+    const currentIndex = stepOrder.indexOf(normalizedStatus);
+    const stepIndex = stepOrder.indexOf(stepKey);
+    if (stepIndex < 0) return 'pending';
+    if (currentIndex < 0) return 'pending';
+    if (stepIndex < currentIndex) return 'completed';
+    if (stepIndex === currentIndex || (stepKey === 'Accepted' && currentStatus === 'Pending')) {
+      return stepIndex === currentIndex || (stepKey === 'Pending' && currentStatus === 'Pending') ? 'current' : 'completed';
+    }
+    if (stepKey === 'Pending' && ['Accepted', 'PickedUp', 'Delivered'].includes(currentStatus)) return 'completed';
+    if (stepKey === 'Accepted' && ['PickedUp', 'Delivered'].includes(currentStatus)) return 'completed';
+    return 'pending';
+  };
 
   const getNextAction = () => {
     if (processing) {
@@ -232,7 +263,7 @@ const OrderDetailsScreen: React.FC = () => {
             >
               <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.buttonGradient}>
                 <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-                <Text style={styles.buttonText}>Accept</Text>
+                <Text style={styles.buttonText}>{isReturnDelivery ? 'Accept Return' : 'Accept'}</Text>
               </LinearGradient>
             </TouchableOpacity>
             
@@ -256,12 +287,27 @@ const OrderDetailsScreen: React.FC = () => {
           >
             <LinearGradient colors={['#2196F3', '#1976D2']} style={styles.buttonGradient}>
               <Ionicons name="cube" size={24} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Mark as Picked Up</Text>
+              <Text style={styles.buttonText}>
+                {isReturnDelivery ? 'Mark as Picked Up from Customer' : 'Mark as Picked Up'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         );
       
       case 'PickedUp':
+        if (isReturnDelivery) {
+          return (
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => handleStatusUpdate('Delivered')}
+            >
+              <LinearGradient colors={['#4CAF50', '#2E7D32']} style={styles.buttonGradient}>
+                <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
+                <Text style={styles.buttonText}>Delivered to Merchant</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          );
+        }
         return (
           <TouchableOpacity
             style={styles.primaryButton}
@@ -304,7 +350,9 @@ const OrderDetailsScreen: React.FC = () => {
         return (
           <View style={styles.completedBanner}>
             <Ionicons name="checkmark-done-circle" size={32} color="#4CAF50" />
-            <Text style={styles.completedText}>Delivery Completed!</Text>
+            <Text style={styles.completedText}>
+              {isReturnDelivery ? 'Return Delivered to Merchant!' : 'Delivery Completed!'}
+            </Text>
           </View>
         );
       
@@ -326,16 +374,26 @@ const OrderDetailsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#2D2D2D" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Order Details</Text>
+          <Text style={styles.headerTitle}>{isReturnDelivery ? 'Return Pickup' : 'Order Details'}</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* Delivery Steps Progress */}
         <View style={styles.progressContainer}>
           <View style={styles.stepsContainer}>
-            {deliverySteps.map((step, index) => {
-              const stepStatus = getStepStatus(step.key, delivery.status);
-              const isLast = index === deliverySteps.length - 1;
+            {(isReturnDelivery
+              ? [
+                  { key: 'Pending', label: 'Assigned', icon: 'time-outline' },
+                  { key: 'Accepted', label: 'Assigned', icon: 'checkmark-circle-outline' },
+                  { key: 'PickedUp', label: 'Picked Up', icon: 'cube-outline' },
+                  { key: 'Delivered', label: 'Delivered to Merchant', icon: 'checkmark-done-circle' },
+                ]
+              : deliverySteps
+            ).map((step, index, arr) => {
+              const stepStatus = isReturnDelivery
+                ? getReturnStepStatus(step.key, delivery.status)
+                : getStepStatus(step.key, delivery.status);
+              const isLast = index === arr.length - 1;
               
               return (
                 <View key={step.key} style={styles.stepWrapper}>
@@ -409,7 +467,9 @@ const OrderDetailsScreen: React.FC = () => {
         {/* Pickup Location */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Pickup Location</Text>
+            <Text style={styles.cardTitle}>
+              {isReturnDelivery ? 'Customer Pickup' : 'Pickup Location'}
+            </Text>
             <TouchableOpacity
               style={styles.navigateButton}
               onPress={() => openNavigation('pickup')}
@@ -420,11 +480,15 @@ const OrderDetailsScreen: React.FC = () => {
           </View>
           <View style={styles.locationCard}>
             <View style={styles.locationIcon}>
-              <Ionicons name="storefront" size={20} color="#4CAF50" />
+              <Ionicons
+                name={isReturnDelivery ? 'home' : 'storefront'}
+                size={20}
+                color="#4CAF50"
+              />
             </View>
             <Text style={styles.locationAddress}>{delivery.pickupAddress}</Text>
           </View>
-          {store && (
+          {!isReturnDelivery && store && (
             <Text style={styles.storeNameText}>{store.storeName}</Text>
           )}
         </View>
@@ -433,7 +497,9 @@ const OrderDetailsScreen: React.FC = () => {
         {canShowCustomerAndDelivery && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Delivery Location</Text>
+              <Text style={styles.cardTitle}>
+                {isReturnDelivery ? 'Merchant Drop-off' : 'Delivery Location'}
+              </Text>
               <TouchableOpacity
                 style={styles.navigateButton}
                 onPress={() => openNavigation('delivery')}
@@ -444,10 +510,17 @@ const OrderDetailsScreen: React.FC = () => {
             </View>
             <View style={styles.locationCard}>
               <View style={styles.locationIcon}>
-                <Ionicons name="location" size={20} color="#F44336" />
+                <Ionicons
+                  name={isReturnDelivery ? 'storefront' : 'location'}
+                  size={20}
+                  color="#F44336"
+                />
               </View>
               <Text style={styles.locationAddress}>{delivery.deliveryAddress}</Text>
             </View>
+            {isReturnDelivery && store && (
+              <Text style={styles.storeNameText}>{store.storeName}</Text>
+            )}
           </View>
         )}
 

@@ -7,6 +7,13 @@ import { type IDelivery } from "../types/delivery";
 import type { Response, Request } from "express";
 import z from "zod";
 
+function routeParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+  return value ?? "";
+}
+
 // Validation schema for delivery creation
 const createDeliverySchema = z.object({
   order: z.string().min(1, "Order ID is required"),
@@ -66,8 +73,8 @@ async function createDelivery(req: Request, res: Response) {
       });
     }
 
-    // Check if delivery already exists for this order
-    const existingDelivery = await DeliveryModel.findOne({ order });
+    // Check if delivery already exists for this order (standard delivery only)
+    const existingDelivery = await DeliveryModel.findOne({ order, deliveryType: { $ne: "RETURN" } });
     if (existingDelivery) {
       return res.status(400).json({
         success: false,
@@ -141,7 +148,7 @@ async function createDelivery(req: Request, res: Response) {
 async function getDeliveryById(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const { deliveryId } = req.params;
+    const deliveryId = routeParam(req.params.deliveryId);
 
     if (!deliveryId) {
       return res.status(400).json({
@@ -178,15 +185,25 @@ async function getDeliveryById(req: Request, res: Response) {
     }
 
     // Check permissions
-    const deliveryPersonId = typeof delivery.deliveryPerson === 'object' 
-      ? (delivery.deliveryPerson as any)._id 
-      : delivery.deliveryPerson;
-    
-    if (user.role === 'Delivery' && deliveryPersonId.toString() !== user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. You can only view your own deliveries"
-      });
+    const deliveryPersonId = delivery.deliveryPerson
+      ? (typeof delivery.deliveryPerson === 'object'
+        ? (delivery.deliveryPerson as any)._id
+        : delivery.deliveryPerson)
+      : null;
+
+    if (user.role === 'Delivery') {
+      if (!deliveryPersonId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. This delivery has not been assigned to you yet.'
+        });
+      }
+      if (deliveryPersonId.toString() !== user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only view your own deliveries"
+        });
+      }
     }
 
     if (user.role === 'User' && (delivery.order as any).user._id.toString() !== user._id.toString()) {
@@ -224,7 +241,7 @@ async function getDeliveryById(req: Request, res: Response) {
 async function updateDeliveryStatus(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const { deliveryId } = req.params;
+    const deliveryId = routeParam(req.params.deliveryId);
 
     if (!deliveryId) {
       return res.status(400).json({
@@ -247,22 +264,46 @@ async function updateDeliveryStatus(req: Request, res: Response) {
     }
 
     // Check permissions
-    if (user.role === 'Delivery' && delivery.deliveryPerson.toString() !== user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. You can only update your own deliveries"
-      });
+    const deliveryPersonId = delivery.deliveryPerson
+      ? (typeof delivery.deliveryPerson === 'object'
+        ? (delivery.deliveryPerson as any)._id
+        : delivery.deliveryPerson)
+      : null;
+
+    if (user.role === 'Delivery') {
+      if (!deliveryPersonId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. This delivery has not been assigned to you yet.'
+        });
+      }
+      if (deliveryPersonId.toString() !== user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only update your own deliveries"
+        });
+      }
     }
 
     // Validate status transitions
-    const validTransitions: { [key: string]: string[] } = {
-      'Pending': ['Accepted', 'Cancelled'],
-      'Accepted': ['PickedUp', 'Cancelled'],
-      'PickedUp': ['OnTheWay', 'Delivered', 'Cancelled'],
-      'OnTheWay': ['Delivered', 'Cancelled'],
-      'Delivered': [],
-      'Cancelled': []
-    };
+    const isReturnDelivery = delivery.deliveryType === 'RETURN';
+    const validTransitions: { [key: string]: string[] } = isReturnDelivery
+      ? {
+          'Pending': ['Accepted', 'Cancelled'],
+          'Accepted': ['PickedUp', 'Cancelled'],
+          'PickedUp': ['Delivered', 'Cancelled'],
+          'OnTheWay': ['Delivered', 'Cancelled'],
+          'Delivered': [],
+          'Cancelled': []
+        }
+      : {
+          'Pending': ['Accepted', 'Cancelled'],
+          'Accepted': ['PickedUp', 'Cancelled'],
+          'PickedUp': ['OnTheWay', 'Delivered', 'Cancelled'],
+          'OnTheWay': ['Delivered', 'Cancelled'],
+          'Delivered': [],
+          'Cancelled': []
+        };
 
     if (!validTransitions[delivery.status]?.includes(status)) {
       return res.status(400).json({
@@ -304,7 +345,21 @@ async function updateDeliveryStatus(req: Request, res: Response) {
      });
 
     // Update order status and send notifications for key delivery transitions
-    if (status === 'PickedUp') {
+    if (isReturnDelivery) {
+      if (status === 'Delivered') {
+        // Return item delivered to merchant — no order status change
+        console.log(`✅ [Delivery] Return delivery ${deliveryId} delivered to merchant`);
+      } else if (status === 'Cancelled') {
+        const { reassignReturnDelivery } = await import('../services/returnAssignmentService');
+        await UserModel.findByIdAndUpdate(delivery.deliveryPerson, {
+          isBusy: false,
+          $unset: { currentOrder: 1 }
+        });
+        reassignReturnDelivery(deliveryId).catch((e) =>
+          console.error('Failed to reassign return delivery', e)
+        );
+      }
+    } else if (status === 'PickedUp') {
       await OrderModel.findByIdAndUpdate(delivery.order, {
         status: 'PickedUp',
         $push: {
@@ -501,7 +556,7 @@ async function getDeliveriesForDeliveryPerson(req: Request, res: Response) {
 async function rateDelivery(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const { deliveryId } = req.params;
+    const deliveryId = routeParam(req.params.deliveryId);
 
     if (!deliveryId) {
       return res.status(400).json({
@@ -894,8 +949,15 @@ async function toggleOnlineStatus(req: Request, res: Response) {
 async function rejectDeliveryAssignment(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const { deliveryId } = req.params;
+    const deliveryId = routeParam(req.params.deliveryId);
     const { reason } = req.body;
+
+    if (!deliveryId) {
+      return res.status(400).json({
+        success: false,
+        message: "Delivery ID is required"
+      });
+    }
 
     // Check if user is a delivery person
     if (user.role !== 'Delivery') {
@@ -915,7 +977,7 @@ async function rejectDeliveryAssignment(req: Request, res: Response) {
     }
 
     // Check if this delivery belongs to the user
-    if (delivery.deliveryPerson.toString() !== user._id.toString()) {
+    if (delivery.deliveryPerson && delivery.deliveryPerson.toString() !== user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "You can only reject your own delivery assignments"
@@ -943,6 +1005,23 @@ async function rejectDeliveryAssignment(req: Request, res: Response) {
     delivery.status = 'Cancelled';
     delivery.cancellationReason = reason || 'Rejected by delivery partner';
     await delivery.save();
+
+    if (delivery.deliveryType === 'RETURN') {
+      await UserModel.findByIdAndUpdate(user._id, {
+        isBusy: false,
+        $unset: { currentOrder: 1 }
+      });
+
+      const { reassignReturnDelivery } = await import('../services/returnAssignmentService');
+      reassignReturnDelivery(deliveryId)
+        .then(() => console.log(`🔄 [Delivery] Return delivery ${deliveryId} reassignment triggered`))
+        .catch((error) => console.error(`❌ [Delivery] Return reassignment error:`, error));
+
+      return res.status(200).json({
+        success: true,
+        message: "Return delivery rejected. It will be reassigned to another delivery partner.",
+      });
+    }
 
     // Reset order back to ReadyForPickup and remove delivery person using findByIdAndUpdate
     await OrderModel.findByIdAndUpdate(delivery.order, {

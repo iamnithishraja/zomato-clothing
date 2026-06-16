@@ -5,6 +5,7 @@
  */
 
 import { processUnassignedOrders } from './orderAssignmentService';
+import { processUnassignedReturnDeliveries } from './returnAssignmentService';
 
 let assignmentInterval: NodeJS.Timeout | null = null;
 
@@ -22,10 +23,12 @@ export function startAssignmentScheduler(): void {
 
   // Run immediately on start
   processUnassignedOrders();
+  processUnassignedReturnDeliveries();
 
   // Then run every 60 seconds
   assignmentInterval = setInterval(() => {
     processUnassignedOrders();
+    processUnassignedReturnDeliveries();
   }, 60000); // 60 seconds
 
   console.log('✅ [Assignment Scheduler] Automatic order assignment service started (runs every 60 seconds)');

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { AlertCircle, Eye, EyeOff, ArrowRight, Smartphone, Lock } from 'lucide-react';
+import LocalsLogo from '@/components/admin/LocalsLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type LoginMode = 'password' | 'otp';
@@ -209,16 +210,7 @@ export default function Login() {
             background: 'rgba(226,55,68,0.12)',
           }} />
           <div>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 10,
-              background: 'rgba(255,215,0,0.1)', padding: '8px 16px',
-              borderRadius: 40, border: '1px solid rgba(255,215,0,0.2)',
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFD700' }} />
-              <span style={{ color: '#FFD700', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em' }}>
-                ADMIN PORTAL
-              </span>
-            </div>
+            <LocalsLogo size={84} variant="light" />
           </div>
           <div>
             <h2 style={{
@@ -234,14 +226,14 @@ export default function Login() {
               Full control over users, stores, products and orders — all in one place.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 24 }}>
+          {/* <div style={{ display: 'flex', gap: 24 }}>
             {[['2,543', 'Users'], ['145', 'Stores'], ['892', 'Orders']].map(([n, l]) => (
               <div key={l}>
                 <div style={{ fontSize: 28, fontWeight: 700, color: '#FFD700', fontFamily: "'Playfair Display', serif" }}>{n}</div>
                 <div style={{ fontSize: 12, color: '#6F6F6F', letterSpacing: '0.06em' }}>{l}</div>
               </div>
             ))}
-          </div>
+          </div> */}
         </div>
 
         {/* Right Panel */}
@@ -262,19 +254,8 @@ export default function Login() {
               borderBottom: '1px solid #F4F4F2',
               background: 'linear-gradient(135deg, #FAFAF8 0%, #FFFFFF 100%)',
             }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 10,
-                  background: 'linear-gradient(135deg, #FFD700, #FFC107)', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ color: '#2D2D2D', fontWeight: 900, fontSize: 16, fontFamily: "'Playfair Display', serif" }}>L</span>
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#2D2D2D', letterSpacing: '0.05em' }}>
-                  LOCALS ADMIN
-                </span>
+              <div style={{ marginBottom: 20 }}>
+                <LocalsLogo size={52} subtitle="Admin" />
               </div>
               <h1 style={{
                 fontFamily: "'Playfair Display', serif",

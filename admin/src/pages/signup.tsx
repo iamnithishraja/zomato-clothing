@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { AlertCircle, Eye, EyeOff, ArrowRight, Check, X } from 'lucide-react';
+import LocalsLogo from '@/components/admin/LocalsLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SignupForm {
@@ -214,15 +215,8 @@ export default function Signup() {
             padding: '36px 36px 24px',
             borderBottom: '1px solid #F4F4F2',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'linear-gradient(135deg, #FFD700, #FFC107)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ color: '#2D2D2D', fontWeight: 900, fontSize: 16, fontFamily: "'Playfair Display', serif" }}>L</span>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#2D2D2D', letterSpacing: '0.05em' }}>LOCALS ADMIN</span>
+            <div style={{ marginBottom: 20 }}>
+              <LocalsLogo size={52} subtitle="Admin" />
             </div>
             <h1 style={{
               fontFamily: "'Playfair Display', serif",

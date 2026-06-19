@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import apiClient from '../../api/client';
 import { navigateAfterAuth } from '@/utils/authRouting';
+import { useAuth } from '@/contexts/AuthContext';
 
 const OtpScreen = () => {
   const router = useRouter();
@@ -389,14 +390,14 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 28,
     fontWeight: '800',
-    color: Colors.logo, // Keep logo red
-    letterSpacing: -0.8,
+    color: Colors.logo,
+    letterSpacing: -1,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   logoUnderline: {
     width: 50,
-    height: 3,
-    backgroundColor: Colors.logo, // Keep logo red
+    height: 4,
+    backgroundColor: Colors.logo,
     borderRadius: 2,
     marginTop: 4,
   },

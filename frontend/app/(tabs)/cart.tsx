@@ -344,7 +344,6 @@ export default function CartScreen() {
       // Open Razorpay checkout
       const options = {
         description: `Locals order payment`,
-        image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
         currency: razorpayOrder.currency,
         key: keyId || razorpayKey || '',
         amount: razorpayOrder.amount,

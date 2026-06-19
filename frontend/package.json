@@ -4,6 +4,8 @@
     "version": "1.0.2",
     "scripts": {
         "start": "expo start",
+        "start:clear": "expo start -c",
+        "generate:icons": "node ./scripts/generate-app-icons.js",
         "reset-project": "node ./scripts/reset-project.js",
         "android": "expo run:android",
         "android-dev": "expo run:android --device",

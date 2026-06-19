@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from '@/components/sidebar';
+import LocalsLogo from '@/components/admin/LocalsLogo';
 
 export default function AdminLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -31,10 +32,7 @@ export default function AdminLayout() {
             <Menu className="h-5 w-5" />
             <span className="sr-only">Open navigation</span>
           </button>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Locals</p>
-            <p className="text-sm font-bold text-stone-900">Admin</p>
-          </div>
+          <LocalsLogo size={36} subtitle="Admin" />
         </header>
 
         <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain">

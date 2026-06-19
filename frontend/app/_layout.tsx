@@ -2,12 +2,18 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect } from 'react';
 import 'react-native-reanimated';
 import { useColorScheme } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { LocationProvider } from '@/contexts/LocationContext';
 import { OnlineStatusProvider } from '@/contexts/OnlineStatusContext';
+
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Splash may already be hidden on fast reload.
+});
 
 // Load icon fonts at startup — keys must match @expo/vector-icons font family names
 const iconFonts = {
@@ -23,6 +29,16 @@ export const unstable_settings = {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts(iconFonts);
+
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  useEffect(() => {
+    onLayoutRootView();
+  }, [onLayoutRootView]);
 
   if (!fontsLoaded) {
     return null;

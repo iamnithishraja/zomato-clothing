@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
+import LocalsLogo from '@/components/admin/LocalsLogo';
 
 interface MenuItem {
   icon: React.ElementType;
@@ -134,15 +135,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             onClick={onMobileClose}
             className="flex items-center gap-3 rounded-xl outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 shadow-md shadow-amber-500/30">
-              <span className="font-['Fraunces',serif] text-lg font-bold text-stone-900">L</span>
-            </div>
-            <div>
-              <p className="text-[15px] font-bold tracking-tight text-stone-900">Locals</p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                Admin
-              </p>
-            </div>
+            <LocalsLogo size={48} subtitle="Admin" />
           </Link>
           <button
             type="button"

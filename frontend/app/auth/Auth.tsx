@@ -187,33 +187,25 @@ const Auth = () => {
 
   return (
     <View style={styles.container}>
-      {/* Background Image - Top 50% only - Creates visual appeal and branding */}
       <ImageBackground
         source={{ uri: 'https://ik.imagekit.io/fhi2xkjg1/locals/locals3.png' }}
         style={styles.backgroundImage}
         resizeMode="cover"
       />
-      
-      {/* StatusBar - Controls the appearance of the status bar at the top of the screen */}
+
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      {/* KeyboardAvoidingView - Automatically adjusts the view when keyboard appears to prevent input fields from being hidden */}
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={styles.content}>
-          {/* Top Section - Reserved space for brand header/logo area */}
           <View style={styles.topSection}>
-            <View style={styles.brandContainer}>
-              {/* Brand content can be added here if needed */}
-            </View>
+            <View style={styles.brandContainer} />
           </View>
 
-          {/* Modal Container - Fixed at bottom */}
           <View style={styles.modalContainer}>
-            {/* Fixed Header Section */}
             <View style={styles.modalHeader}>
               <View style={styles.logoContainer}>
                 <Text style={styles.logoText}>Locals</Text>
@@ -370,7 +362,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: '100%',
-    height: height * 0.4, // Reduced to 40% for better keyboard behavior
+    height: height * 0.4,
   },
   keyboardContainer: {
     flex: 1,
@@ -421,14 +413,14 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: '800',
-    color: Colors.logo, // Keep logo red
+    color: Colors.logo,
     letterSpacing: -1,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   logoUnderline: {
     width: 60,
     height: 4,
-    backgroundColor: Colors.logo, // Keep logo red
+    backgroundColor: Colors.logo,
     borderRadius: 2,
     marginTop: 4,
   },
